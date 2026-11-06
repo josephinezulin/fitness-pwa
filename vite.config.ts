@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
+import { matchPublicThumbnail } from "./src/cache-policy";
 export default defineConfig({
   base: "./",
   plugins: [
@@ -27,6 +28,21 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,png,svg,ico}"],
         navigateFallback: "index.html",
         cleanupOutdatedCaches: true,
+        runtimeCaching: [
+          {
+            urlPattern: matchPublicThumbnail,
+            handler: "StaleWhileRevalidate",
+            options: {
+              cacheName: "daily-movement-youtube-thumbnails-v1",
+              cacheableResponse: { statuses: [0, 200] },
+              expiration: {
+                maxEntries: 24,
+                maxAgeSeconds: 14 * 24 * 60 * 60,
+                purgeOnQuotaError: true,
+              },
+            },
+          },
+        ],
       },
     }),
   ],
