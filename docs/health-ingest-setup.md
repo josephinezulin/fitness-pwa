@@ -100,3 +100,15 @@ Script Lock 序列化此端點的健康寫入；Sheets 多表不是交易。Sync
 ## Mac 捷徑匯入
 
 Mac 提供 Apple 官方 `shortcuts sign` 簽署工具，可將準備好的捷徑原始檔簽署後匯入 iPhone。目前尚未交付已簽署捷徑檔，也未驗證本機 iOS 動作的匯入相容性；Mac 簽署、iPhone 健康授權及個人自動化仍需使用者裝置完成。匯入前的共用檔不含 Token，安裝後才在自己的捷徑填入憑證，不分享填好憑證的版本。
+
+## 給 Mac session 的部署後檢查指令
+
+部署完成後，可用 repo 內的工具先驗證未授權請求：
+
+```sh
+python3 scripts/check_ingest_endpoint.py --url 'https://script.google.com/macros/s/實際部署ID/exec'
+```
+
+這個命令沒有 Token 參數，不需要把自己的憑證放進終端機歷史。只會測 GET、空 POST、固定錯誤 Token，並確認回應不含健康資料；SERVICE_DISABLED 代表服務尚未開啟。若導向 Google 登入頁、回傳 HTML、未授權卻 ok=true，檢查會失敗。通過後仍需用私人捷徑做本人授權的寫入測試。
+
+工具自身測試：`python3 -m unittest discover -s scripts -p 'test_*.py'`，已加入 GitHub Actions。

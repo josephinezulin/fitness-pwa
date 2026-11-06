@@ -27,16 +27,19 @@ import {
 } from "./workspace";
 import { loadSiteConfig } from "./site-config";
 import { TAB_NAMES } from "./sheet-schema";
+export type CloudReadState = { busy: boolean; error: string };
 export function CloudPanel({
   onUseSnapshot,
   onDisconnect,
   visible,
   activeSpreadsheetId,
+  onReadState,
 }: {
   onUseSnapshot: (identity: CloudIdentity, data: Data) => void;
-  onDisconnect: () => void;
+  onDisconnect: (reason?: string) => void;
   visible: boolean;
   activeSpreadsheetId: string | null;
+  onReadState?: (state: CloudReadState) => void;
 }) {
   const [config, setConfig] = useState<GoogleConfig | null>(null);
   const [configLoaded, setConfigLoaded] = useState(false);
@@ -46,6 +49,10 @@ export function CloudPanel({
   const [inspection, setInspection] = useState<SheetInspection | null>(null);
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
+  const [readError, setReadError] = useState("");
+  useEffect(() => {
+    onReadState?.({ busy: !!busy, error: readError });
+  }, [busy, readError, onReadState]);
   const epoch = useRef(0);
   const request = useRef<AbortController | null>(null);
   const currentSession = useRef<GoogleSession | null>(null);
@@ -69,7 +76,8 @@ export function CloudPanel({
     setInspection(null);
     setBusy("");
     setNotice(message);
-    onDisconnect();
+    setReadError("");
+    onDisconnect(message);
   };
   useEffect(() => {
     if (!session) return;
@@ -134,7 +142,10 @@ export function CloudPanel({
     setBusy("等待 Google 登入");
     setNotice("");
     // Invoke synchronously within the click, preserving Safari's popup permission.
-    login(config)
+    request.current?.abort();
+    const loginController = new AbortController();
+    request.current = loginController;
+    login(config, loginController.signal)
       .then(async (next) => {
         if (!valid(version)) return;
         currentSession.current = next;
@@ -175,6 +186,7 @@ export function CloudPanel({
       Date.now() >= current.expiresAt
     )
       return;
+    setReadError("");
     onUseSnapshot(
       {
         subject: current.subject,
@@ -210,10 +222,13 @@ export function CloudPanel({
     lastRefresh.current = Date.now();
     setBusy("更新雲端資料");
     setNotice("");
+    setReadError("");
     try {
       const result = await inspectSpreadsheet(id, current, controller.signal);
       if (!valid(version)) return;
       setInspection(result);
+      if (!result.report.ok)
+        setReadError("試算表格式已變更，尚未更新；目前保留上次讀取的摘要。");
       if (currentViewId.current === id && result.report.ok && result.data)
         useSnapshot(result, current);
     } catch (error) {
@@ -222,7 +237,9 @@ export function CloudPanel({
         reset(error.message);
         return;
       }
-      setNotice("未能更新，仍保留上次讀取的摘要。可重新選檔或稍後重試。");
+      const message = "未能更新，仍保留上次讀取的摘要。可重新選檔或稍後重試。";
+      setReadError(message);
+      setNotice(message);
     } finally {
       if (valid(version)) setBusy("");
     }
@@ -233,10 +250,15 @@ export function CloudPanel({
       if (document.visibilityState === "visible" && navigator.onLine)
         void refresh(activeSpreadsheetId, true);
     };
+    const manualUpdate = () => {
+      void refresh(activeSpreadsheetId);
+    };
+    window.addEventListener("daily-movement-refresh", manualUpdate);
     window.addEventListener("online", update);
     window.addEventListener("focus", update);
     document.addEventListener("visibilitychange", update);
     return () => {
+      window.removeEventListener("daily-movement-refresh", manualUpdate);
       window.removeEventListener("online", update);
       window.removeEventListener("focus", update);
       document.removeEventListener("visibilitychange", update);

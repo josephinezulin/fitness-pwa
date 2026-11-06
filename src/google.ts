@@ -119,20 +119,53 @@ export async function prepareGoogle() {
     }),
   );
 }
-export function login(config: GoogleConfig): Promise<GoogleSession> {
+export function login(
+  config: GoogleConfig,
+  signal?: AbortSignal,
+): Promise<GoogleSession> {
   // Called directly from a click after prepareGoogle: keep the popup in Safari's user gesture.
   return new Promise((resolve, reject) => {
+    let settled = false;
+    let timer: number | undefined;
+    const controller = new AbortController();
+    const cleanup = () => {
+      if (timer !== undefined) window.clearTimeout(timer);
+      signal?.removeEventListener("abort", cancel);
+    };
+    const rejectOnce = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error);
+    };
+    const resolveOnce = (value: GoogleSession) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(value);
+    };
+    const cancel = () => {
+      controller.abort();
+      rejectOnce(new DOMException("登入已取消", "AbortError"));
+    };
+    if (signal?.aborted) {
+      cancel();
+      return;
+    }
+    signal?.addEventListener("abort", cancel, { once: true });
     const sdk = window.google;
     if (!sdk?.accounts) {
-      reject(Error("請先載入 Google 連線元件。"));
+      rejectOnce(Error("請先載入 Google 連線元件。"));
       return;
     }
     const client = sdk.accounts.oauth2.initTokenClient({
       client_id: config.clientId,
       scope: `openid email ${DRIVE_SCOPE}`,
       include_granted_scopes: false,
-      error_callback: () => reject(Error("登入視窗已關閉或被阻擋，請重試。")),
+      error_callback: () =>
+        rejectOnce(Error("登入視窗已關閉或被阻擋，請重試。")),
       callback: (response) => {
+        if (settled || signal?.aborted) return;
         if (
           response.error ||
           !response.access_token ||
@@ -140,14 +173,16 @@ export function login(config: GoogleConfig): Promise<GoogleSession> {
           Number(response.expires_in) <= 60 ||
           !sdk.accounts.oauth2.hasGrantedAllScopes(response, DRIVE_SCOPE)
         ) {
-          reject(Error("未取得選定試算表的必要授權。"));
+          rejectOnce(Error("未取得選定試算表的必要授權。"));
           return;
         }
         const accessToken = response.access_token;
+        timer = window.setTimeout(() => controller.abort(), 20000);
         fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
           headers: { Authorization: `Bearer ${accessToken}` },
           cache: "no-store",
           credentials: "omit",
+          signal: controller.signal,
         })
           .then(async (r) => {
             if (!r.ok) throw Error("無法確認 Google 帳號，請重新登入。");
@@ -160,7 +195,7 @@ export function login(config: GoogleConfig): Promise<GoogleSession> {
           .then((user) => {
             if (!user.sub || !user.email || !user.email_verified)
               throw Error("Google 帳號資訊不完整。");
-            resolve({
+            resolveOnce({
               accessToken,
               subject: user.sub,
               email: user.email,
@@ -170,7 +205,7 @@ export function login(config: GoogleConfig): Promise<GoogleSession> {
             });
           })
           .catch(() =>
-            reject(Error("無法確認 Google 帳號，請檢查網路後重新登入。")),
+            rejectOnce(Error("無法確認 Google 帳號，請檢查網路後重新登入。")),
           );
       },
     });

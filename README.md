@@ -55,3 +55,5 @@ npm run build
 完整進度與尚待外部設定：見 [同步進度](docs/sync-progress.md)。
 
 捷徑上傳端程式已備妥但預設關閉，需使用者部署後實機驗收：[Apps Script 上傳 API 設定](docs/health-ingest-setup.md)。同帳號選擇私人表後，下次登入會自動重新讀取；PWA 雲端寫入仍未啟用。
+
+PWA 新版會顯示更新提示，表單開啟時先保留草稿；雲端摘要列提供手動更新與失敗狀態。測試包含 TypeScript / DOM 介面測試（`npm test`）及未授權端點檢查工具測試（`python3 -m unittest discover -s scripts -p 'test_*.py'`）。

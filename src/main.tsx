@@ -45,13 +45,22 @@ import {
   validate,
   demo,
 } from "./model";
-import { CloudPanel } from "./CloudPanel";
+import { CloudPanel, type CloudReadState } from "./CloudPanel";
+import { PwaUpdate } from "./PwaUpdate";
+import { calendarDateInZone } from "./calendar";
 import { useWorkspace } from "./useWorkspace";
 import "./style.css";
 const names = { home: "居家徒手訓練", walk: "上坡快走", other: "其他運動" };
 function App() {
   const workspace = useWorkspace();
   const data = workspace.data;
+  const viewToday = workspace.cloud
+    ? calendarDateInZone(new Date(), workspace.cloud.timezone)
+    : today();
+  const [cloudReadState, setCloudReadState] = useState<CloudReadState>({
+    busy: false,
+    error: "",
+  });
   const [page, setPage] = useState("總覽"),
     [modal, setModal] = useState<"workout" | "metric" | null>(null),
     [editing, setEditing] = useState<Workout | null>(null),
@@ -111,17 +120,17 @@ function App() {
       return false;
     }
   }
-  const days = weekDays(),
+  const days = weekDays(new Date(viewToday + "T12:00:00")),
     done = plans.filter((p) =>
       completed(data.workouts, days[p.day], p.type),
     ).length;
   const latest = (field: keyof Metric) =>
     [...data.metrics]
-      .filter((m) => m[field] !== undefined && m.date <= today())
+      .filter((m) => m[field] !== undefined && m.date <= viewToday)
       .sort((a, b) => b.date.localeCompare(a.date))[0];
   const w = latest("weight"),
     f = latest("fat"),
-    steps = data.metrics.find((m) => m.date === today())?.steps;
+    steps = data.metrics.find((m) => m.date === viewToday)?.steps;
   const weekWorkouts = data.workouts.filter((w) => days.includes(w.date));
   const begin = (workout?: Workout) => {
     if (workspace.cloud) {
@@ -141,7 +150,7 @@ function App() {
     );
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${workspace.cloud ? "日常動作-雲端每日摘要" : "日常動作"}-${today()}.json`;
+    a.download = `${workspace.cloud ? "日常動作-雲端每日摘要" : "日常動作"}-${viewToday}.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
@@ -162,13 +171,13 @@ function App() {
     }
   }
   const chart = () => {
-    const cutoff = new Date();
+    const cutoff = new Date(viewToday + "T12:00:00");
     cutoff.setDate(cutoff.getDate() - range + 1);
     const rows = data.metrics
       .filter(
         (m) =>
           m.date >= todayDate(cutoff) &&
-          m.date <= today() &&
+          m.date <= viewToday &&
           m[metric] !== undefined,
       )
       .sort((a, b) => a.date.localeCompare(b.date));
@@ -288,7 +297,7 @@ function App() {
       </div>
       <div className="week-strip">
         {days.map((d, i) => (
-          <div key={d} className={d === today() ? "current" : ""}>
+          <div key={d} className={d === viewToday ? "current" : ""}>
             <span>{"一二三四五六日"[i]}</span>
             <b>{+d.slice(-2)}</b>
             <i className={plans.some((p) => p.day === i) ? "dot" : ""} />
@@ -451,6 +460,7 @@ function App() {
                   month: "long",
                   day: "numeric",
                   weekday: "long",
+                  timeZone: workspace.cloud?.timezone,
                 })}
               </span>
               <h1>{page === "總覽" ? "把健康，放進日常。" : page}</h1>
@@ -483,7 +493,22 @@ function App() {
                   timeZone: "Asia/Taipei",
                 })}
               </span>
-              <button onClick={workspace.disconnectCloud}>切回本機</button>
+              <div className="cloud-toolbar">
+                <button
+                  disabled={cloudReadState.busy || !online}
+                  onClick={() =>
+                    window.dispatchEvent(new Event("daily-movement-refresh"))
+                  }
+                >
+                  {cloudReadState.busy ? "更新中…" : "更新資料"}
+                </button>
+                <button onClick={workspace.disconnectCloud}>切回本機</button>
+              </div>
+            </div>
+          )}
+          {workspace.cloud && cloudReadState.error && (
+            <div className="notice" role="status">
+              {cloudReadState.error}
             </div>
           )}
           {!online && (
@@ -673,7 +698,11 @@ function App() {
                 visible={page === "設定與備份"}
                 activeSpreadsheetId={workspace.cloud?.spreadsheetId ?? null}
                 onUseSnapshot={workspace.activateCloud}
-                onDisconnect={workspace.disconnectCloud}
+                onDisconnect={(reason) => {
+                  workspace.disconnectCloud();
+                  if (reason) setMessage(reason);
+                }}
+                onReadState={setCloudReadState}
               />
               <section className="card">
                 <h2>資料與備份</h2>
@@ -758,6 +787,7 @@ function App() {
           </footer>
         </div>
       </main>
+      <PwaUpdate blocked={!!modal} />
       {modal && (
         <div className="overlay" onClick={() => setModal(null)}>
           <section
@@ -842,9 +872,9 @@ function App() {
                   type="date"
                   required
                   defaultValue={
-                    modal === "workout" ? editing?.date || today() : today()
+                    modal === "workout" ? editing?.date || viewToday : viewToday
                   }
-                  max={today()}
+                  max={viewToday}
                 />
               </label>
               {modal === "workout" ? (

@@ -7,6 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "prompt",
+      injectRegister: false,
       includeAssets: ["apple-touch-icon.png"],
       manifest: {
         name: "日常動作｜個人健身日誌",
