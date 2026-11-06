@@ -11,6 +11,8 @@
 - iPhone YouTube 試播、真實 Apps Script 升級與私人副本端對端驗收仍未完成；不可把 mock 或 HTTP 測試稱為實機驗收。
 - 優先修復使用者回報的手機表單問題：欄位至少 16px，避免 iOS 聚焦自動放大；日期、雙欄表單及跑步機分段可縮窄，不以禁止縮放或隱藏頁面溢位處理。
 - 此修復的 98 項 Vitest、6 項 Python 測試及正式建置通過；仍須 iPhone Safari／主畫面 PWA 確認日期欄位、鍵盤聚焦、分段輸入及手動縮放。
+- 手機表單修復已在 PR #2 合併並部署，main 提交 `e38a12594fc46d498f3f73faa2cda3c03e7c4a5b`，Pages 建置與部署皆成功。
+- 階段 C 的分段比較與衝突規劃已完成，完整 103 項 Vitest、6 項 Python 測試及建置通過；其餘雲端寫入工作見 `docs/stage-c-progress.md`，介面尚未開放雲端寫入。
 
 ## 下一步
 

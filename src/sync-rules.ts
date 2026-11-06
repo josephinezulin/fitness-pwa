@@ -115,7 +115,18 @@ const workoutFields = [
 ] as const;
 const same = (a: Workout | undefined, b: Workout | undefined) =>
   (!a && !b) ||
-  (!!a && !!b && workoutFields.every((field) => a[field] === b[field]));
+  (!!a &&
+    !!b &&
+    workoutFields.every((field) => a[field] === b[field]) &&
+    a.segments?.length === b.segments?.length &&
+    (a.segments || []).every((segment, index) => {
+      const other = b.segments![index];
+      return (
+        segment.minutes === other.minutes &&
+        segment.speed === other.speed &&
+        segment.incline === other.incline
+      );
+    }));
 function unique<T extends { id: string }>(rows: T[]) {
   const map = new Map<string, T>();
   for (const row of rows) {
@@ -124,7 +135,10 @@ function unique<T extends { id: string }>(rows: T[]) {
   }
   return map;
 }
-/** Pure plan only. A future writer must atomically re-check expected revisions before applying it. */
+/**
+ * Pure plan only. The writer must read fresh revisions before applying it.
+ * A preflight comparison does not provide a cross-device atomic revision lock.
+ */
 export function planWorkoutChanges(
   base: RemoteWorkout[],
   local: Workout[],
@@ -158,9 +172,20 @@ export function planWorkoutChanges(
       kind: !edit ? "delete" : original ? "update" : "create",
       ...(edit
         ? {
-            value: Object.fromEntries(
-              workoutFields.map((field) => [field, edit[field]]),
-            ) as unknown as Workout,
+            value: {
+              ...Object.fromEntries(
+                workoutFields.map((field) => [field, edit[field]]),
+              ),
+              ...(edit.segments
+                ? {
+                    segments: edit.segments.map(({ minutes, speed, incline }) => ({
+                      minutes,
+                      speed,
+                      incline,
+                    })),
+                  }
+                : {}),
+            } as Workout,
           }
         : {}),
     });
