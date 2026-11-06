@@ -5,6 +5,8 @@
  */
 function createFitnessTemplate() {
   const updatedAt = new Date().toISOString();
+  const workoutTypes = ['home', 'strength', 'jumprope', 'walk', 'run', 'cycling', 'swim', 'hike', 'yoga', 'pilates', 'stretch', 'ball', 'other'];
+  const videoCategories = ['暖身', '居家徒手', '快走／跑步機', '跑步', '重量訓練', '瑜伽', '皮拉提斯', '伸展放鬆', '飛輪／騎車', '跳繩', '其他'];
   const tutorialUrl = 'https://www.youtube.com/results?search_query=初學者+徒手全身訓練+低衝擊+20分鐘';
   const specifications = [
     {
@@ -25,14 +27,14 @@ function createFitnessTemplate() {
       name: 'WorkoutLogs',
       headers: ['id', 'date', 'timezone', 'type', 'minutes', 'calories', 'note', 'source', 'revision', 'updatedAt', 'deletedAt'],
       numbers: { minutes: '0', calories: '0.##', revision: '0' },
-      lists: { type: ['home', 'walk', 'other'] },
+      lists: { type: workoutTypes },
       data: [],
     },
     {
       name: 'WorkoutPlans',
       headers: ['id', 'weekday', 'type', 'title', 'minMinutes', 'maxMinutes', 'tutorialUrl', 'active', 'updatedAt'],
       numbers: { weekday: '0', minMinutes: '0', maxMinutes: '0' },
-      lists: { type: ['home', 'walk', 'other'] },
+      lists: { type: workoutTypes },
       data: [
         ['home-mon', 1, 'home', '居家徒手訓練', 20, 30, tutorialUrl, true, updatedAt],
         ['walk-wed', 3, 'walk', '健身房上坡快走', 30, 60, '', true, updatedAt],
@@ -44,6 +46,20 @@ function createFitnessTemplate() {
       headers: ['requestId', 'deviceId', 'receivedAt', 'rangeStart', 'rangeEnd', 'status', 'acceptedCount', 'rejectedCount', 'errorCode'],
       numbers: { acceptedCount: '0', rejectedCount: '0' },
       lists: { status: ['committed', 'failed', 'partial'] },
+      data: [],
+    },
+    {
+      name: 'TreadmillSegments',
+      headers: ['id', 'workoutId', 'seq', 'minutes', 'speed', 'incline', 'updatedAt', 'deletedAt'],
+      numbers: { seq: '0', minutes: '0.0#', speed: '0.0#', incline: '0.0#' },
+      lists: {},
+      data: [],
+    },
+    {
+      name: 'Videos',
+      headers: ['id', 'url', 'title', 'category', 'minutes', 'updatedAt', 'deletedAt'],
+      numbers: { minutes: '0' },
+      lists: { category: videoCategories },
       data: [],
     },
   ];
@@ -109,6 +125,12 @@ function createFitnessTemplate() {
         totalSteps: '指定日期的總步數；重同步取代舊值，不累加。',
         value: 'weight 為 kg；bodyFat 為 0–100 的百分比，例如 23；heartRate 為 bpm。',
         revision: '從 1 開始的正整數，用於衝突檢查。',
+        workoutId: '對應 WorkoutLogs.id；只限 walk／run。各段分鐘加總四捨五入需等於該筆 minutes。',
+        seq: '段落順序 1–50，同一筆運動不可重複。',
+        speed: '跑步機速度 km/h（0.5–25）。',
+        incline: '坡度 %（-5–40）。',
+        url: 'YouTube 影片網址或 11 碼影片 ID。',
+        category: '影片分類，請從下拉選單選擇。',
       };
       if (notes[name]) sheet.getRange(1, i + 1).setNote(notes[name]);
     });
@@ -141,6 +163,13 @@ function createFitnessTemplate() {
       integer('minMinutes', 1, 1440);
       check('maxMinutes', '=OR(F2="",AND(ISNUMBER(F2),F2=INT(F2),F2>=1,F2<=1440,OR(E2="",F2>=E2)))', '需為不小於 minMinutes 的 1–1440 整數');
     }
+    if (spec.name === 'TreadmillSegments') {
+      integer('seq', 1, 50);
+      check('minutes', '=OR(D2="",AND(ISNUMBER(D2),D2>=0.5,D2<=300))', '每段 0.5–300 分鐘');
+      check('speed', '=OR(E2="",AND(ISNUMBER(E2),E2>=0.5,E2<=25))', '速度 0.5–25 km/h');
+      check('incline', '=OR(F2="",AND(ISNUMBER(F2),F2>=-5,F2<=40))', '坡度 -5–40 %');
+    }
+    if (spec.name === 'Videos') integer('minutes', 1, 600);
     if (spec.name === 'SyncLogs') {
       integer('acceptedCount', 0, 9007199254740991);
       integer('rejectedCount', 0, 9007199254740991);
@@ -149,7 +178,7 @@ function createFitnessTemplate() {
   });
 
   SpreadsheetApp.flush();
-  const expectedCounts = [0, 0, 0, 3, 0];
+  const expectedCounts = [0, 0, 0, 3, 0, 0, 0];
   const report = ss.getSheets().map((sheet, index) => {
     const spec = specifications[index];
     const headers = sheet.getRange(1, 1, 1, spec.headers.length).getValues()[0];

@@ -9,6 +9,19 @@
 | WorkoutLogs | id, date, timezone, type, minutes, calories, note, source, revision, updatedAt, deletedAt |
 | WorkoutPlans | id, weekday, type, title, minMinutes, maxMinutes, tutorialUrl, active, updatedAt |
 | SyncLogs | requestId, deviceId, receivedAt, rangeStart, rangeEnd, status, acceptedCount, rejectedCount, errorCode |
+| TreadmillSegments（選用） | id, workoutId, seq, minutes, speed, incline, updatedAt, deletedAt |
+| Videos（選用） | id, url, title, category, minutes, updatedAt, deletedAt |
+
+WorkoutLogs.type 與 WorkoutPlans.type 允許：home, strength, jumprope, walk, run, cycling, swim, hike, yoga, pilates, stretch, ball, other。
+
+### 選用分頁（schema 版本仍為 1）
+
+- 兩張選用分頁為向下相容的擴充：沒有這兩張的舊副本照常通過驗收；除這兩張外不可再加其他工作表。
+- TreadmillSegments：每段一列。workoutId 對應 WorkoutLogs.id 且類型必須為 walk／run；seq 1–50 不重複；minutes 0.5–300、speed 0.5–25 km/h、incline -5–40 %。未刪除分段的分鐘總和四捨五入必須等於 WorkoutLogs.minutes；網站顯示時使用分段精確總和，並計算距離、時間加權平均速度與坡度、估算爬升。
+- Videos：url 可填任何 YouTube 影片網址或 11 碼 ID；category 為網站影片分類之一（暖身、居家徒手、快走／跑步機、跑步、重量訓練、瑜伽、皮拉提斯、伸展放鬆、飛輪／騎車、跳繩、其他）；minutes 可留白。雲端檢視時與內建影片合併顯示，同一影片只列一次。
+- 兩張選用分頁的 updatedAt 可留白（方便手動輸入）；deletedAt 留白代表有效。
+- 既有副本升級：Apps Script 貼上 `apps-script/UpgradeFitnessTemplate.gs`，填入自己的試算表網址後執行 `upgradeFitnessTemplate`。它先檢查版本與欄名，只新增缺少的分頁並更新 type 下拉選單，不修改既有資料或分享權限，可重複執行。新建範本（CreateFitnessTemplate.gs）已直接包含七張工作表。
+- 捷徑上傳（HealthIngest.gs）接受含或不含選用分頁的副本，不讀寫它們。
 
 HealthMetrics 使用長表，每筆一個指標；metricType 僅允許 weight / bodyFat / heartRate，標準單位 kg / percent / bpm。原始樣本優先以 Health sample UUID 去重；若捷徑無法取得 UUID，使用裝置 ID + 類型 + 完整量測時間 + 正規化數值雜湊。限制：相同時間同值的不同樣本可能合併，必須在測試記錄註明。
 
@@ -57,4 +70,4 @@ WorkoutPlans 預設 weekday 採 ISO 1–7：1 / home / 20–30；3 / walk / 30�
 
 ## 可執行驗收契約
 
-`src/sheet-schema.ts` 為目前欄位與型別的程式契約。Gemini Prompt 必須與它一致。資料格不允許公式、額外欄位或變更欄名；初始範本預期筆數為 0 / 0 / 0 / 3 / 0。Google 連線驗收流程見 `docs/google-setup.md`。此階段不寫入任何資料。
+`src/sheet-schema.ts` 為目前欄位與型別的程式契約。Gemini Prompt 必須與它一致。資料格不允許公式、額外欄位或變更欄名；初始範本預期筆數為 0 / 0 / 0 / 3 / 0（含選用分頁時另為 0 / 0）。Google 連線驗收流程見 `docs/google-setup.md`。此階段不寫入任何資料。

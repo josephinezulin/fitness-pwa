@@ -779,6 +779,8 @@ function App() {
               key={videoVersion}
               online={online}
               initialCategory={videoCategory}
+              cloud={!!workspace.cloud}
+              sheetVideos={workspace.cloud ? data.videos : undefined}
             />
           )}
           {page === "健康趨勢" && (

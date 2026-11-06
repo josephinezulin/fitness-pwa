@@ -20,6 +20,8 @@ export type Video = {
   category: VideoCategory;
   minutes?: number;
   builtIn?: boolean;
+  /** Read from the user's spreadsheet; managed there, not in the app. */
+  fromSheet?: boolean;
 };
 export type VideoLibrary = { version: 1; custom: Video[]; hidden: string[] };
 export const VIDEO_KEY = "daily-movement-videos-v1";
@@ -172,13 +174,32 @@ export function storeLibrary(
 ) {
   storage.setItem(VIDEO_KEY, JSON.stringify(validateLibrary(lib)));
 }
-/** Visible list: built-ins not hidden, then the user's own videos (newest first). */
-export function visibleVideos(lib: VideoLibrary): Video[] {
+/** Visible list: spreadsheet videos, the user's own (newest first), then non-hidden built-ins; one entry per YouTube ID. */
+export function visibleVideos(
+  lib: VideoLibrary,
+  sheet: {
+    id: string;
+    youtubeId: string;
+    title: string;
+    category: string;
+    minutes?: number;
+  }[] = [],
+): Video[] {
   const hidden = new Set(lib.hidden);
+  const seen = new Set<string>();
+  const fromSheet: Video[] = sheet.map((x) => ({
+    id: `sheet-${x.id}`,
+    youtubeId: x.youtubeId,
+    title: x.title,
+    category: (isCategory(x.category) ? x.category : "其他") as VideoCategory,
+    ...(x.minutes !== undefined ? { minutes: x.minutes } : {}),
+    fromSheet: true,
+  }));
   return [
+    ...fromSheet,
     ...[...lib.custom].reverse(),
     ...BUILT_IN_VIDEOS.filter((x) => !hidden.has(x.id)),
-  ];
+  ].filter((x) => !seen.has(x.youtubeId) && !!seen.add(x.youtubeId));
 }
 export function addVideo(
   lib: VideoLibrary,

@@ -100,3 +100,75 @@ describe("cloud daily summaries", () => {
     expect(projectCloudData(g, "Asia/Taipei").workouts).toEqual([]);
   });
 });
+
+describe("cloud treadmill segments and videos", () => {
+  it("attaches active segments in seq order and exposes the precise total", () => {
+    const g = grids();
+    g.WorkoutLogs.push(
+      [
+        "w1",
+        "2026-11-05",
+        "Asia/Taipei",
+        "walk",
+        31,
+        0,
+        "",
+        "pwa",
+        1,
+        "2026-11-05T00:00:00Z",
+        "",
+      ],
+      [
+        "w2",
+        "2026-11-05",
+        "Asia/Taipei",
+        "home",
+        20,
+        0,
+        "",
+        "pwa",
+        1,
+        "2026-11-05T00:00:00Z",
+        "",
+      ],
+    );
+    g.TreadmillSegments = [
+      [...HEADERS.TreadmillSegments],
+      ["s2", "w1", 2, 25.5, 5.5, 8, "", ""],
+      ["s1", "w1", 1, 5, 4.5, 1, "", ""],
+      ["gone", "w1", 3, 10, 5, 0, "", "2026-11-05T00:00:00Z"],
+    ];
+    g.Videos = [
+      [...HEADERS.Videos],
+      [
+        "v1",
+        "https://www.youtube.com/watch?v=v7AYKMP6rOE",
+        " 新手瑜伽 ",
+        "瑜伽",
+        20,
+        "",
+        "",
+      ],
+      ["v2", "abcdefghijk", "已刪除", "其他", "", "", "2026-11-05T00:00:00Z"],
+    ];
+    const data = projectCloudData(g, "Asia/Taipei");
+    const walk = data.workouts.find((w) => w.id === "w1")!;
+    expect(walk.minutes).toBe(30.5);
+    expect(walk.segments).toEqual([
+      { minutes: 5, speed: 4.5, incline: 1 },
+      { minutes: 25.5, speed: 5.5, incline: 8 },
+    ]);
+    expect(data.workouts.find((w) => w.id === "w2")!.segments).toBeUndefined();
+    expect(data.videos).toEqual([
+      {
+        id: "v1",
+        youtubeId: "v7AYKMP6rOE",
+        title: "新手瑜伽",
+        category: "瑜伽",
+        minutes: 20,
+      },
+    ]);
+  });
+  it("leaves videos undefined when the spreadsheet has no Videos tab", () =>
+    expect(projectCloudData(grids(), "Asia/Taipei").videos).toBeUndefined());
+});

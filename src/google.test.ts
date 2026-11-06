@@ -16,17 +16,15 @@ function sdk() {
     expires_in: number;
   }) => void;
   const request = vi.fn();
-  const fetcher = vi
-    .fn()
-    .mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          sub: "account-A",
-          email: "a@example.com",
-          email_verified: true,
-        }),
-      ),
-    );
+  const fetcher = vi.fn().mockResolvedValue(
+    new Response(
+      JSON.stringify({
+        sub: "account-A",
+        email: "a@example.com",
+        email_verified: true,
+      }),
+    ),
+  );
   vi.stubGlobal("fetch", fetcher);
   Object.defineProperty(window, "google", {
     configurable: true,

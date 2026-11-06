@@ -14,13 +14,19 @@ import {
   type VideoCategory,
   type VideoLibrary as Library,
 } from "./videos";
+import type { SheetVideo } from "./model";
 
 export function VideoLibrary({
   online,
   initialCategory = "全部",
+  sheetVideos,
+  cloud = false,
 }: {
   online: boolean;
   initialCategory?: VideoCategory | "全部";
+  /** Present only in cloud view; undefined when the spreadsheet has no Videos tab. */
+  sheetVideos?: SheetVideo[];
+  cloud?: boolean;
 }) {
   const [lib, setLib] = useState<Library>(() => readLibrary(localStorage));
   const [category, setCategory] = useState<VideoCategory | "全部">(
@@ -32,7 +38,7 @@ export function VideoLibrary({
   const playerRef = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => setCategory(initialCategory), [initialCategory]);
 
-  const all = visibleVideos(lib);
+  const all = visibleVideos(lib, sheetVideos);
   const list =
     category === "全部" ? all : all.filter((x) => x.category === category);
   const counts = new Map<string, number>();
@@ -223,21 +229,23 @@ export function VideoLibrary({
                   <h3>{x.title}</h3>
                   <p>
                     {x.category}
-                    {x.builtIn ? "" : " · 我的影片"}
+                    {x.fromSheet ? " · 試算表" : x.builtIn ? "" : " · 我的影片"}
                   </p>
                 </div>
-                <button
-                  className="icon-button"
-                  aria-label={`從清單移除：${x.title}`}
-                  onClick={() => {
-                    if (confirm(`從影片庫移除「${x.title}」？`)) {
-                      if (playing?.id === x.id) setPlaying(null);
-                      persist(removeVideo(lib, x.id));
-                    }
-                  }}
-                >
-                  <Trash2 size={15} />
-                </button>
+                {!x.fromSheet && (
+                  <button
+                    className="icon-button"
+                    aria-label={`從清單移除：${x.title}`}
+                    onClick={() => {
+                      if (confirm(`從影片庫移除「${x.title}」？`)) {
+                        if (playing?.id === x.id) setPlaying(null);
+                        persist(removeVideo(lib, x.id));
+                      }
+                    }}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                )}
               </div>
             </article>
           ))}
@@ -248,7 +256,13 @@ export function VideoLibrary({
         </div>
       )}
       <p className="tiny muted">
-        影片直接在頁面內播放（YouTube 隱私強化模式）。清單存於此裝置；
+        影片直接在頁面內播放（YouTube 隱私強化模式）。
+        {cloud
+          ? sheetVideos
+            ? `已讀取試算表 Videos 分頁 ${sheetVideos.length} 部影片（請在試算表中增刪）。`
+            : "試算表尚無 Videos 分頁，可執行升級腳本加入，影片就會跟著帳號走。"
+          : ""}
+        App 內新增的影片存於此裝置；
         {lib.hidden.length > 0 && (
           <>
             已隱藏 {lib.hidden.length} 部內建影片，

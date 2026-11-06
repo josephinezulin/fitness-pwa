@@ -72,7 +72,20 @@ export type Metric = {
   heart?: number;
   steps?: number;
 };
-export type Data = { version: 1; workouts: Workout[]; metrics: Metric[] };
+/** Videos maintained in the user's spreadsheet (cloud view only). */
+export type SheetVideo = {
+  id: string;
+  youtubeId: string;
+  title: string;
+  category: string;
+  minutes?: number;
+};
+export type Data = {
+  version: 1;
+  workouts: Workout[];
+  metrics: Metric[];
+  videos?: SheetVideo[];
+};
 export const empty: Data = { version: 1, workouts: [], metrics: [] };
 export const today = () => dateKey(new Date());
 export function dateKey(d: Date) {
@@ -180,8 +193,44 @@ export function validate(raw: unknown): Data {
     )
       throw Error("健康資料不可為空");
   }
+  if (d.videos !== undefined) {
+    const vids = new Set<string>();
+    if (
+      !Array.isArray(d.videos) ||
+      d.videos.length > 5000 ||
+      d.videos.some(
+        (v) =>
+          !v ||
+          typeof v.id !== "string" ||
+          !v.id ||
+          vids.has(v.id) ||
+          !vids.add(v.id) ||
+          typeof v.youtubeId !== "string" ||
+          !/^[\w-]{11}$/.test(v.youtubeId) ||
+          typeof v.title !== "string" ||
+          !v.title ||
+          v.title.length > 200 ||
+          typeof v.category !== "string" ||
+          (v.minutes !== undefined && !number(v.minutes, 1, 600)),
+      )
+    )
+      throw Error("影片資料格式錯誤");
+  }
   return {
     version: 1,
+    ...(d.videos
+      ? {
+          videos: d.videos.map(
+            ({ id, youtubeId, title, category, minutes }) => ({
+              id,
+              youtubeId,
+              title,
+              category,
+              ...(minutes !== undefined ? { minutes } : {}),
+            }),
+          ),
+        }
+      : {}),
     workouts: d.workouts.map(
       ({ id, date, type, minutes, calories, note, segments }) => ({
         id,
@@ -228,14 +277,16 @@ export function demo(): Data {
     })),
     workouts: weekDays()
       .filter((_, i) => i === 0)
-      .map((date): Workout => ({
-        id: "demo-workout",
-        date,
-        type: "home",
-        minutes: 25,
-        calories: 130,
-        note: "全身循環，完成後伸展 5 分鐘",
-      }))
+      .map(
+        (date): Workout => ({
+          id: "demo-workout",
+          date,
+          type: "home",
+          minutes: 25,
+          calories: 130,
+          note: "全身循環，完成後伸展 5 分鐘",
+        }),
+      )
       .concat({
         id: "demo-treadmill",
         date: dates[11],
