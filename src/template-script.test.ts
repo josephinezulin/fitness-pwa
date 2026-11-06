@@ -2,12 +2,14 @@ import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import { describe, expect, it } from "vitest";
 import {
+  ALL_TABS,
   HEADERS,
-  TAB_NAMES,
+  WORKOUT_TYPE_KEYS,
   validateGrids,
   type Cell,
   type Grids,
 } from "./sheet-schema";
+import { VIDEO_CATEGORIES } from "./videos";
 
 function templateHarness() {
   class Sheet {
@@ -143,6 +145,7 @@ function templateHarness() {
     },
     getSheetByName: (name: string) => sheets.find((s) => s.name === name),
   };
+  const lists: string[][] = [];
   function validation() {
     let checkbox = false;
     const rule = {
@@ -151,7 +154,10 @@ function templateHarness() {
         return rule;
       },
       setAllowInvalid: () => rule,
-      requireValueInList: () => rule,
+      requireValueInList: (list: string[]) => {
+        lists.push(list);
+        return rule;
+      },
       requireFormulaSatisfied: () => rule,
       setHelpText: () => rule,
       build: () => ({ checkbox }),
@@ -175,13 +181,24 @@ function templateHarness() {
   const result = runInNewContext(code + "\ncreateFitnessTemplate();", context, {
     timeout: 3000,
   });
-  return { sheets, metadata, result };
+  return {
+    sheets,
+    metadata,
+    result,
+    lists,
+    validation,
+    newSheet: (name: string) => {
+      const sheet = new Sheet();
+      sheet.name = name;
+      return sheet;
+    },
+  };
 }
 describe("Apps Script template builder (mock, not a Google runtime test)", () => {
   it("creates exactly the PWA schema and default plans within grid bounds", () => {
     const { sheets, metadata, result } = templateHarness();
     expect(result).toContain("/mock-only");
-    expect(sheets.map((s) => s.name)).toEqual(TAB_NAMES);
+    expect(sheets.map((s) => s.name)).toEqual(ALL_TABS);
     expect(metadata).toEqual([["fitnessSchemaVersion", "1", "DOCUMENT"]]);
     const grids = {} as Grids;
     for (const sheet of sheets) {
@@ -202,7 +219,16 @@ describe("Apps Script template builder (mock, not a Google runtime test)", () =>
       WorkoutLogs: 0,
       WorkoutPlans: 3,
       SyncLogs: 0,
+      TreadmillSegments: 0,
+      Videos: 0,
     });
+  });
+  it("offers every PWA workout type in the sheet dropdowns", () => {
+    const { lists } = templateHarness();
+    expect(lists.filter((l) => l.includes("home"))).toEqual([
+      WORKOUT_TYPE_KEYS,
+      WORKOUT_TYPE_KEYS,
+    ]);
   });
   it("preserves decimal display, text timestamps and true boolean plans without placeholder rows", () => {
     const { sheets } = templateHarness();
@@ -290,5 +316,104 @@ describe("targeted placeholder repair", () => {
     expect(rows[2][7]).toBe("");
     expect(rows[3][7]).toBe(false);
     expect(rows[4][7]).toBe("");
+  });
+});
+
+describe("upgrade script for existing copies (mock, not a Google runtime test)", () => {
+  function upgradeHarness(extraTab?: string) {
+    const h = templateHarness();
+    const sheets = h.sheets.slice(0, 5);
+    sheets[2]
+      .getRange(2, 1, 1, 11)
+      .setValues([
+        [
+          "w1",
+          "2026-11-05",
+          "Asia/Taipei",
+          "walk",
+          30,
+          0,
+          "舊資料",
+          "pwa",
+          1,
+          "2026-11-05T00:00:00Z",
+          "",
+        ],
+      ]);
+    if (extraTab) sheets.push(h.newSheet(extraTab));
+    const ss = {
+      getDeveloperMetadata: () => [
+        { getKey: () => "fitnessSchemaVersion", getValue: () => "1" },
+      ],
+      getSheets: () => sheets,
+      getSheetByName: (name: string) => sheets.find((s) => s.name === name),
+      insertSheet(name: string) {
+        const sheet = h.newSheet(name);
+        sheets.push(sheet);
+        return sheet;
+      },
+    };
+    const code = readFileSync(
+      new URL("../apps-script/UpgradeFitnessTemplate.gs", import.meta.url),
+      "utf8",
+    ).replace(
+      "const url = '貼上你的試算表網址';",
+      "const url = 'https://docs.google.com/spreadsheets/d/mock-only/edit';",
+    );
+    const lists: string[][] = [];
+    const run = () =>
+      runInNewContext(
+        code + "\nupgradeFitnessTemplate();",
+        {
+          SpreadsheetApp: {
+            openByUrl: () => ss,
+            newDataValidation: () => {
+              const rule = h.validation();
+              const original = rule.requireValueInList;
+              rule.requireValueInList = (list: string[]) => {
+                lists.push(list);
+                return original(list);
+              };
+              return rule;
+            },
+            BandingTheme: { LIGHT_GREEN: "LIGHT_GREEN" },
+            flush() {},
+          },
+          Logger: { log() {} },
+        },
+        { timeout: 3000 },
+      ) as string[];
+    return { sheets, run, lists };
+  }
+  it("adds the optional tabs, widens type dropdowns and keeps existing rows", () => {
+    const { sheets, run, lists } = upgradeHarness();
+    run();
+    expect(sheets.map((s) => s.name)).toEqual(ALL_TABS);
+    expect(lists.filter((l) => l.includes("home"))).toEqual([
+      WORKOUT_TYPE_KEYS,
+      WORKOUT_TYPE_KEYS,
+    ]);
+    expect(lists).toContainEqual([...VIDEO_CATEGORIES]);
+    const grids = {} as Grids;
+    for (const sheet of sheets) {
+      const name = sheet.name as keyof Grids;
+      expect(sheet.cols).toBe(HEADERS[name].length);
+      grids[name] = sheet
+        .getRange(1, 1, Math.max(1, sheet.getLastRow()), sheet.cols)
+        .getValues();
+    }
+    expect(grids.WorkoutLogs[1][6]).toBe("舊資料");
+    expect(validateGrids(grids).errors).toEqual([]);
+  });
+  it("is safe to run twice", () => {
+    const { sheets, run } = upgradeHarness();
+    run();
+    expect(run()).toContain("Videos 已存在，未修改");
+    expect(sheets).toHaveLength(7);
+  });
+  it("stops before changing anything when an unknown tab exists", () => {
+    const { sheets, run } = upgradeHarness("Notes");
+    expect(run).toThrow("未定義的工作表");
+    expect(sheets).toHaveLength(6);
   });
 });

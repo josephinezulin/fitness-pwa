@@ -165,3 +165,73 @@ describe("Google Sheets v1 contract", () => {
     expect(validateGrids(grids).ok).toBe(true);
   });
 });
+
+describe("optional TreadmillSegments and Videos tabs", () => {
+  const TS = "2026-11-06T00:00:00Z";
+  const withWorkout = (type = "run", minutes: number = 30) => {
+    const grids = fixture();
+    grids.WorkoutLogs.push([
+      "w1",
+      "2026-11-05",
+      "Asia/Taipei",
+      type,
+      minutes,
+      200,
+      "",
+      "pwa",
+      1,
+      TS,
+      "",
+    ]);
+    grids.TreadmillSegments = [
+      [...HEADERS.TreadmillSegments],
+      ["s1", "w1", 1, 10, 6, 2, "", ""],
+      ["s2", "w1", 2, 20, 9, 5, TS, ""],
+    ];
+    return grids;
+  };
+  it("accepts new workout types and valid segments; updatedAt may be blank", () => {
+    const result = validateGrids(withWorkout());
+    expect(result.errors).toEqual([]);
+    expect(result.counts.TreadmillSegments).toBe(2);
+    expect(result.counts.Videos).toBeUndefined();
+  });
+  it("requires WorkoutLogs.minutes to match the rounded segment total", () => {
+    expect(validateGrids(withWorkout("run", 25)).errors.join()).toContain(
+      "分段總和",
+    );
+  });
+  it("rejects segments for non-treadmill types, unknown workouts, duplicate seq and out-of-range values", () => {
+    expect(validateGrids(withWorkout("yoga")).errors.join()).toContain(
+      "walk／run",
+    );
+    const g = withWorkout();
+    g.TreadmillSegments!.push(
+      ["s3", "missing", 1, 5, 5, 0, "", ""],
+      ["s4", "w1", 2, 5, 5, 0, "", TS],
+      ["s5", "w1", 1, 5, 30, 0, "", ""],
+    );
+    const errors = validateGrids(g).errors.join("\n");
+    expect(errors).toContain("找不到對應");
+    expect(errors).toContain("seq 不可重複");
+    expect(errors).toContain("超出範圍");
+  });
+  it("validates Videos rows: YouTube URL or ID, category and minutes", () => {
+    const g = fixture();
+    g.Videos = [
+      [...HEADERS.Videos],
+      ["v1", "https://youtu.be/v7AYKMP6rOE", "新手瑜伽", "瑜伽", 20, "", ""],
+      ["v2", "abcdefghijk", "核心", "其他", "", "", ""],
+    ];
+    expect(validateGrids(g).errors).toEqual([]);
+    g.Videos.push(
+      ["v3", "https://example.com/x", "壞連結", "瑜伽", "", "", ""],
+      ["v4", "abcdefghijk", "壞分類", "跳舞", "", "", ""],
+      ["v5", "abcdefghijk", "壞長度", "其他", 0.5, "", ""],
+    );
+    const errors = validateGrids(g).errors.join("\n");
+    expect(errors).toContain("第 4 列：url");
+    expect(errors).toContain("第 5 列：category");
+    expect(errors).toContain("第 6 列：minutes");
+  });
+});

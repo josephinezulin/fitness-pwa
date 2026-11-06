@@ -1,4 +1,6 @@
 /** Shared contract for the PWA, Gemini template and future Apps Script writer. */
+import { WORKOUT_TYPES, SEGMENT_LIMITS, isWorkoutType } from "./model";
+import { VIDEO_CATEGORIES, parseYouTubeId } from "./videos";
 export const SCHEMA_VERSION = "1";
 export const SCHEMA_KEY = "fitnessSchemaVersion";
 export const MAX_DATA_ROWS = 5000;
@@ -62,15 +64,51 @@ export const HEADERS = {
     "rejectedCount",
     "errorCode",
   ],
+  // Optional, additive tabs (same schema version 1). Older copies without them stay valid.
+  TreadmillSegments: [
+    "id",
+    "workoutId",
+    "seq",
+    "minutes",
+    "speed",
+    "incline",
+    "updatedAt",
+    "deletedAt",
+  ],
+  Videos: [
+    "id",
+    "url",
+    "title",
+    "category",
+    "minutes",
+    "updatedAt",
+    "deletedAt",
+  ],
 } as const;
 export type TabName = keyof typeof HEADERS;
-export const TAB_NAMES = Object.keys(HEADERS) as TabName[];
+/** Required tabs, in template order. */
+export const TAB_NAMES = [
+  "HealthMetrics",
+  "DailySteps",
+  "WorkoutLogs",
+  "WorkoutPlans",
+  "SyncLogs",
+] as const satisfies readonly TabName[];
+export type CoreTab = (typeof TAB_NAMES)[number];
+export const OPTIONAL_TABS = [
+  "TreadmillSegments",
+  "Videos",
+] as const satisfies readonly TabName[];
+export type OptionalTab = (typeof OPTIONAL_TABS)[number];
+export const ALL_TABS: readonly TabName[] = [...TAB_NAMES, ...OPTIONAL_TABS];
+export const WORKOUT_TYPE_KEYS = Object.keys(WORKOUT_TYPES);
 export type Cell = string | number | boolean | null;
-export type Grids = Record<TabName, Cell[][]>;
+export type Grids = Record<CoreTab, Cell[][]> &
+  Partial<Record<OptionalTab, Cell[][]>>;
 export type ValidationReport = {
   ok: boolean;
   errors: string[];
-  counts: Record<TabName, number>;
+  counts: Partial<Record<TabName, number>>;
 };
 const isoDate = (value: Cell | undefined) =>
   typeof value === "string" &&
@@ -112,14 +150,14 @@ export const populated = (row: Cell[]) => row.some((value) => !missing(value));
 
 export function validateGrids(grids: Grids): ValidationReport {
   const errors: string[] = [];
-  const counts = Object.fromEntries(TAB_NAMES.map((tab) => [tab, 0])) as Record<
-    TabName,
-    number
-  >;
+  const present = OPTIONAL_TABS.filter((tab) => grids[tab] !== undefined);
+  const counts: Partial<Record<TabName, number>> = Object.fromEntries(
+    [...TAB_NAMES, ...present].map((tab) => [tab, 0]),
+  );
   const add = (tab: string, row: number, detail: string) => {
     if (errors.length < 50) errors.push(`${tab} 第 ${row} 列：${detail}`);
   };
-  for (const tab of TAB_NAMES) {
+  for (const tab of [...TAB_NAMES, ...present] as TabName[]) {
     const rows = grids[tab];
     if (!Array.isArray(rows)) {
       add(tab, 1, "缺少工作表資料");
@@ -140,7 +178,7 @@ export function validateGrids(grids: Grids): ValidationReport {
       add(tab, MAX_DATA_ROWS + 2, "超出目前支援的 5,000 筆上限");
     rows.slice(1).forEach((cells, index) => {
       if (!populated(cells)) return;
-      counts[tab]++;
+      counts[tab] = (counts[tab] || 0) + 1;
       const row = index + 2;
       if (cells.slice(HEADERS[tab].length).some((v) => !missing(v)))
         add(tab, row, "含未定義的額外欄位");
@@ -155,8 +193,19 @@ export function validateGrids(grids: Grids): ValidationReport {
         add(tab, row, "date 必須為有效 YYYY-MM-DD 純文字");
       if ("timezone" in r && !zone(r.timezone))
         add(tab, row, "timezone 必須為有效 IANA 時區");
-      if ("updatedAt" in r && !timestamp(r.updatedAt))
-        add(tab, row, "updatedAt 必須為 UTC ISO 8601");
+      const optionalStamp = tab === "TreadmillSegments" || tab === "Videos";
+      if (
+        "updatedAt" in r &&
+        !(optionalStamp && missing(r.updatedAt)) &&
+        !timestamp(r.updatedAt)
+      )
+        add(
+          tab,
+          row,
+          optionalStamp
+            ? "updatedAt 必須留白或使用 UTC ISO 8601"
+            : "updatedAt 必須為 UTC ISO 8601",
+        );
       if ("deletedAt" in r && !missing(r.deletedAt) && !timestamp(r.deletedAt))
         add(tab, row, "deletedAt 必須留白或使用 UTC ISO 8601");
       if (
@@ -205,7 +254,7 @@ export function validateGrids(grids: Grids): ValidationReport {
       }
       if (tab === "WorkoutLogs") {
         if (
-          !["home", "walk", "other"].includes(String(r.type)) ||
+          !isWorkoutType(r.type) ||
           !number(r.minutes, 1, 1440, true) ||
           !number(r.calories, 0, 20000)
         )
@@ -220,7 +269,7 @@ export function validateGrids(grids: Grids): ValidationReport {
       if (tab === "WorkoutPlans") {
         if (
           !number(r.weekday, 1, 7, true) ||
-          !["home", "walk", "other"].includes(String(r.type)) ||
+          !isWorkoutType(r.type) ||
           !text(r.title)
         )
           add(tab, row, "課表日期、類型或名稱不符");
@@ -247,6 +296,31 @@ export function validateGrids(grids: Grids): ValidationReport {
           }
         }
       }
+      if (tab === "TreadmillSegments") {
+        if (!text(r.workoutId)) add(tab, row, "workoutId 不可為空");
+        if (!number(r.seq, 1, SEGMENT_LIMITS.count, true))
+          add(tab, row, `seq 必須為 1–${SEGMENT_LIMITS.count} 的整數`);
+        if (
+          !number(r.minutes, ...SEGMENT_LIMITS.minutes) ||
+          !number(r.speed, ...SEGMENT_LIMITS.speed) ||
+          !number(r.incline, ...SEGMENT_LIMITS.incline)
+        )
+          add(
+            tab,
+            row,
+            `分鐘 ${SEGMENT_LIMITS.minutes.join("–")}、速度 ${SEGMENT_LIMITS.speed.join("–")} km/h、坡度 ${SEGMENT_LIMITS.incline.join("–")}% 超出範圍`,
+          );
+      }
+      if (tab === "Videos") {
+        if (typeof r.url !== "string" || !parseYouTubeId(r.url))
+          add(tab, row, "url 必須為 YouTube 影片網址或 11 碼影片 ID");
+        if (!text(r.title) || String(r.title).length > 200)
+          add(tab, row, "title 必須為 1–200 字");
+        if (!VIDEO_CATEGORIES.includes(r.category as never))
+          add(tab, row, `category 必須為：${VIDEO_CATEGORIES.join("、")}`);
+        if (!missing(r.minutes) && !number(r.minutes, 1, 600, true))
+          add(tab, row, "minutes 必須留白或為 1–600 整數");
+      }
       if (tab === "SyncLogs") {
         if (
           !text(r.deviceId) ||
@@ -268,6 +342,7 @@ export function validateGrids(grids: Grids): ValidationReport {
       }
     });
   }
+  crossCheckSegments(grids, add);
   const plans = grids.WorkoutPlans?.slice(1).filter(populated) || [];
   for (const [weekday, type, min, max] of [
     [1, "home", 20, 30],
@@ -291,4 +366,68 @@ export function validateGrids(grids: Grids): ValidationReport {
       );
   }
   return { ok: errors.length === 0, errors, counts };
+}
+
+const SEGMENT_COL = Object.fromEntries(
+  HEADERS.TreadmillSegments.map((name, i) => [name, i]),
+) as Record<(typeof HEADERS.TreadmillSegments)[number], number>;
+/** Active segments grouped by workout, sorted by seq. Rows must already pass validateGrids. */
+export function activeSegments(grids: Grids) {
+  const byWorkout = new Map<string, Cell[][]>();
+  for (const cells of grids.TreadmillSegments?.slice(1) || []) {
+    if (!populated(cells) || !missing(cells[SEGMENT_COL.deletedAt])) continue;
+    const id = String(cells[SEGMENT_COL.workoutId]);
+    byWorkout.set(id, [...(byWorkout.get(id) || []), cells]);
+  }
+  for (const rows of byWorkout.values())
+    rows.sort(
+      (a, b) => Number(a[SEGMENT_COL.seq]) - Number(b[SEGMENT_COL.seq]),
+    );
+  return byWorkout;
+}
+export const segmentOf = (cells: Cell[]) => ({
+  minutes: Number(cells[SEGMENT_COL.minutes]),
+  speed: Number(cells[SEGMENT_COL.speed]),
+  incline: Number(cells[SEGMENT_COL.incline]),
+});
+function crossCheckSegments(
+  grids: Grids,
+  add: (tab: string, row: number, detail: string) => void,
+) {
+  if (!grids.TreadmillSegments || !Array.isArray(grids.WorkoutLogs)) return;
+  const workouts = new Map<string, Cell[]>();
+  for (const cells of grids.WorkoutLogs.slice(1))
+    if (populated(cells)) workouts.set(String(cells[0]), cells);
+  const seen = new Set<string>();
+  grids.TreadmillSegments.slice(1).forEach((cells, index) => {
+    if (!populated(cells) || !missing(cells[SEGMENT_COL.deletedAt])) return;
+    const row = index + 2;
+    const workoutId = String(cells[SEGMENT_COL.workoutId]);
+    const key = `${workoutId}#${cells[SEGMENT_COL.seq]}`;
+    if (seen.has(key))
+      add("TreadmillSegments", row, "同一筆運動的 seq 不可重複");
+    seen.add(key);
+    const workout = workouts.get(workoutId);
+    if (!workout)
+      add("TreadmillSegments", row, "workoutId 找不到對應的 WorkoutLogs");
+    else if (
+      missing(workout[10]) &&
+      !(isWorkoutType(workout[3]) && WORKOUT_TYPES[workout[3]].treadmill)
+    )
+      add("TreadmillSegments", row, "只有 walk／run 運動可以有跑步機分段");
+  });
+  for (const [workoutId, rows] of activeSegments(grids)) {
+    const workout = workouts.get(workoutId);
+    if (!workout || !missing(workout[10])) continue;
+    const total = rows.reduce(
+      (sum, cells) => sum + segmentOf(cells).minutes,
+      0,
+    );
+    if (Math.round(total) !== workout[4])
+      add(
+        "WorkoutLogs",
+        grids.WorkoutLogs.indexOf(workout) + 1,
+        `minutes（${workout[4]}）必須等於跑步機分段總和四捨五入（${Math.round(total * 10) / 10}）`,
+      );
+  }
 }

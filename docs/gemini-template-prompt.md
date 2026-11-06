@@ -41,7 +41,7 @@ requestId,deviceId,receivedAt,rangeStart,rangeEnd,status,acceptedCount,rejectedC
 - 數值欄位保存成真正數字，不含單位文字；active 保存成真正的布林值，可使用核取方塊，不要存成文字 "TRUE"。
 - HealthMetrics.metricType 僅 weight / bodyFat / heartRate，對應 unit 為 kg / percent / bpm；value 範圍依序為 1–500、0–100、20–250。體脂率 23% 存 value=23、unit=percent，不是 0.23 或 2300。
 - DailySteps.totalSteps 為 0–200000 整數；每個時區同一天只有一筆 canonical 總步數，不把 iPhone 與 Apple Watch 重疊來源直接加總。
-- WorkoutLogs.type 為 home / walk / other；minutes 為 1–1440 整數；calories 為 0–20000 數字；note 可空白，最多 2000 字。
+- WorkoutLogs.type 與 WorkoutPlans.type 為 home / strength / jumprope / walk / run / cycling / swim / hike / yoga / pilates / stretch / ball / other；minutes 為 1–1440 整數；calories 為 0–20000 數字；note 可空白，最多 2000 字。（跑步機分段與影片分頁為選用，建立後再執行 apps-script/UpgradeFitnessTemplate.gs 加入，不需請 Gemini 建立。）
 - revision 為從 1 開始的正整數。deletedAt 留白代表未刪除，刪除時寫 UTC 時戳。
 - WorkoutPlans.weekday 採 ISO 1–7（週一到週日）；minMinutes、maxMinutes 為正整數，且 min 不大於 max。tutorialUrl 只能是 HTTPS 的 youtube.com、www.youtube.com 或 youtu.be 連結，沒有時留白。
 - SyncLogs.status 僅 committed / failed / partial；acceptedCount、rejectedCount 為非負整數；errorCode 留白或簡短錯誤代碼，不存健康內容或憑證。

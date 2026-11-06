@@ -10,6 +10,8 @@
 - 登出／授權到期返回本機資料、清除當前雲端檢視；導航切頁不卸載登入元件。重新載入不自動展示帳號快取，需再次登入；同帳號已記住的檔案會重新驗證及讀取，不直接信任舊快取。雲端摘要快取是同源 localStorage，不是加密保管庫。
 - 混合時區資料先拒絕，不把不同曆日靜默混算。
 
+- 選用分頁 TreadmillSegments、Videos 與擴充的運動類型：雲端唯讀檢視可顯示跑步機分段統計與試算表影片；升級腳本 UpgradeFitnessTemplate.gs 已以 mock 測試，需使用者實際執行驗收。
+
 ## 已完成但未連接寫入端的純邏輯
 
 `src/sync-rules.ts`：
@@ -22,7 +24,7 @@
 
 ## 目前仍關閉
 
-- PWA 對 Sheets 的新增、修改、刪除與自動同步。
+- PWA 對 Sheets 的新增、修改、刪除與自動同步（含跑步機分段、影片清單）。未來寫入端需同時寫 WorkoutLogs 與 TreadmillSegments，並維持「分段總和四捨五入＝minutes」；`sync-rules.ts` 的運動變更規劃尚未納入 segments。
 - 本機紀錄自動匯入雲端。
 - 捷徑健康資料上傳與 Apps Script ingestion deployment。Apps Script 程式及 mock 測試已備妥，但預設關閉且尚未部署，見 docs/health-ingest-setup.md。
 

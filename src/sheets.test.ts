@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { inspectSpreadsheet } from "./sheets";
-import { HEADERS, TAB_NAMES } from "./sheet-schema";
+import {
+  HEADERS,
+  OPTIONAL_TABS,
+  TAB_NAMES,
+  type TabName,
+} from "./sheet-schema";
 const session = {
   accessToken: "test-token-not-real",
   expiresAt: Date.now() + 3600000,
@@ -174,6 +179,111 @@ describe("read-only Google Sheets gate", () => {
         `Bearer ${session.accessToken}`,
       );
     }
+  });
+  it("reads optional TreadmillSegments and Videos tabs and projects them", async () => {
+    browserTimers();
+    const tabs: TabName[] = [...TAB_NAMES, ...OPTIONAL_TABS];
+    const ranges = tabs.map((tab) => ({
+      values: [[...HEADERS[tab]]] as unknown[][],
+    }));
+    for (const [day, type, min, max] of [
+      [1, "home", 20, 30],
+      [3, "walk", 30, 60],
+      [6, "home", 20, 30],
+    ])
+      ranges[3].values.push([
+        `plan-${day}`,
+        day,
+        type,
+        "預設課表",
+        min,
+        max,
+        "",
+        true,
+        "2026-11-06T00:00:00Z",
+      ]);
+    ranges[2].values.push([
+      "w1",
+      "2026-11-05",
+      "Asia/Taipei",
+      "run",
+      30,
+      0,
+      "",
+      "pwa",
+      1,
+      "2026-11-05T00:00:00Z",
+      "",
+    ]);
+    ranges[5].values.push(["s1", "w1", 1, 30, 8, 1, "", ""]);
+    ranges[6].values.push([
+      "v1",
+      "https://youtu.be/v7AYKMP6rOE",
+      "新手瑜伽",
+      "瑜伽",
+      20,
+      "",
+      "",
+    ]);
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(json(privateFile))
+      .mockResolvedValueOnce(
+        json({
+          ...metadata,
+          sheets: tabs.map((title) => ({
+            properties: {
+              title,
+              gridProperties: {
+                rowCount: 1000,
+                columnCount: HEADERS[title].length,
+              },
+            },
+          })),
+        }),
+      )
+      .mockResolvedValueOnce(json({ valueRanges: ranges }));
+    vi.stubGlobal("fetch", fetcher);
+    const result = await inspectSpreadsheet(
+      "test_spreadsheet_id",
+      session,
+      new AbortController().signal,
+    );
+    expect(result.report.errors).toEqual([]);
+    expect(String(fetcher.mock.calls[2][0])).toContain("TreadmillSegments");
+    expect(result.data!.workouts[0].segments).toEqual([
+      { minutes: 30, speed: 8, incline: 1 },
+    ]);
+    expect(result.data!.videos![0].youtubeId).toBe("v7AYKMP6rOE");
+  });
+  it("rejects unknown extra tabs before reading cells", async () => {
+    browserTimers();
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(json(privateFile))
+      .mockResolvedValueOnce(
+        json({
+          ...metadata,
+          sheets: [
+            ...metadata.sheets,
+            {
+              properties: {
+                title: "Notes",
+                gridProperties: { rowCount: 10, columnCount: 2 },
+              },
+            },
+          ],
+        }),
+      );
+    vi.stubGlobal("fetch", fetcher);
+    await expect(
+      inspectSpreadsheet(
+        "test_spreadsheet_id",
+        session,
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow("選用");
+    expect(fetcher).toHaveBeenCalledTimes(2);
   });
   it("does not continue when permission is revoked", async () => {
     browserTimers();

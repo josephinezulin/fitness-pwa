@@ -4,6 +4,8 @@ import type { GoogleSession } from "./google";
 import {
   HEADERS,
   MAX_DATA_ROWS,
+  OPTIONAL_TABS,
+  type TabName,
   SCHEMA_KEY,
   SCHEMA_VERSION,
   TAB_NAMES,
@@ -129,15 +131,23 @@ export async function inspectSpreadsheet(
     throw Error(
       "試算表缺少正確版本標記 fitnessSchemaVersion=1，請使用相容範本。",
     );
+  const titles = meta.sheets.map((s) => s.properties.title);
   if (
-    meta.sheets.length !== TAB_NAMES.length ||
-    TAB_NAMES.some(
-      (tab) => !meta.sheets.some((s) => s.properties.title === tab),
-    )
+    TAB_NAMES.some((tab) => !titles.includes(tab)) ||
+    titles.some(
+      (t) =>
+        !(TAB_NAMES as readonly string[]).includes(t) &&
+        !(OPTIONAL_TABS as readonly string[]).includes(t),
+    ) ||
+    new Set(titles).size !== titles.length
   )
     throw Error(
-      "試算表必須正好包含 HealthMetrics、DailySteps、WorkoutLogs、WorkoutPlans、SyncLogs 五張工作表。",
+      "試算表必須包含 HealthMetrics、DailySteps、WorkoutLogs、WorkoutPlans、SyncLogs 五張工作表；只可另外加入選用的 TreadmillSegments、Videos。",
     );
+  const tabs: TabName[] = [
+    ...TAB_NAMES,
+    ...OPTIONAL_TABS.filter((tab) => titles.includes(tab)),
+  ];
   for (const sheet of meta.sheets) {
     if (sheet.properties.gridProperties.rowCount > MAX_DATA_ROWS + 1)
       throw Error(
@@ -153,7 +163,7 @@ export async function inspectSpreadsheet(
   const valuesUrl = new URL(
     `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}/values:batchGet`,
   );
-  for (const tab of TAB_NAMES) {
+  for (const tab of tabs) {
     const end = String.fromCharCode(64 + HEADERS[tab].length);
     const rows = meta.sheets.find((s) => s.properties.title === tab)!.properties
       .gridProperties.rowCount;
@@ -165,18 +175,15 @@ export async function inspectSpreadsheet(
   const response = await getJson<{
     valueRanges?: { values?: Grids[keyof Grids] }[];
   }>(valuesUrl, session, signal);
-  if (response.valueRanges?.length !== TAB_NAMES.length)
+  if (response.valueRanges?.length !== tabs.length)
     throw Error("Google 未回傳完整工作表資料，未完成驗收。");
   const grids = Object.fromEntries(
-    TAB_NAMES.map((tab, index) => [
-      tab,
-      response.valueRanges![index].values || [],
-    ]),
+    tabs.map((tab, index) => [tab, response.valueRanges![index].values || []]),
   ) as Grids;
   const report = validateGrids(grids);
-  for (const tab of TAB_NAMES) {
+  for (const tab of tabs) {
     if (
-      grids[tab].some((row) =>
+      grids[tab]!.some((row) =>
         row.some((cell) => typeof cell === "string" && cell.startsWith("=")),
       )
     ) {

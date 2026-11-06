@@ -64,6 +64,8 @@ var HEALTH_HEADERS = {
     "errorCode",
   ],
 };
+// Optional additive tabs (schema version 1). Ingestion never reads or writes them.
+var HEALTH_OPTIONAL_TABS = ["TreadmillSegments", "Videos"];
 function healthFail(code) {
   var error = new Error(code);
   error.healthCode = code;
@@ -286,7 +288,19 @@ function healthContext(id) {
   var ss = SpreadsheetApp.openById(id),
     sheets = ss.getSheets(),
     tabs = {};
-  if (sheets.length !== 5) healthFail("SCHEMA_MISMATCH");
+  var names = sheets.map(function (sheet) {
+    return sheet.getName();
+  });
+  if (
+    names.some(function (name, i) {
+      return (
+        names.indexOf(name) !== i ||
+        (!HEALTH_HEADERS.hasOwnProperty(name) &&
+          HEALTH_OPTIONAL_TABS.indexOf(name) < 0)
+      );
+    })
+  )
+    healthFail("SCHEMA_MISMATCH");
   var version = ss.getDeveloperMetadata().filter(function (m) {
     return (
       m.getKey() === "fitnessSchemaVersion" &&

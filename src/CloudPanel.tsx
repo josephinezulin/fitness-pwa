@@ -26,7 +26,7 @@ import {
   type CloudIdentity,
 } from "./workspace";
 import { loadSiteConfig } from "./site-config";
-import { TAB_NAMES } from "./sheet-schema";
+import { ALL_TABS } from "./sheet-schema";
 export type CloudReadState = { busy: boolean; error: string };
 export function CloudPanel({
   onUseSnapshot,
@@ -401,9 +401,12 @@ export function CloudPanel({
             {inspection.title} · {inspection.timezone}
           </p>
           <ul>
-            {TAB_NAMES.map((tab) => (
+            {ALL_TABS.map((tab) => (
               <li key={tab}>
-                {tab}：{inspection.report.counts[tab]} 筆
+                {tab}：
+                {inspection.report.counts[tab] === undefined
+                  ? "未建立（選用）"
+                  : `${inspection.report.counts[tab]} 筆`}
               </li>
             ))}
           </ul>

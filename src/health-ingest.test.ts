@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import { describe, expect, it } from "vitest";
-import { HEADERS } from "./sheet-schema";
+import { HEADERS, OPTIONAL_TABS, TAB_NAMES } from "./sheet-schema";
 const hash = (s: string) => createHash("sha256").update(s).digest("hex");
 const token = "a".repeat(64);
 const now = new Date().toISOString();
@@ -39,6 +39,7 @@ function harness(
     disabled?: boolean;
     failStepsOnce?: boolean;
     busy?: boolean;
+    tabs?: string[];
   } = {},
 ) {
   let fileReads = 0,
@@ -53,11 +54,15 @@ function harness(
     ["HEALTH_SPREADSHEET_ID", "test-sheet-only"],
   ]);
   const sheets = Object.fromEntries(
-    Object.entries(HEADERS).map(([name, headers]) => {
+    (options.tabs || Object.keys(HEADERS)).map((name) => {
+      const headers: readonly string[] = HEADERS[
+        name as keyof typeof HEADERS
+      ] || ["id"];
       const rows: unknown[][] = [[...headers]];
       let maxRows = 1000;
       const sheet = {
         rows,
+        getName: () => name,
         getMaxColumns: () => headers.length,
         getMaxRows: () => maxRows,
         getLastRow: () => rows.length,
@@ -202,7 +207,21 @@ function harness(
 }
 describe("authenticated Shortcuts ingestion (Google services mocked)", () => {
   it("uses exactly the same five-table contract as the PWA", () => {
-    expect(harness().context.HEALTH_HEADERS).toEqual(HEADERS);
+    const h = harness();
+    expect(h.context.HEALTH_HEADERS).toEqual(
+      Object.fromEntries(TAB_NAMES.map((tab) => [tab, HEADERS[tab]])),
+    );
+    expect(h.context.HEALTH_OPTIONAL_TABS).toEqual([...OPTIONAL_TABS]);
+  });
+  it("accepts copies with or without optional tabs but rejects unknown tabs", () => {
+    expect(harness({ tabs: [...TAB_NAMES] }).post(request())).toMatchObject({
+      ok: true,
+    });
+    expect(
+      harness({ tabs: [...TAB_NAMES, ...OPTIONAL_TABS, "Notes"] }).post(
+        request(),
+      ),
+    ).toEqual({ ok: false, error: "SCHEMA_MISMATCH" });
   });
   it("is disabled by default and refuses GET without exposing health data", () => {
     const h = harness({ disabled: true });
