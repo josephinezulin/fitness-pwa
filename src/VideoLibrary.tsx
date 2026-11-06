@@ -7,6 +7,7 @@ import {
   RotateCcw,
   Trash2,
   X,
+  Star,
 } from "lucide-react";
 import {
   VIDEO_CATEGORIES,
@@ -25,6 +26,7 @@ import {
   type VideoLibrary as Library,
 } from "./videos";
 import type { SheetVideo } from "./model";
+import { seenCount, type Preferences } from "./preferences";
 
 export function VideoLibrary({
   online,
@@ -34,6 +36,11 @@ export function VideoLibrary({
   canEditCloud = false,
   onSaveVideo,
   onDeleteVideo,
+  preferences,
+  onToggleFavorite,
+  onMarkSeen,
+  onRecord,
+  canRecord = false,
 }: {
   online: boolean;
   initialCategory?: VideoCategory | "全部";
@@ -43,6 +50,11 @@ export function VideoLibrary({
   canEditCloud?: boolean;
   onSaveVideo?: (video: SheetVideo) => boolean;
   onDeleteVideo?: (id: string) => boolean;
+  preferences?: Preferences;
+  onToggleFavorite?: (id: string) => boolean;
+  onMarkSeen?: (id: string) => boolean;
+  onRecord?: (video: Video, countWatch: boolean) => void;
+  canRecord?: boolean;
 }) {
   const [lib, setLib] = useState<Library>(() => readLibrary(localStorage));
   const [category, setCategory] = useState<VideoCategory | "全部">(
@@ -52,14 +64,21 @@ export function VideoLibrary({
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Video | null>(null);
   const [error, setError] = useState("");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [markedThisPlay, setMarkedThisPlay] = useState(false);
   const playerRef = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => setCategory(initialCategory), [initialCategory]);
 
   const all = visibleVideos(cloud ? { ...lib, custom: [] } : lib, sheetVideos);
+  const available = favoritesOnly
+    ? all.filter((x) => preferences?.favorites.includes(x.youtubeId))
+    : all;
   const list =
-    category === "全部" ? all : all.filter((x) => x.category === category);
+    category === "全部"
+      ? available
+      : available.filter((x) => x.category === category);
   const counts = new Map<string, number>();
-  for (const x of all)
+  for (const x of available)
     counts.set(x.category, (counts.get(x.category) || 0) + 1);
 
   function persist(next: Library) {
@@ -75,6 +94,7 @@ export function VideoLibrary({
   }
   function play(video: Video) {
     setPlaying(video);
+    setMarkedThisPlay(false);
     requestAnimationFrame(() =>
       playerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
     );
@@ -229,10 +249,23 @@ export function VideoLibrary({
               onClick={() => setCategory(c)}
             >
               {c}
-              <small>{c === "全部" ? all.length : counts.get(c)}</small>
+              <small>{c === "全部" ? available.length : counts.get(c)}</small>
             </button>
           ))}
       </div>
+      {onToggleFavorite && (
+        <button
+          className="text-button"
+          aria-pressed={favoritesOnly}
+          onClick={() => {
+            setFavoritesOnly((v) => !v);
+            setCategory("全部");
+          }}
+        >
+          <Star size={15} fill={favoritesOnly ? "currentColor" : "none"} />
+          {favoritesOnly ? "顯示全部影片" : "只看我的收藏"}
+        </button>
+      )}
       {playing && (
         <div className="player" ref={playerRef}>
           <div className="player-frame">
@@ -271,6 +304,34 @@ export function VideoLibrary({
               <X size={16} />
             </button>
           </div>
+          <div className="player-actions">
+            {onRecord && (
+              <button
+                className="primary"
+                disabled={!canRecord}
+                onClick={() => {
+                  onRecord(playing, !markedThisPlay);
+                  setPlaying(null);
+                }}
+              >
+                完成，記錄這次運動
+              </button>
+            )}
+            {onMarkSeen && (
+              <button
+                className="secondary"
+                disabled={markedThisPlay}
+                onClick={() => {
+                  if (onMarkSeen(playing.youtubeId)) setMarkedThisPlay(true);
+                }}
+              >
+                {markedThisPlay ? "本次已標記看過" : "看過一次"}
+                {seenCount(preferences, playing.youtubeId)
+                  ? `（已標記 ${seenCount(preferences, playing.youtubeId)} 次）`
+                  : ""}
+              </button>
+            )}
+          </div>
         </div>
       )}
       {list.length ? (
@@ -302,8 +363,30 @@ export function VideoLibrary({
                   <p>
                     {x.category}
                     {x.fromSheet ? " · 試算表" : x.builtIn ? "" : " · 我的影片"}
+                    {seenCount(preferences, x.youtubeId)
+                      ? ` · 看過 ${seenCount(preferences, x.youtubeId)} 次`
+                      : ""}
                   </p>
                 </div>
+                {onToggleFavorite && (
+                  <button
+                    className="icon-button"
+                    aria-label={`收藏影片：${x.title}`}
+                    aria-pressed={
+                      preferences?.favorites.includes(x.youtubeId) || false
+                    }
+                    onClick={() => onToggleFavorite(x.youtubeId)}
+                  >
+                    <Star
+                      size={16}
+                      fill={
+                        preferences?.favorites.includes(x.youtubeId)
+                          ? "currentColor"
+                          : "none"
+                      }
+                    />
+                  </button>
+                )}
                 {x.fromSheet && (
                   <button
                     className="icon-button"
@@ -340,7 +423,9 @@ export function VideoLibrary({
         </div>
       ) : (
         <div className="empty">
-          這個分類還沒有影片，點「新增影片」貼上網址。
+          {favoritesOnly
+            ? "還沒有符合分類的收藏，點影片旁的星星加入收藏。"
+            : "這個分類還沒有影片，點「新增影片」貼上網址。"}
         </div>
       )}
       <p className="tiny muted">
@@ -366,6 +451,7 @@ export function VideoLibrary({
           </>
         )}
         JSON 備份會一併包含自訂影片。
+        {preferences && " 收藏與觀看標記儲存在此裝置，依帳號及試算表分開保存。"}
       </p>
     </section>
   );

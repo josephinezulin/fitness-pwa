@@ -24,7 +24,7 @@
 - iOS 捷徑健康資料上傳的 Apps Script deployment。`HealthIngest.gs` 與 mock 測試已備妥，預設關閉；尚無經實機驗證的 /exec 健康上傳端點。
 - 不自動匯入、合併或還原本機資料到雲端。
 
-下一步是完成 iPhone 實機驗收，並依交接文件進行階段 D 的熱量估算、跑步機範本、影片完成記錄與趨勢改善。Google Cloud 網站設定已由使用者完成，不要求重新建立 OAuth client 或維護 Client Secret。
+階段 D 的熱量輔助、跑步機範本、影片預填記錄、收藏及週趨勢已實作，驗收見 [階段 D](stage-d-progress.md)。下一步持續收集 iPhone 實機回報，並接續階段 E。Google Cloud 網站設定已由使用者完成，不要求重新建立 OAuth client 或維護 Client Secret。
 
 ## 備份範圍
 

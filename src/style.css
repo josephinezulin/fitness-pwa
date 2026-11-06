@@ -1528,3 +1528,123 @@ button.video-link {
     font-size: 8px;
   }
 }
+
+/* Recording shortcuts and personal weekly progress */
+.preset-list,
+.player-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.preset-list .secondary {
+  font-size: 11px;
+  padding: 9px 10px;
+  margin: 4px 0;
+  min-height: 44px;
+}
+.form-errors {
+  padding-left: 18px;
+  color: #975442;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.energy-helper {
+  padding: 10px 14px;
+  border: 1px solid #e1e8d9;
+  border-radius: 8px;
+  margin: 12px 0;
+}
+.energy-helper summary {
+  cursor: pointer;
+  min-height: 28px;
+  line-height: 28px;
+  color: #5b7452;
+}
+.weekly-goal,
+.weekly-activity {
+  margin-bottom: 22px;
+}
+.goal-total {
+  color: #657b58;
+  font-size: 16px;
+  margin: 18px 0 12px;
+}
+.goal-total strong {
+  font-weight: 500;
+  font-size: 32px;
+  color: #385c3e;
+}
+.goal-total span {
+  font-size: 12px;
+}
+.weekly-goal progress {
+  appearance: none;
+  width: 100%;
+  height: 9px;
+  border: 0;
+  border-radius: 99px;
+  background: #eaf0e3;
+  overflow: hidden;
+}
+.weekly-goal progress::-webkit-progress-bar {
+  background: #eaf0e3;
+  border-radius: 99px;
+}
+.weekly-goal progress::-webkit-progress-value {
+  background: #708d61;
+  border-radius: 99px;
+}
+.weekly-goal progress::-moz-progress-bar {
+  background: #708d61;
+  border-radius: 99px;
+}
+.goal-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  margin-top: 18px;
+  max-width: 440px;
+}
+.goal-editor label,
+.goal-editor p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.goal-editor input {
+  width: 100%;
+  border: 1px solid #dfe5d6;
+  border-radius: 6px;
+  padding: 10px 12px;
+  min-height: 44px;
+}
+.goal-editor .secondary {
+  margin: 0;
+}
+.weekly-chart {
+  min-width: 0;
+  width: 100%;
+}
+.player-actions {
+  align-items: center;
+  padding-top: 12px;
+}
+.player-actions .secondary {
+  margin: 0;
+}
+.video-meta h3 {
+  overflow-wrap: anywhere;
+}
+.video-meta {
+  flex-wrap: wrap;
+}
+.video-meta > .grow {
+  flex-basis: 100%;
+  margin-bottom: 4px;
+}
+.video-meta .icon-button {
+  min-width: 44px;
+  min-height: 44px;
+}
+.dialog .segment input {
+  min-height: 44px;
+}

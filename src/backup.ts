@@ -1,10 +1,16 @@
 import { validate, type Data } from "./model";
 import { validateLibrary, type VideoLibrary } from "./videos";
+import { validatePreferences, type Preferences } from "./preferences";
 
-export function makeBackup(data: Data, library?: VideoLibrary) {
+export function makeBackup(
+  data: Data,
+  library?: VideoLibrary,
+  preferences?: Preferences,
+) {
   return {
     ...validate(data),
     ...(library ? { videoLibrary: validateLibrary(library) } : {}),
+    ...(preferences ? { experience: validatePreferences(preferences) } : {}),
   };
 }
 /** Earlier exports used videos for a local library; accept both formats without losing cloud videos. */
@@ -20,6 +26,10 @@ export function parseBackup(raw: unknown) {
   );
   return {
     data,
+    preferences:
+      input.experience === undefined
+        ? null
+        : validatePreferences(input.experience),
     library:
       library !== undefined
         ? validateLibrary(library)

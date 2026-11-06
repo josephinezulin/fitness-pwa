@@ -1,3 +1,7 @@
+import { CATEGORY_WORKOUT, pace, type WorkoutDraft } from "./exercise";
+import { preferenceKey, markSeen } from "./preferences";
+import { usePreferences } from "./usePreferences";
+import { WeeklyActivity, WeeklyGoal } from "./WeeklyActivity";
 import { makeBackup, parseBackup } from "./backup";
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -56,7 +60,12 @@ import {
 } from "./model";
 import { WorkoutForm, TreadmillStats } from "./WorkoutForm";
 import { VideoLibrary } from "./VideoLibrary";
-import { readLibrary, storeLibrary, type VideoCategory } from "./videos";
+import {
+  readLibrary,
+  storeLibrary,
+  watchUrl,
+  type VideoCategory,
+} from "./videos";
 import { CloudPanel, type CloudReadState } from "./CloudPanel";
 import { PwaUpdate } from "./PwaUpdate";
 import { calendarDateInZone } from "./calendar";
@@ -76,7 +85,7 @@ const typeIcon = (type: WorkoutType) =>
 function workoutDetail(w: Workout) {
   if (!w.segments) return "";
   const t = treadmillSummary(w.segments);
-  return `跑步機 ${w.segments.length} 段 · ${t.distanceKm} km · 均速 ${t.avgSpeed} km/h · 均坡 ${t.avgIncline}% · 爬升 ${t.elevationM} m`;
+  return `跑步機 ${w.segments.length} 段 · ${t.distanceKm} km · 均速 ${t.avgSpeed} km/h · 約 ${pace(t.avgSpeed)} 分/km · 均坡 ${t.avgIncline}% · 爬升 ${t.elevationM} m`;
 }
 function App() {
   const workspace = useWorkspace();
@@ -102,6 +111,11 @@ function App() {
     [metric, setMetric] = useState<"weight" | "fat" | "heart" | "steps">(
       "weight",
     );
+  const [workoutDraft, setWorkoutDraft] = useState<WorkoutDraft | null>(null);
+  const preferences = usePreferences(
+    preferenceKey(workspace.cloud),
+    setMessage,
+  );
   React.useEffect(() => {
     if (!modal) return;
     const previous = document.activeElement as HTMLElement | null;
@@ -146,6 +160,7 @@ function App() {
   React.useEffect(() => {
     setModal(null);
     setEditing(null);
+    setWorkoutDraft(null);
   }, [workspace.cloud?.subject, workspace.cloud?.spreadsheetId]);
   function save(next: Data) {
     try {
@@ -167,13 +182,20 @@ function App() {
   const w = latest("weight"),
     f = latest("fat"),
     steps = data.metrics.find((m) => m.date === viewToday)?.steps;
-  const weekWorkouts = data.workouts.filter((w) => days.includes(w.date));
+  const weekWorkouts = data.workouts.filter(
+    (w) => days.includes(w.date) && w.date <= viewToday,
+  );
+  const weekMinutes =
+    Math.round(
+      weekWorkouts.reduce((total, workout) => total + workout.minutes, 0) * 10,
+    ) / 10;
   const begin = (workout?: Workout) => {
     if (!workspace.canEditCloud) {
       setMessage("請先完成同步或處理連線狀態，再編輯運動。");
       return;
     }
     setEditing(workout || null);
+    setWorkoutDraft(null);
     setModal("workout");
   };
   const deleteWorkout = (id: string) => {
@@ -188,6 +210,7 @@ function App() {
             makeBackup(
               data,
               workspace.cloud ? undefined : readLibrary(localStorage),
+              preferences.value,
             ),
             null,
             2,
@@ -220,7 +243,14 @@ function App() {
           storeLibrary(localStorage, videos);
           setVideoVersion((v) => v + 1);
         }
-        setMessage("已成功還原資料");
+        const restoredPreferences = parsed.preferences
+          ? preferences.update(() => parsed.preferences!)
+          : true;
+        setMessage(
+          restoredPreferences
+            ? "已成功還原資料"
+            : "運動與健康紀錄已還原；裝置偏好設定尚未還原，原始內容已保留。",
+        );
       }
     } catch (e) {
       setMessage("無法還原：" + (e as Error).message);
@@ -404,7 +434,7 @@ function App() {
       </div>
       <div>
         <span>本週總時間</span>
-        <b>{Math.round(weekWorkouts.reduce((a, w) => a + w.minutes, 0))}</b>
+        <b>{weekMinutes}</b>
         <small>分鐘</small>
       </div>
       <div>
@@ -745,10 +775,10 @@ function App() {
                   },
                   {
                     label: "本週運動",
-                    value: done,
-                    unit: "/ 3 次",
+                    value: weekMinutes,
+                    unit: "分鐘",
                     icon: Flame,
-                    sub: `已累積 ${Math.round(weekWorkouts.reduce((a, w) => a + w.minutes, 0))} 分鐘`,
+                    sub: `本週目標 ${preferences.value.weeklyGoal} 分鐘 · 課表 ${done}/3 完成`,
                     color: "peach",
                   },
                 ].map((s) => (
@@ -767,6 +797,14 @@ function App() {
                   </article>
                 ))}
               </div>
+              <WeeklyGoal
+                key={preferenceKey(workspace.cloud)}
+                minutes={weekMinutes}
+                goal={preferences.value.weeklyGoal}
+                onChange={(weeklyGoal) =>
+                  preferences.update((p) => ({ ...p, weeklyGoal }))
+                }
+              />
               <div className="two-column">
                 {chart()}
                 {schedule()}
@@ -835,6 +873,7 @@ function App() {
           {page === "運動紀錄" && (
             <>
               {weekSummary()}
+              <WeeklyActivity workouts={data.workouts} reference={viewToday} />
               {logs()}
             </>
           )}
@@ -844,6 +883,29 @@ function App() {
               online={online}
               initialCategory={videoCategory}
               cloud={!!workspace.cloud}
+              preferences={preferences.value}
+              onToggleFavorite={(id) =>
+                preferences.update((p) => ({
+                  ...p,
+                  favorites: p.favorites.includes(id)
+                    ? p.favorites.filter((x) => x !== id)
+                    : [...p.favorites, id],
+                }))
+              }
+              onMarkSeen={(id) => preferences.update((p) => markSeen(p, id))}
+              canRecord={workspace.canEditCloud}
+              onRecord={(video, countWatch) => {
+                setEditing(null);
+                setWorkoutDraft({
+                  type: CATEGORY_WORKOUT[video.category],
+                  minutes: video.minutes || 30,
+                  note: `影片：${video.title}\n${watchUrl(video.youtubeId)}`,
+                  treadmill: false,
+                  videoId: video.youtubeId,
+                  countWatch,
+                });
+                setModal("workout");
+              }}
               sheetVideos={workspace.cloud ? data.videos : undefined}
               canEditCloud={workspace.canEditCloud}
               onSaveVideo={(video) =>
@@ -1041,6 +1103,8 @@ function App() {
             {modal === "workout" ? (
               <WorkoutForm
                 editing={editing}
+                initialDraft={workoutDraft}
+                metrics={data.metrics}
                 today={viewToday}
                 disabled={!workspace.canEditCloud}
                 onSave={(record) => {
@@ -1051,7 +1115,14 @@ function App() {
                       record,
                     ],
                   });
-                  if (ok) setModal(null);
+                  if (ok) {
+                    if (workoutDraft?.videoId && workoutDraft.countWatch) {
+                      const id = workoutDraft.videoId;
+                      preferences.update((p) => markSeen(p, id));
+                    }
+                    setModal(null);
+                    setWorkoutDraft(null);
+                  }
                   return ok;
                 }}
               />
