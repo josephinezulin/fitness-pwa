@@ -79,6 +79,65 @@ describe("seven-day overlapping synchronization rules", () => {
   });
 });
 describe("workout conflict plans (no network writes)", () => {
+  const treadmill: RemoteWorkout = {
+    ...workout,
+    type: "walk",
+    segments: [
+      { minutes: 10, speed: 5, incline: 2 },
+      { minutes: 20, speed: 6, incline: 5 },
+    ],
+  };
+
+  it("detects a speed-only edit and preserves independent segment snapshots", () => {
+    const edited = {
+      ...treadmill,
+      segments: treadmill.segments!.map((s) => ({ ...s, speed: s.speed + 1 })),
+    };
+    const result = planWorkoutChanges([treadmill], [edited], [treadmill]);
+    expect(result.conflicts).toEqual([]);
+    expect(result.changes).toHaveLength(1);
+    expect(result.changes[0].value?.segments).toEqual(edited.segments);
+    edited.segments[0].speed = 20;
+    expect(result.changes[0].value?.segments?.[0].speed).toBe(6);
+  });
+
+  it("treats reread segment arrays as equal and acknowledges successful retries", () => {
+    const reread = {
+      ...treadmill,
+      revision: 2,
+      segments: treadmill.segments!.map((s) => ({ ...s })),
+    };
+    expect(planWorkoutChanges([treadmill], [reread], [reread])).toEqual({
+      changes: [],
+      conflicts: [],
+    });
+  });
+
+  it("protects manual remote incline edits even when revision was unchanged", () => {
+    const remote = {
+      ...treadmill,
+      segments: treadmill.segments!.map((s) => ({ ...s, incline: 8 })),
+    };
+    expect(
+      planWorkoutChanges([treadmill], [{ ...treadmill, note: "local" }], [remote]),
+    ).toEqual({ changes: [], conflicts: ["w1"] });
+  });
+
+  it("detects adding or removing treadmill details without changing total minutes", () => {
+    const { segments: _segments, ...withoutSegments } = treadmill;
+    const adding = planWorkoutChanges([withoutSegments], [treadmill], [withoutSegments]);
+    expect(adding.changes[0].value?.segments).toEqual(treadmill.segments);
+    const removing = planWorkoutChanges([treadmill], [withoutSegments], [treadmill]);
+    expect(removing.changes).toHaveLength(1);
+    expect(removing.changes[0].value).not.toHaveProperty("segments");
+  });
+
+  it("retains segment order when a session is rearranged", () => {
+    const edited = { ...treadmill, segments: [...treadmill.segments!].reverse() };
+    const result = planWorkoutChanges([treadmill], [edited], [treadmill]);
+    expect(result.changes[0].value?.segments?.[0].minutes).toBe(20);
+  });
+
   it("plans an update with the expected revision", () => {
     const result = planWorkoutChanges(
       [workout],
