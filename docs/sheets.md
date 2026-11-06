@@ -1,6 +1,6 @@
 # Google Sheets 資料模型（設計稿，尚未建立遠端工作表）
 
-所有工作表保持私人；服務端由 Script Properties 保存 SPREADSHEET_ID、OWNER_SUB、裝置憑證摘要與可輪替設定，不將私密資訊寫入 sheet 或前端。時間戳為 UTC ISO 8601；日摘要的 date 為指定 IANA 時區的 YYYY-MM-DD，不從 UTC 截斷。使用者需確認日摘要時區，建議與 iPhone 健康統計一致。
+每位使用者的資料試算表及所有工作表保持私人；捷徑寫入服務端由各自的 Script Properties 保存 SPREADSHEET_ID、OWNER_SUB、裝置憑證摘要與可輪替設定，不將私密資訊寫入 sheet 或前端。PWA 的目標 spreadsheetId 由使用者授權選擇，不能硬編碼成開發者共用的資料表。時間戳為 UTC ISO 8601；日摘要的 date 為指定 IANA 時區的 YYYY-MM-DD，不從 UTC 截斷。使用者需確認日摘要時區，建議與 iPhone 健康統計一致。
 
 | 工作表 | 欄位 |
 | --- | --- |
@@ -25,3 +25,31 @@ WorkoutPlans 預設 weekday 採 ISO 1–7：1 / home / 20–30；3 / walk / 30�
 ## 第二階段驗收
 
 授權帳號可 CRUD；其他帳號無法讀取。相同 requestId 重送、部分寫入後重試、兩台 client revision 衝突、跨時區與夏令時間、惡意公式字串皆需測試。完成後再為 PWA 加入同步狀態、離線 outbox 與失敗重試；第一階段沒有假同步按鈕。
+
+## 保留 Google 範本與各自資料的擴充彈性
+
+使用者已確認只使用 Google Drive／Google Sheets，不整合 OneDrive／Excel。第一版仍為單人應用；以下為第二階段的設計約束，尚未實作登入、選表或多使用者同步。
+
+### 預期流程
+
+1. 開發者提供唯讀 Google Sheets 範本，使用者透過「建立副本」複製到自己的 Google Drive，保留為原生 Google Sheets。
+2. 公開範本只含五張工作表的欄名、預設課表、教學連結與明確標記的虛構範例；不得包含真實健康資料、綁定的裝置憑證、同步日誌或已授權的 Apps Script 部署資訊。
+3. 使用者在共同的 PWA 網址完成 Google 登入與授權，透過 Google Picker 選擇自己的私人副本。不能以檔名自動猜測或選取開發者的表。
+4. 驗證五張工作表、必要欄位與 schemaVersion。可將 schemaVersion 放在 spreadsheet developerMetadata，不新增第六張工作表。格式不符時停止同步，不自動覆蓋既有檔案。
+5. 前端只對當次授權選定的檔案存取。OAuth client ID 可由全體共用；各人的 access token 與目標檔案不共用。`drive.file` 配合 Picker 的可行性仍須實測。
+
+### 隔離與切換
+
+- 使用者檔案設定與本機健康資料應以 Google 帳號穩定識別碼及 spreadsheetId 分區，不能沿用第一階段單一 localStorage key 當作所有帳號共用資料。
+- 第一階段本機資料沒有 Google 擁有者資訊。首次連線時需由使用者明確選擇是否匯入，不能自動上傳到第一個登入帳號。
+- 登出、切換帳號或切換試算表時清除記憶體中的 access token、取消待執行請求，隱藏上一個帳號資料；舊回應不得寫回目前畫面。待同步資料必須保留原帳號／檔案歸屬。
+- 所有 Sheets API 讀寫共用資料存取層，UI 不持有固定開發者 spreadsheetId；範本 ID 與實際資料檔案 ID 分開處理。
+- 只填入 Sheet ID 不代表授權，實際存取仍由 Google OAuth 與該檔案權限控制。不要求使用者公開自己的副本。
+
+### iOS 捷徑另外設定
+
+複製 Sheets 範本不會自動建立個人自動化、授予 Apple 健康權限、完成 Apps Script 部署或產生安全憑證。未來使用者仍需為自己的檔案設定獨立 Apps Script 部署及裝置憑證，或另行設計並審查可隔離多使用者的服務；不得把開發者的個人捷徑端點與憑證放進公開範本。
+
+### 開放他人使用前驗收
+
+以兩個測試 Google 帳號各自複製範本，確認 A 的授權與副本不可讓 B 存取；測試登出、切換帳號、離線待同步、錯選試算表及權限撤銷。公開給其他帳號前另需檢查 OAuth consent screen 發布狀態、測試使用者限制與當時 Google 要求的應用驗證；不能將測試模式視為所有人可用。

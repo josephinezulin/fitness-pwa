@@ -20,7 +20,7 @@ npm run build
 3. Actions 的 Deploy GitHub Pages 執行測試、建置並發布。
 4. 以 iPhone Safari 開啟部署 URL，分享 → 加入主畫面。
 
-此工作環境沒有綁定 GitHub repository，未替你推送或發布。前端程式碼是公開資產，禁止放入健康資料或私密憑證。測試資料使用虛構數值。
+原始碼 repository：https://github.com/josephinezulin/fitness-pwa 。網站是否可用依 GitHub Pages 設定及 Actions 部署結果確認。前端程式碼是公開資產，禁止放入健康資料或私密憑證。測試資料使用虛構數值。
 
 ## 第一階段驗收
 
@@ -40,3 +40,6 @@ npm run build
 ## 後續階段
 
 先閱讀 [安全決策與整合閘門](docs/security.md)、[Sheets 資料模型](docs/sheets.md)、[iOS 捷徑規格](docs/shortcuts.md)。依使用者要求，安全可行性未驗證前不開啟雲端 API。
+
+
+未來擴充保留「共用 PWA、各自登入 Google、各自複製範本到 Google Drive」模式，詳見 [範本與資料隔離規格](docs/sheets.md#保留-google-範本與各自資料的擴充彈性)。第一版維持單人使用；登入、選擇副本、帳號資料隔離及捷徑部署尚未實作。不支援 OneDrive／Excel。
