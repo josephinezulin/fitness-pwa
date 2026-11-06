@@ -10,7 +10,7 @@
 
 ## 合併後驗收清單
 
-- [ ] main 的 GitHub Pages 部署成功，首頁及新版資產 HTTP 200。
+- [x] PR #1 已合併為 `4fab158aaf4879883edeabf4022e2fdaad017044`，GitHub Pages 工作流程成功，首頁及新版 JS／CSS 均 HTTP 200。
 - [ ] iPhone Safari：新增走路／跑步，填兩段分鐘、km/h、坡度 % 及機台熱量；儲存後可展開，重新開啟仍保留。
 - [ ] iPhone Safari：影片縮圖點擊後在頁內播放，直向／全螢幕操作正常。
 - [ ] 不允許內嵌／已下架影片：可開啟 YouTube 觀看，不能將無法播放誤標為可用。
