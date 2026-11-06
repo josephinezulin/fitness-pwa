@@ -15,6 +15,11 @@ const data = {
   videos: [video],
 };
 describe("JSON backup compatibility", () => {
+  it("makes cloud video exports available in the device library when restored locally", () => {
+    const result = parseBackup(makeBackup(data));
+    expect(result.data.videos).toEqual([video]);
+    expect(result.library?.custom).toEqual([video]);
+  });
   it("round trips both cloud videos and the device video library", () => {
     const library = { ...emptyLibrary, custom: [video] };
     const result = parseBackup(

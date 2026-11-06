@@ -15,7 +15,7 @@
 
 ## 檢查結果
 
-已執行 `npm ci`、`npm test`、Python unittest、`npm run build` 與 `git diff --check`：140 項 Vitest、6 項 Python 測試全部通過，TypeScript／Vite／Service Worker 建置成功。沒有可用的 iPhone／Safari 瀏覽器控制工具，因此不宣稱完成實機驗收。
+已執行 `npm ci`、`npm test`、Python unittest、`npm run build` 與 `git diff --check`：141 項 Vitest、6 項 Python 測試全部通過，TypeScript／Vite／Service Worker 建置成功。沒有可用的 iPhone／Safari 瀏覽器控制工具，因此不宣稱完成實機驗收。
 
 ## 真實 Google Sheets 驗證
 
@@ -50,3 +50,5 @@ Google 對字串與公式有不同原生型別：
 https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/other#ExtendedValue
 
 寫前重讀及 Web Locks 不提供跨裝置的原子 compare-and-swap。第一版維持單人使用，避免同時在兩個裝置修改同一筆；不宣稱 Sheets 等同具有版本條件交易的資料庫。Apps Script 僅寫健康／步數表，PWA 僅寫運動／分段／影片表，避免兩套寫入器更新同一資料區。
+
+Safari Web Locks 支援的官方背景：https://webkit.org/blog/12445/new-webkit-features-in-safari-15-4/ 。執行時仍採能力檢測，不僅憑版本判斷。

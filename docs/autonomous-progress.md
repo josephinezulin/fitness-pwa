@@ -37,5 +37,5 @@
 
 - 已實作 typed cell 讀寫、運動／分段原子 CRUD、影片 CRUD、outbox、重試／衝突、Web Locks、帳號切換取消，以及舊備份相容。
 - 已直接升級使用者授權的私人原表，升級前私人原生副本已驗證；獨立私人 QA 副本已實際建立／修改虛構運動、兩段分段及影片，原生純文字與批次失敗未套用已讀回。私人檔案 ID 不寫 repo。
-- 完整檢查通過：140 項 Vitest、6 項 Python、TypeScript／Vite／Service Worker 建置及 diff 檢查。接著開 PR、CI 通過後合併部署；不得把 iPhone PWA OAuth 寫入／試播尚待實機驗收寫成已通過。
+- 完整檢查通過：141 項 Vitest、6 項 Python、TypeScript／Vite／Service Worker 建置及 diff 檢查。接著開 PR、CI 通過後合併部署；不得把 iPhone PWA OAuth 寫入／試播尚待實機驗收寫成已通過。
 - 自動排程訊息若在此工作階段進行時到達，視為繼續同一任務，不另外啟動重疊工作。

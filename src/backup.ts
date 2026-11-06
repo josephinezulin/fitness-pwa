@@ -15,8 +15,16 @@ export function parseBackup(raw: unknown) {
     input.videos !== undefined && !Array.isArray(input.videos);
   const library =
     input.videoLibrary ?? (legacyLibrary ? input.videos : undefined);
+  const data = validate(
+    legacyLibrary ? { ...input, videos: undefined } : input,
+  );
   return {
-    data: validate(legacyLibrary ? { ...input, videos: undefined } : input),
-    library: library === undefined ? null : validateLibrary(library),
+    data,
+    library:
+      library !== undefined
+        ? validateLibrary(library)
+        : data.videos
+          ? validateLibrary({ version: 1, custom: data.videos, hidden: [] })
+          : null,
   };
 }
