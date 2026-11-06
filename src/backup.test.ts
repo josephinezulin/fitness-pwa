@@ -44,3 +44,21 @@ describe("JSON backup compatibility", () => {
     ).toThrow();
   });
 });
+
+it("round trips the weekly goal, favorites and seen markers without credentials", () => {
+  const experience = {
+    version: 1 as const,
+    weeklyGoal: 90,
+    favorites: ["v7AYKMP6rOE"],
+    seen: { v7AYKMP6rOE: 2 },
+    accessToken: "never-export",
+  };
+  const backup = makeBackup(data, undefined, experience);
+  expect(JSON.stringify(backup)).not.toContain("never-export");
+  expect(parseBackup(backup).preferences).toMatchObject({
+    weeklyGoal: 90,
+    favorites: experience.favorites,
+    seen: experience.seen,
+  });
+  expect(parseBackup(data).preferences).toBeNull();
+});

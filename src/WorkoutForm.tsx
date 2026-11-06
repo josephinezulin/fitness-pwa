@@ -1,4 +1,13 @@
-import { useState } from "react";
+import { useId, useState } from "react";
+import {
+  estimateEnergy,
+  pace,
+  segmentErrors,
+  TREADMILL_PRESETS,
+  weightForDate,
+  type WorkoutDraft,
+} from "./exercise";
+import type { Metric } from "./model";
 import { Check, Copy, Plus, Trash2 } from "lucide-react";
 import {
   SEGMENT_LIMITS,
@@ -18,7 +27,7 @@ const toDraft = (s: Segment): Draft => ({
 const groups = [...new Set(Object.values(WORKOUT_TYPES).map((t) => t.group))];
 const defaultSegment = (type: WorkoutType): Draft =>
   type === "run"
-    ? { minutes: "20", speed: "8", incline: "1" }
+    ? { minutes: "20", speed: "8.5", incline: "1" }
     : { minutes: "30", speed: "5.5", incline: "6" };
 
 export function TreadmillStats({ segments }: { segments: Segment[] }) {
@@ -44,6 +53,13 @@ export function TreadmillStats({ segments }: { segments: Segment[] }) {
         <dd>
           {s.avgSpeed}
           <small> km/h</small>
+        </dd>
+      </div>
+      <div>
+        <dt>平均配速（約）</dt>
+        <dd>
+          {pace(s.avgSpeed) || "—"}
+          <small> 分/km</small>
         </dd>
       </div>
       <div>
@@ -76,25 +92,42 @@ export function WorkoutForm({
   today,
   disabled,
   onSave,
+  metrics = [],
+  initialDraft,
 }: {
   editing: Workout | null;
   today: string;
   disabled: boolean;
   onSave: (record: Workout) => boolean;
+  metrics?: Metric[];
+  initialDraft?: WorkoutDraft | null;
 }) {
-  const [type, setType] = useState<WorkoutType>(editing?.type || "home");
-  const [useTreadmill, setUseTreadmill] = useState(!!editing?.segments);
+  const [type, setType] = useState<WorkoutType>(
+    editing?.type || initialDraft?.type || "home",
+  );
+  const [useTreadmill, setUseTreadmill] = useState(
+    editing
+      ? !!editing.segments
+      : (initialDraft?.treadmill ?? initialDraft?.type === "walk"),
+  );
+  const [date, setDate] = useState(editing?.date || today);
+  const [calories, setCalories] = useState(String(editing?.calories ?? 0));
+  const [weightOverride, setWeightOverride] = useState("");
+  const [appliedEstimate, setAppliedEstimate] = useState<string | null>(null);
+  const errorsId = useId();
   const [segments, setSegments] = useState<Draft[]>(
     editing?.segments?.map(toDraft) || [
-      defaultSegment(editing?.type || "walk"),
+      defaultSegment(editing?.type || initialDraft?.type || "walk"),
     ],
   );
-  const [minutes, setMinutes] = useState(String(editing?.minutes || 30));
+  const [minutes, setMinutes] = useState(
+    String(editing?.minutes || initialDraft?.minutes || 30),
+  );
   const treadmill = WORKOUT_TYPES[type].treadmill && useTreadmill;
   const parsed: Segment[] = segments.map((d) => ({
-    minutes: Number(d.minutes),
-    speed: Number(d.speed),
-    incline: Number(d.incline),
+    minutes: d.minutes === "" ? NaN : Number(d.minutes),
+    speed: d.speed === "" ? NaN : Number(d.speed),
+    incline: d.incline === "" ? NaN : Number(d.incline),
   }));
   const complete = parsed.every(
     (s, i) =>
@@ -103,7 +136,27 @@ export function WorkoutForm({
       segments[i].incline !== "" &&
       [s.minutes, s.speed, s.incline].every(Number.isFinite),
   );
-  const total = treadmillSummary(complete ? parsed : []);
+  const errors = treadmill ? segmentErrors(parsed) : [];
+  const total = treadmillSummary(complete && !errors.length ? parsed : []);
+  const weightMetric = weightForDate(metrics, date);
+  const weight =
+    weightOverride === ""
+      ? (weightMetric?.weight ?? NaN)
+      : Number(weightOverride);
+  const estimate = estimateEnergy(
+    type,
+    treadmill ? total.minutes : Number(minutes),
+    weight,
+    treadmill ? parsed : undefined,
+  );
+  const signature = JSON.stringify([
+    date,
+    type,
+    minutes,
+    treadmill,
+    segments,
+    weight,
+  ]);
   const update = (i: number, field: keyof Draft, value: string) =>
     setSegments((all) =>
       all.map((d, j) => (j === i ? { ...d, [field]: value } : d)),
@@ -114,6 +167,7 @@ export function WorkoutForm({
     <form
       onSubmit={(e) => {
         e.preventDefault();
+        if (errors.length || (treadmill && !complete)) return;
         const form = new FormData(e.currentTarget);
         const record: Workout = {
           id: editing?.id || crypto.randomUUID(),
@@ -133,7 +187,8 @@ export function WorkoutForm({
           name="date"
           type="date"
           required
-          defaultValue={editing?.date || today}
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
           max={today}
         />
       </label>
@@ -145,6 +200,7 @@ export function WorkoutForm({
           onChange={(e) => {
             const next = e.target.value as WorkoutType;
             setType(next);
+            if (!editing) setUseTreadmill(next === "walk" || next === "run");
             if (!editing?.segments) setSegments([defaultSegment(next)]);
           }}
         >
@@ -174,6 +230,25 @@ export function WorkoutForm({
       {treadmill && (
         <fieldset className="segments">
           <legend>跑步機分段</legend>
+          <div className="preset-list" aria-label="跑步機範本">
+            {TREADMILL_PRESETS.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                className="secondary"
+                onClick={() => {
+                  setType(p.type);
+                  setUseTreadmill(true);
+                  setSegments(p.segments.map(toDraft));
+                }}
+              >
+                {p.title}
+              </button>
+            ))}
+          </div>
+          <p className="tiny muted">
+            套用範本會取代目前分段，可依實際機台設定修改。
+          </p>
           <div className="segment-head" aria-hidden="true">
             <span>#</span>
             <span>分鐘</span>
@@ -191,7 +266,8 @@ export function WorkoutForm({
                 required
                 min={min[0]}
                 max={min[1]}
-                step="0.5"
+                step="any"
+                aria-describedby={errors.length ? errorsId : undefined}
                 value={d.minutes}
                 onChange={(e) => update(i, "minutes", e.target.value)}
               />
@@ -202,7 +278,8 @@ export function WorkoutForm({
                 required
                 min={max[0]}
                 max={max[1]}
-                step="0.1"
+                step="any"
+                aria-describedby={errors.length ? errorsId : undefined}
                 value={d.speed}
                 onChange={(e) => update(i, "speed", e.target.value)}
               />
@@ -213,7 +290,8 @@ export function WorkoutForm({
                 required
                 min={SEGMENT_LIMITS.incline[0]}
                 max={SEGMENT_LIMITS.incline[1]}
-                step="0.5"
+                step="any"
+                aria-describedby={errors.length ? errorsId : undefined}
                 value={d.incline}
                 onChange={(e) => update(i, "incline", e.target.value)}
               />
@@ -230,6 +308,13 @@ export function WorkoutForm({
               </button>
             </div>
           ))}
+          {!!errors.length && (
+            <ul id={errorsId} className="form-errors" role="status">
+              {errors.map((error) => (
+                <li key={error}>{error}</li>
+              ))}
+            </ul>
+          )}
           <div className="segment-actions">
             <button
               type="button"
@@ -290,17 +375,68 @@ export function WorkoutForm({
             min="0"
             max="20000"
             required
-            defaultValue={editing?.calories ?? 0}
+            value={calories}
+            onChange={(e) => {
+              setCalories(e.target.value);
+              setAppliedEstimate(null);
+            }}
           />
         </label>
       </div>
+      <details className="energy-helper">
+        <summary>幫我估算熱量</summary>
+        <label>
+          估算用體重（kg）
+          <input
+            aria-label="估算用體重（kg）"
+            type="text"
+            inputMode="decimal"
+            value={weightOverride}
+            placeholder={
+              weightMetric?.weight ? String(weightMetric.weight) : "輸入體重"
+            }
+            onChange={(e) => setWeightOverride(e.target.value)}
+          />
+        </label>
+        <p className="tiny muted">
+          {weightOverride === "" && weightMetric
+            ? `採用 ${weightMetric.date} 的 ${weightMetric.weight} kg；此處覆寫不會改健康紀錄。`
+            : "這個體重只用於本次估算，不會改健康紀錄。"}
+        </p>
+        <p className="tiny">
+          {estimate.calories !== null
+            ? `約 ${estimate.calories} kcal · ${estimate.method}`
+            : estimate.reason}
+        </p>
+        {estimate.calories !== null && (
+          <p className="tiny muted">{estimate.reason}</p>
+        )}
+        <button
+          type="button"
+          className="secondary"
+          disabled={estimate.calories === null}
+          onClick={() => {
+            if (estimate.calories !== null) {
+              setCalories(String(estimate.calories));
+              setAppliedEstimate(signature);
+            }
+          }}
+        >
+          套用估算熱量
+        </button>
+        {appliedEstimate && appliedEstimate !== signature && (
+          <p className="tiny">
+            設定已變更，已填熱量保留；需要時可重新套用估算。
+          </p>
+        )}
+      </details>
       <label>
         備註
         <textarea
           name="note"
           maxLength={2000}
           rows={3}
-          defaultValue={editing?.note}
+          defaultValue={editing?.note || initialDraft?.note}
           placeholder="今天的感受、訓練內容…"
         />
       </label>

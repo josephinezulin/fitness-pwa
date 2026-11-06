@@ -91,3 +91,58 @@ describe("cloud video ownership", () => {
     ).toBe(true);
   });
 });
+
+it("filters favorites by YouTube ID and requires an explicit action before recording or counting a watch", () => {
+  vi.stubGlobal(
+    "requestAnimationFrame",
+    vi.fn(() => 0),
+  );
+  const toggle = vi.fn(() => true),
+    seen = vi.fn(() => true),
+    record = vi.fn();
+  render(
+    <VideoLibrary
+      online
+      cloud
+      canEditCloud
+      canRecord
+      sheetVideos={[video]}
+      preferences={{
+        version: 1,
+        weeklyGoal: 150,
+        favorites: [video.youtubeId],
+        seen: { [video.youtubeId]: 2 },
+      }}
+      onToggleFavorite={toggle}
+      onMarkSeen={seen}
+      onRecord={record}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "只看我的收藏" }));
+  expect(screen.getAllByRole("article")).toHaveLength(1);
+  const favorite = screen.getByRole("button", {
+    name: "收藏影片：雲端自己的影片",
+  });
+  expect(favorite.getAttribute("aria-pressed")).toBe("true");
+  fireEvent.click(favorite);
+  expect(toggle).toHaveBeenCalledWith(video.youtubeId);
+  fireEvent.click(screen.getByRole("button", { name: "播放：雲端自己的影片" }));
+  expect(record).not.toHaveBeenCalled();
+  expect(seen).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "完成，記錄這次運動" }));
+  expect(record).toHaveBeenCalledWith(
+    expect.objectContaining({
+      youtubeId: video.youtubeId,
+      minutes: 20,
+      category: "瑜伽",
+    }),
+    true,
+  );
+  expect(seen).not.toHaveBeenCalled();
+  expect(screen.queryByTitle(video.title)).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "播放：雲端自己的影片" }));
+  fireEvent.click(screen.getByRole("button", { name: /看過一次/ }));
+  fireEvent.click(screen.getByRole("button", { name: "完成，記錄這次運動" }));
+  expect(seen).toHaveBeenCalledTimes(1);
+  expect(record.mock.calls[1][1]).toBe(false);
+});
