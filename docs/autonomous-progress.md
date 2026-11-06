@@ -47,4 +47,9 @@
 - 已加入跑步機範本、配速、分段提示、ACSM／MET 估算、影片預填記錄、收藏／觀看、可設每週分鐘目標與八週趨勢。新偏好依帳號／檔案分區，包含於 JSON 備份，未新增 Sheet 分頁或 OAuth scope。
 - 詳見 docs/stage-d-progress.md、docs/energy-estimates.md。完成本輪完整檢查、PR、CI 及部署後，接續階段 E；不要重做已上線的 C，也不能把未完成的 iPhone 實機驗收寫成通過。
 
-- 階段 D 已完成完整檢查：164 項 Vitest、6 項 Python、正式建置與 diff 檢查通過。接著送 PR／CI／部署；實機驗收仍列為待辦。
+- 階段 D 的 PR #6 已合併為 `d837651ed2ca7876f0620c4b4555816f01298f86`；CI／Pages 部署成功，首頁及新 JS／CSS HTTP 200，部署 JS 已含跑步機範本、熱量及收藏功能。164 項 Vitest、6 項 Python 與建置通過，實機驗收仍待確認。
+
+## 最新階段 E 檢查點
+
+- E1 已實作受限的公開 YouTube 縮圖 runtime cache：24 張、14 天、quota 時可清除，不能快取登入／健康／Sheet／Apps Script 請求。完整 167 項 Vitest、6 項 Python、正式建置與 diff 檢查通過。
+- 詳見 docs/stage-e-progress.md。接續先確認縮圖補強的 PR／部署結果，再做主程式拆分與自訂課表；這兩項尚未完成。

@@ -120,7 +120,9 @@ export function VideoLibrary({
         </button>
       </div>
       {!online && (
-        <p className="notice">目前離線，影片需要網路連線才能播放。</p>
+        <p className="notice">
+          目前離線，曾載入的部分縮圖可保留；影片需要網路連線才能播放。
+        </p>
       )}
       {error && (
         <p className="notice" role="status">
