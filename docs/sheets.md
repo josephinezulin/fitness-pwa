@@ -28,14 +28,14 @@ WorkoutPlans 預設 weekday 採 ISO 1–7：1 / home / 20–30；3 / walk / 30�
 
 ## 保留 Google 範本與各自資料的擴充彈性
 
-使用者已確認只使用 Google Drive／Google Sheets，不整合 OneDrive／Excel。第一版仍為單人應用；以下為第二階段的設計約束，尚未實作登入、選表或多使用者同步。
+使用者已確認只使用 Google Drive／Google Sheets，不整合 OneDrive／Excel。第一版仍為單人應用；以下為第二階段的設計約束。已新增登入、選表與只讀格式驗收；多使用者健康資料分區及同步仍待實作。
 
 ### 預期流程
 
 1. 開發者提供唯讀 Google Sheets 範本，使用者透過「建立副本」複製到自己的 Google Drive，保留為原生 Google Sheets。
 2. 公開範本只含五張工作表的欄名、預設課表、教學連結與明確標記的虛構範例；不得包含真實健康資料、綁定的裝置憑證、同步日誌或已授權的 Apps Script 部署資訊。
 3. 使用者在共同的 PWA 網址完成 Google 登入與授權，透過 Google Picker 選擇自己的私人副本。不能以檔名自動猜測或選取開發者的表。
-4. 驗證五張工作表、必要欄位與 schemaVersion。可將 schemaVersion 放在 spreadsheet developerMetadata，不新增第六張工作表。格式不符時停止同步，不自動覆蓋既有檔案。
+4. 驗證五張工作表、必要欄位與 schemaVersion。版本標記固定為試算表層級的 developerMetadata `fitnessSchemaVersion=1`、visibility=DOCUMENT，不新增第六張工作表。格式不符時停止同步，不自動覆蓋既有檔案。
 5. 前端只對當次授權選定的檔案存取。OAuth client ID 可由全體共用；各人的 access token 與目標檔案不共用。`drive.file` 配合 Picker 的可行性仍須實測。
 
 ### 隔離與切換
@@ -53,3 +53,8 @@ WorkoutPlans 預設 weekday 採 ISO 1–7：1 / home / 20–30；3 / walk / 30�
 ### 開放他人使用前驗收
 
 以兩個測試 Google 帳號各自複製範本，確認 A 的授權與副本不可讓 B 存取；測試登出、切換帳號、離線待同步、錯選試算表及權限撤銷。公開給其他帳號前另需檢查 OAuth consent screen 發布狀態、測試使用者限制與當時 Google 要求的應用驗證；不能將測試模式視為所有人可用。
+
+
+## 可執行驗收契約
+
+`src/sheet-schema.ts` 為目前欄位與型別的程式契約。Gemini Prompt 必須與它一致。資料格不允許公式、額外欄位或變更欄名；初始範本預期筆數為 0 / 0 / 0 / 3 / 0。Google 連線驗收流程見 `docs/google-setup.md`。此階段不寫入任何資料。
