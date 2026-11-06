@@ -51,6 +51,8 @@ export function CloudPanel({
   const currentSession = useRef<GoogleSession | null>(null);
   const active = useRef(true);
   const lastRefresh = useRef(0);
+  const currentViewId = useRef(activeSpreadsheetId);
+  currentViewId.current = activeSpreadsheetId;
   useEffect(() => {
     active.current = true;
     return () => {
@@ -212,7 +214,7 @@ export function CloudPanel({
       const result = await inspectSpreadsheet(id, current, controller.signal);
       if (!valid(version)) return;
       setInspection(result);
-      if (activeSpreadsheetId === id && result.report.ok && result.data)
+      if (currentViewId.current === id && result.report.ok && result.data)
         useSnapshot(result, current);
     } catch (error) {
       if (!valid(version)) return;
