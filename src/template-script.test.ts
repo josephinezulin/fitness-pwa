@@ -1,0 +1,101 @@
+import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
+import { describe, expect, it } from 'vitest';
+import { HEADERS, TAB_NAMES, validateGrids, type Cell, type Grids } from './sheet-schema';
+
+function templateHarness() {
+  class Sheet {
+    name = 'Sheet1';
+    rows = 1000;
+    cols = 26;
+    values = new Map<string, Cell>();
+    formats = new Map<number, string>();
+    filter: number[] | null = null;
+    setName(name: string) { this.name = name; return this; }
+    getName() { return this.name; }
+    getMaxRows() { return this.rows; }
+    getMaxColumns() { return this.cols; }
+    insertRowsAfter(_start: number, count: number) { this.rows += count; }
+    deleteRows(_start: number, count: number) { this.rows -= count; }
+    insertColumnsAfter(_start: number, count: number) { this.cols += count; }
+    deleteColumns(_start: number, count: number) { this.cols -= count; }
+    setFrozenRows() {}
+    setRowHeight() {}
+    setColumnWidths() {}
+    getLastRow() { return Math.max(0, ...[...this.values.keys()].map(k => Number(k.split(':')[0]))); }
+    getRange(row: number, col: number, height = 1, width = 1) {
+      if (row < 1 || col < 1 || row + height - 1 > this.rows || col + width - 1 > this.cols) throw Error('Range exceeds grid');
+      const sheet = this;
+      const range = {
+        setValues(data: Cell[][]) {
+          if (data.length !== height || data.some(r => r.length !== width)) throw Error('Range shape mismatch');
+          data.forEach((r, y) => r.forEach((value, x) => sheet.values.set(`${row + y}:${col + x}`, value)));
+          return range;
+        },
+        getValues() { return Array.from({ length: height }, (_, y) => Array.from({ length: width }, (_, x) => sheet.values.get(`${row + y}:${col + x}`) ?? '')); },
+        setNumberFormat(format: string) { sheet.formats.set(col, format); return range; },
+        createFilter() { sheet.filter = [row, col, height, width]; return range; },
+        setFontFamily() { return range; }, setFontSize() { return range; }, applyRowBanding() { return range; },
+        setBackground() { return range; }, setFontColor() { return range; }, setFontWeight() { return range; },
+        setHorizontalAlignment() { return range; }, setDataValidation() { return range; }, setNote() { return range; },
+      };
+      return range;
+    }
+  }
+  const sheets = [new Sheet()];
+  const metadata: string[][] = [];
+  const ss = {
+    getUrl: () => 'https://docs.google.com/spreadsheets/d/mock-only',
+    setSpreadsheetLocale() {}, setSpreadsheetTimeZone() {},
+    addDeveloperMetadata(...args: string[]) { metadata.push(args); },
+    getSheets: () => sheets,
+    insertSheet(name: string) { const sheet = new Sheet(); sheet.name = name; sheets.push(sheet); return sheet; },
+    getSheetByName: (name: string) => sheets.find(s => s.name === name),
+  };
+  function validation() {
+    const rule = {
+      requireCheckbox: () => rule, setAllowInvalid: () => rule, requireValueInList: () => rule,
+      requireFormulaSatisfied: () => rule, setHelpText: () => rule, build: () => ({}),
+    };
+    return rule;
+  }
+  const context = {
+    SpreadsheetApp: {
+      create: () => ss, DeveloperMetadataVisibility: { DOCUMENT: 'DOCUMENT' },
+      BandingTheme: { LIGHT_GREEN: 'LIGHT_GREEN' }, newDataValidation: validation, flush() {},
+    },
+    Logger: { log() {} },
+  };
+  const code = readFileSync(new URL('../apps-script/CreateFitnessTemplate.gs', import.meta.url), 'utf8');
+  const result = runInNewContext(code + '\ncreateFitnessTemplate();', context, { timeout: 3000 });
+  return { sheets, metadata, result };
+}
+describe('Apps Script template builder (mock, not a Google runtime test)', () => {
+  it('creates exactly the PWA schema and default plans within grid bounds', () => {
+    const { sheets, metadata, result } = templateHarness();
+    expect(result).toContain('/mock-only');
+    expect(sheets.map(s => s.name)).toEqual(TAB_NAMES);
+    expect(metadata).toEqual([['fitnessSchemaVersion', '1', 'DOCUMENT']]);
+    const grids = {} as Grids;
+    for (const sheet of sheets) {
+      const name = sheet.name as keyof Grids;
+      expect(sheet.rows).toBe(1000);
+      expect(sheet.cols).toBe(HEADERS[name].length);
+      expect(sheet.filter).toEqual([1, 1, 1000, sheet.cols]);
+      grids[name] = sheet.getRange(1, 1, Math.max(1, sheet.getLastRow()), sheet.cols).getValues();
+      expect(grids[name][0]).toEqual(HEADERS[name]);
+    }
+    const report = validateGrids(grids);
+    expect(report.errors).toEqual([]);
+    expect(report.counts).toEqual({ HealthMetrics: 0, DailySteps: 0, WorkoutLogs: 0, WorkoutPlans: 3, SyncLogs: 0 });
+  });
+  it('preserves decimal display, text timestamps and true boolean plans without placeholder rows', () => {
+    const { sheets } = templateHarness();
+    expect(sheets[0].formats.get(7)).toBe('0.0#');
+    expect(sheets[0].formats.get(3)).toBe('@');
+    expect(sheets[2].cols).toBe(11);
+    expect(sheets[2].formats.get(11)).toBe('@');
+    expect(sheets[3].getRange(2, 8, 3, 1).getValues()).toEqual([[true], [true], [true]]);
+    expect(sheets[3].getLastRow()).toBe(4);
+  });
+});
