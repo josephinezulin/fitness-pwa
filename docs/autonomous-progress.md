@@ -9,6 +9,8 @@
 - PR #1 已合併，main 合併提交 `4fab158aaf4879883edeabf4022e2fdaad017044`；PR CI 與 Pages 部署成功，首頁及新版 JS／CSS 均 HTTP 200。
 - 分支 `feature/exercise-videos-treadmill` 已快轉到合併提交；接續修改前先檢查工作目錄與遠端更新，保護其他工作階段的修改。
 - iPhone YouTube 試播、真實 Apps Script 升級與私人副本端對端驗收仍未完成；不可把 mock 或 HTTP 測試稱為實機驗收。
+- 優先修復使用者回報的手機表單問題：欄位至少 16px，避免 iOS 聚焦自動放大；日期、雙欄表單及跑步機分段可縮窄，不以禁止縮放或隱藏頁面溢位處理。
+- 此修復的 98 項 Vitest、6 項 Python 測試及正式建置通過；仍須 iPhone Safari／主畫面 PWA 確認日期欄位、鍵盤聚焦、分段輸入及手動縮放。
 
 ## 下一步
 
