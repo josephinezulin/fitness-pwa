@@ -19,3 +19,9 @@
 若已執行原版而報錯，可能已有同名半成品。先保留，確認新檔完成後再自行移除。測試檔只放預設課表，不寫真實健康數據。
 
 程式碼的 mock 測試會檢查格線範圍、五表欄位、三筆課表、空白資料列及版本標記；它不能取代真實 Apps Script 的授權、公式驗證、格式 API 與共用權限檢查。需要使用者實際執行後提供檔案才算完成遠端驗收。
+
+## 真實 Google 執行後發現的差異
+
+實際讀取已建立範本，發現 Google 在對空白 active 欄套用 checkbox 驗證時會填入 FALSE；初版 mock 未模擬這個副作用。已修正建立器，只在三筆實際課表列設定 checkbox，並更新 mock 重現 Google 行為，避免再次產生佔位紀錄。
+
+既有檔案可使用 [RepairTemplatePlaceholders.gs](../apps-script/RepairTemplatePlaceholders.gs)，填入自己的檔案網址後執行 repairFitnessTemplatePlaceholders。它只清除「其他欄全空、active 為 FALSE」的欄位內容與驗證，不修改有內容的停用課表，不更改權限。使用者需先檢查函式再執行；本次唯讀驗收未自行修復遠端檔案。函式另回報版本中繼資料，以補足目前讀取工具未回傳 spreadsheet developerMetadata 的限制。

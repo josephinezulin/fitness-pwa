@@ -37,7 +37,14 @@ function templateHarness() {
         createFilter() { sheet.filter = [row, col, height, width]; return range; },
         setFontFamily() { return range; }, setFontSize() { return range; }, applyRowBanding() { return range; },
         setBackground() { return range; }, setFontColor() { return range; }, setFontWeight() { return range; },
-        setHorizontalAlignment() { return range; }, setDataValidation() { return range; }, setNote() { return range; },
+        setHorizontalAlignment() { return range; },
+        setDataValidation(rule: { checkbox?: boolean }) {
+          // Observed Google behavior: checkbox validation materializes FALSE in blank cells.
+          if (rule.checkbox) for (let y = row; y < row + height; y++) for (let x = col; x < col + width; x++) {
+            if (!sheet.values.has(`${y}:${x}`)) sheet.values.set(`${y}:${x}`, false);
+          }
+          return range;
+        }, setNote() { return range; },
       };
       return range;
     }
@@ -53,9 +60,10 @@ function templateHarness() {
     getSheetByName: (name: string) => sheets.find(s => s.name === name),
   };
   function validation() {
+    let checkbox = false;
     const rule = {
-      requireCheckbox: () => rule, setAllowInvalid: () => rule, requireValueInList: () => rule,
-      requireFormulaSatisfied: () => rule, setHelpText: () => rule, build: () => ({}),
+      requireCheckbox: () => { checkbox = true; return rule; }, setAllowInvalid: () => rule, requireValueInList: () => rule,
+      requireFormulaSatisfied: () => rule, setHelpText: () => rule, build: () => ({ checkbox }),
     };
     return rule;
   }
@@ -97,5 +105,46 @@ describe('Apps Script template builder (mock, not a Google runtime test)', () =>
     expect(sheets[2].formats.get(11)).toBe('@');
     expect(sheets[3].getRange(2, 8, 3, 1).getValues()).toEqual([[true], [true], [true]]);
     expect(sheets[3].getLastRow()).toBe(4);
+  });
+});
+
+describe('targeted placeholder repair', () => {
+  it('removes FALSE-only placeholders and preserves real inactive plans and partial data', () => {
+    const header = [...HEADERS.WorkoutPlans];
+    const rows: Cell[][] = [
+      ['plan-1', 1, 'home', '停用課表', 20, 30, '', false, '2026-11-06T00:00:00Z'],
+      ['', '', '', '', '', '', '', false, ''],
+      ['', '', '', '', '', '', '', false, ''],
+      ['', '', '', '尚未填完的課表', '', '', '', false, ''],
+      ['', '', '', '', '', '', '', false, ''],
+    ];
+    let validationsCleared = false;
+    const sheet = {
+      getMaxColumns: () => 9, getMaxRows: () => rows.length + 1,
+      getRange: (row: number) => ({ getValues: () => row === 1 ? [header] : rows }),
+      getLastRow: () => Math.max(1, ...rows.map((row, i) => row.some(v => v !== '') ? i + 2 : 1)),
+      getRangeList: (ranges: string[]) => ({
+        clearDataValidations() { validationsCleared = true; },
+        clearContent() {
+          expect(validationsCleared).toBe(true);
+          for (const range of ranges) {
+            const match = /^H(\d+):H(\d+)$/.exec(range)!;
+            for (let row = +match[1]; row <= +match[2]; row++) rows[row - 2][7] = '';
+          }
+        },
+      }),
+    };
+    const context = {
+      SpreadsheetApp: { openByUrl: () => ({ getSheetByName: () => sheet, getDeveloperMetadata: () => [] }), flush() {} },
+      Logger: { log() {} },
+    };
+    const code = readFileSync(new URL('../apps-script/RepairTemplatePlaceholders.gs', import.meta.url), 'utf8')
+      .replace("const url = '貼上你的試算表網址';", "const url = 'https://docs.google.com/spreadsheets/d/mock-only/edit';");
+    runInNewContext(code + '\nrepairFitnessTemplatePlaceholders();', context, { timeout: 3000 });
+    expect(rows[0][7]).toBe(false);
+    expect(rows[1][7]).toBe('');
+    expect(rows[2][7]).toBe('');
+    expect(rows[3][7]).toBe(false);
+    expect(rows[4][7]).toBe('');
   });
 });

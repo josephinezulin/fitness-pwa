@@ -88,8 +88,12 @@ function createFitnessTemplate() {
     spec.headers.forEach((name, i) => {
       const cells = sheet.getRange(2, i + 1, rows - 1, 1);
       if (name === 'active') {
-        // 僅套用驗證，不填滿 FALSE，避免產生 999 筆假資料。
-        cells.setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().setAllowInvalid(false).build());
+        // Google 會在套用 checkbox 驗證時填入 FALSE；只對實際資料列套用。
+        if (spec.data.length) {
+          sheet.getRange(2, i + 1, spec.data.length, 1).setDataValidation(
+            SpreadsheetApp.newDataValidation().requireCheckbox().setAllowInvalid(false).build()
+          );
+        }
       } else {
         cells.setNumberFormat(spec.numbers[name] || '@');
       }
