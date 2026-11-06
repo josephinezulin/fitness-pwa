@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { registerSW } from "virtual:pwa-register";
 import { Download, X } from "lucide-react";
-export function PwaUpdate({ blocked }: { blocked: boolean }) {
+export function PwaUpdate({
+  blocked,
+  blockedReason = "請先儲存或關閉目前表單，再更新。",
+}: {
+  blocked: boolean;
+  blockedReason?: string;
+}) {
   const [updateReady, setUpdateReady] = useState(false);
   const [offlineReady, setOfflineReady] = useState(false);
   const [updating, setUpdating] = useState(false);
@@ -45,7 +51,7 @@ export function PwaUpdate({ blocked }: { blocked: boolean }) {
       <Download size={17} />
       <span>
         {error || (updateReady ? "新版本已就緒。" : "離線介面已準備好。")}
-        {updateReady && blocked ? " 請先儲存或關閉目前表單，再更新。" : ""}
+        {updateReady && blocked ? ` ${blockedReason}` : ""}
       </span>
       {updateReady && (
         <button

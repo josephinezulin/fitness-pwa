@@ -20,7 +20,8 @@ export type Video = {
   category: VideoCategory;
   minutes?: number;
   builtIn?: boolean;
-  /** Read from the user's spreadsheet; managed there, not in the app. */
+  /** UI IDs are namespaced; this is the original record ID used for cloud writes. */
+  sheetRecordId?: string;
   fromSheet?: boolean;
 };
 export type VideoLibrary = { version: 1; custom: Video[]; hidden: string[] };
@@ -189,6 +190,7 @@ export function visibleVideos(
   const seen = new Set<string>();
   const fromSheet: Video[] = sheet.map((x) => ({
     id: `sheet-${x.id}`,
+    sheetRecordId: x.id,
     youtubeId: x.youtubeId,
     title: x.title,
     category: (isCategory(x.category) ? x.category : "其他") as VideoCategory,

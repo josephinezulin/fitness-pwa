@@ -1,6 +1,6 @@
 # 第二階段前：安全可行性決策
 
-狀態：尚未進行實際 Google 帳號、Apps Script deployment 與 GitHub Pages origin 的端到端驗證。以下為架構評估及測試計畫，**不是已通過的跨來源登入結論**。
+狀態：使用者已回報真實 Google 登入、Picker 選檔與格式驗收通過；已透過連線工具驗證私人 Sheets 的原子批次及純文字寫入。PWA OAuth 寫入的 iPhone 情境與 Apps Script deployment 尚待實機驗收。下列原架構限制仍適用，不以此宣稱 Apps Script 的 CORS 登入可行。
 
 ## 原架構的限制
 
@@ -49,3 +49,13 @@ curl 可檢查 header，但不能代表 Safari 的 CORS 與 OAuth 測試通過�
 - https://developers.google.com/sheets/api/scopes
 
 上述連結供部署時對照最新官方規則；此階段未宣稱以實際 endpoint 驗證成功。
+
+## 階段 C 的瀏覽器寫入
+
+維持原有 drive.file，不增加 spreadsheets 或整個 Drive 的範圍。每次寫入先重新檢查 ownedByMe、canEdit、shared=false、schema、內容與版本；僅向官方 Sheets API 的固定檔案路徑送出有 Bearer Token 的 HTTPS JSON，Token 不進 URL、localStorage、outbox、備份或 repo。
+
+文字明確指定 stringValue，數字指定 numberValue，不產生 formulaValue。讀取原生型別以辨別真正公式，保留等號與 apostrophe 原文；這取代交接文件中可能破壞原文字串的加引號逃逸。
+
+運動／分段一起原子更新；寫後讀回確認，回應遺失後先比對遠端再重試。outbox 按帳號與檔案隔離並嚴格挑選欄位，未確認的意圖不可直接改寫。Web Locks 限制同源同檔案只有一個編輯分頁；不支援時唯讀。跨裝置仍沒有條件交易鎖，避免同時改同一筆。
+
+細節、真實工具驗證與待完成實機清單見 docs/stage-c-progress.md。
