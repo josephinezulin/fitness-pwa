@@ -1,10 +1,20 @@
 import React, { useState } from "react";
-import { ArrowUpRight, Play, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import {
+  ArrowUpRight,
+  Pencil,
+  Play,
+  Plus,
+  RotateCcw,
+  Trash2,
+  X,
+} from "lucide-react";
 import {
   VIDEO_CATEGORIES,
   addVideo,
   embedUrl,
   readLibrary,
+  parseYouTubeId,
+  validateLibrary,
   removeVideo,
   storeLibrary,
   thumbnailUrl,
@@ -21,12 +31,18 @@ export function VideoLibrary({
   initialCategory = "全部",
   sheetVideos,
   cloud = false,
+  canEditCloud = false,
+  onSaveVideo,
+  onDeleteVideo,
 }: {
   online: boolean;
   initialCategory?: VideoCategory | "全部";
   /** Present only in cloud view; undefined when the spreadsheet has no Videos tab. */
   sheetVideos?: SheetVideo[];
   cloud?: boolean;
+  canEditCloud?: boolean;
+  onSaveVideo?: (video: SheetVideo) => boolean;
+  onDeleteVideo?: (id: string) => boolean;
 }) {
   const [lib, setLib] = useState<Library>(() => readLibrary(localStorage));
   const [category, setCategory] = useState<VideoCategory | "全部">(
@@ -34,11 +50,12 @@ export function VideoLibrary({
   );
   const [playing, setPlaying] = useState<Video | null>(null);
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<Video | null>(null);
   const [error, setError] = useState("");
   const playerRef = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => setCategory(initialCategory), [initialCategory]);
 
-  const all = visibleVideos(lib, sheetVideos);
+  const all = visibleVideos(cloud ? { ...lib, custom: [] } : lib, sheetVideos);
   const list =
     category === "全部" ? all : all.filter((x) => x.category === category);
   const counts = new Map<string, number>();
@@ -70,7 +87,14 @@ export function VideoLibrary({
           <span className="eyebrow">跟著影片一起動</span>
           <h2>運動影片庫</h2>
         </div>
-        <button className="text-button" onClick={() => setAdding((a) => !a)}>
+        <button
+          className="text-button"
+          disabled={cloud && (!canEditCloud || !sheetVideos)}
+          onClick={() => {
+            setEditing(null);
+            setAdding((a) => !a);
+          }}
+        >
           {adding ? "取消" : "新增影片"}{" "}
           {adding ? <X size={16} /> : <Plus size={16} />}
         </button>
@@ -85,20 +109,52 @@ export function VideoLibrary({
       )}
       {adding && (
         <form
+          key={editing?.id || "new"}
           className="video-form"
           onSubmit={(e) => {
             e.preventDefault();
             const form = new FormData(e.currentTarget);
             try {
               const minutes = Number(form.get("minutes")) || undefined;
-              const next = addVideo(lib, {
+              const input = {
                 url: String(form.get("url")),
                 title: String(form.get("title")),
                 category: form.get("category") as VideoCategory,
                 minutes,
-              });
-              if (persist(next)) {
+              };
+              const next = cloud
+                ? validateLibrary({
+                    version: 1,
+                    hidden: [],
+                    custom: [
+                      {
+                        id: editing?.sheetRecordId || crypto.randomUUID(),
+                        youtubeId: parseYouTubeId(input.url),
+                        title: input.title.trim() || "我的運動影片",
+                        category: input.category,
+                        ...(minutes ? { minutes } : {}),
+                      },
+                    ],
+                  })
+                : addVideo(lib, input);
+              if (
+                cloud &&
+                (sheetVideos || []).some(
+                  (v) =>
+                    v.youtubeId === next.custom[0].youtubeId &&
+                    v.id !== editing?.sheetRecordId,
+                )
+              )
+                throw Error("這部影片已在你的試算表中。");
+              const saved = cloud
+                ? onSaveVideo?.({
+                    ...next.custom.at(-1)!,
+                    ...(editing ? { id: editing.sheetRecordId! } : {}),
+                  })
+                : persist(next);
+              if (saved) {
                 setAdding(false);
+                setEditing(null);
                 setCategory(form.get("category") as VideoCategory);
               }
             } catch (err) {
@@ -113,6 +169,7 @@ export function VideoLibrary({
               required
               inputMode="url"
               placeholder="https://youtu.be/…"
+              defaultValue={editing ? watchUrl(editing.youtubeId) : ""}
             />
           </label>
           <label>
@@ -121,6 +178,7 @@ export function VideoLibrary({
               name="title"
               maxLength={200}
               placeholder="例：20 分鐘核心訓練"
+              defaultValue={editing?.title}
             />
           </label>
           <div className="form-row">
@@ -128,7 +186,10 @@ export function VideoLibrary({
               分類
               <select
                 name="category"
-                defaultValue={category === "全部" ? "居家徒手" : category}
+                defaultValue={
+                  editing?.category ||
+                  (category === "全部" ? "居家徒手" : category)
+                }
               >
                 {VIDEO_CATEGORIES.map((c) => (
                   <option key={c}>{c}</option>
@@ -137,11 +198,22 @@ export function VideoLibrary({
             </label>
             <label>
               長度（分鐘，選填）
-              <input name="minutes" type="number" min="1" max="600" step="1" />
+              <input
+                name="minutes"
+                type="number"
+                min="1"
+                max="600"
+                step="1"
+                defaultValue={editing?.minutes}
+              />
             </label>
           </div>
-          <button className="primary" type="submit">
-            加入影片庫 <Plus size={16} />
+          <button
+            className="primary"
+            type="submit"
+            disabled={cloud && !canEditCloud}
+          >
+            {editing ? "儲存影片" : "加入影片庫"} <Plus size={16} />
           </button>
         </form>
       )}
@@ -232,14 +304,30 @@ export function VideoLibrary({
                     {x.fromSheet ? " · 試算表" : x.builtIn ? "" : " · 我的影片"}
                   </p>
                 </div>
-                {!x.fromSheet && (
+                {x.fromSheet && (
+                  <button
+                    className="icon-button"
+                    disabled={!canEditCloud}
+                    aria-label={`編輯影片：${x.title}`}
+                    onClick={() => {
+                      setEditing(x);
+                      setAdding(true);
+                    }}
+                  >
+                    <Pencil size={15} />
+                  </button>
+                )}
+                {(!x.fromSheet || cloud) && (
                   <button
                     className="icon-button"
                     aria-label={`從清單移除：${x.title}`}
+                    disabled={x.fromSheet && !canEditCloud}
                     onClick={() => {
                       if (confirm(`從影片庫移除「${x.title}」？`)) {
-                        if (playing?.id === x.id) setPlaying(null);
-                        persist(removeVideo(lib, x.id));
+                        const saved = x.fromSheet
+                          ? onDeleteVideo?.(x.sheetRecordId!)
+                          : persist(removeVideo(lib, x.id));
+                        if (saved && playing?.id === x.id) setPlaying(null);
                       }
                     }}
                   >
@@ -259,10 +347,12 @@ export function VideoLibrary({
         影片直接在頁面內播放（YouTube 隱私強化模式）。
         {cloud
           ? sheetVideos
-            ? `已讀取試算表 Videos 分頁 ${sheetVideos.length} 部影片（請在試算表中增刪）。`
+            ? `試算表 Videos 分頁共 ${sheetVideos.length} 部影片，新增與編輯會同步到私人試算表。`
             : "試算表尚無 Videos 分頁，可執行升級腳本加入，影片就會跟著帳號走。"
           : ""}
-        App 內新增的影片存於此裝置；
+        {cloud
+          ? "尚未同步的修改會先保留在此裝置；"
+          : "App 內新增的影片存於此裝置；"}
         {lib.hidden.length > 0 && (
           <>
             已隱藏 {lib.hidden.length} 部內建影片，

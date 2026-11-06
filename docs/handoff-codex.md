@@ -1,6 +1,6 @@
 # 交接文件：運動紀錄、跑步機分段、影片庫與雲端擴充
 
-分支：feature/exercise-videos-treadmill（尚未合併 main，尚未開 PR）
+原始交接分支：feature/exercise-videos-treadmill。以下保留原始計畫；PR #1–3 已合併，最新實作與驗收狀態以 docs/autonomous-progress.md、docs/stage-c-progress.md 為準。
 檢查指令：npm ci && npm test && python3 -m unittest discover -s scripts -p 'test_*.py' && npm run build
 目前狀態：98 項測試通過，建置成功。
 

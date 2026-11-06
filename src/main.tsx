@@ -1,3 +1,4 @@
+import { makeBackup, parseBackup } from "./backup";
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -55,12 +56,7 @@ import {
 } from "./model";
 import { WorkoutForm, TreadmillStats } from "./WorkoutForm";
 import { VideoLibrary } from "./VideoLibrary";
-import {
-  readLibrary,
-  storeLibrary,
-  validateLibrary,
-  type VideoCategory,
-} from "./videos";
+import { readLibrary, storeLibrary, type VideoCategory } from "./videos";
 import { CloudPanel, type CloudReadState } from "./CloudPanel";
 import { PwaUpdate } from "./PwaUpdate";
 import { calendarDateInZone } from "./calendar";
@@ -147,6 +143,10 @@ function App() {
       window.removeEventListener("offline", update);
     };
   }, []);
+  React.useEffect(() => {
+    setModal(null);
+    setEditing(null);
+  }, [workspace.cloud?.subject, workspace.cloud?.spreadsheetId]);
   function save(next: Data) {
     try {
       workspace.save(validate(next));
@@ -169,8 +169,8 @@ function App() {
     steps = data.metrics.find((m) => m.date === viewToday)?.steps;
   const weekWorkouts = data.workouts.filter((w) => days.includes(w.date));
   const begin = (workout?: Workout) => {
-    if (workspace.cloud) {
-      setMessage("目前為雲端唯讀檢視，請先切回本機再編輯。");
+    if (!workspace.canEditCloud) {
+      setMessage("請先完成同步或處理連線狀態，再編輯運動。");
       return;
     }
     setEditing(workout || null);
@@ -185,7 +185,10 @@ function App() {
       new Blob(
         [
           JSON.stringify(
-            { ...data, videos: readLibrary(localStorage) },
+            makeBackup(
+              data,
+              workspace.cloud ? undefined : readLibrary(localStorage),
+            ),
             null,
             2,
           ),
@@ -204,9 +207,9 @@ function App() {
     try {
       if (file.size > 10_000_000) throw Error("檔案超過 10 MB");
       const raw = JSON.parse(await file.text());
-      const next = validate(raw);
-      const videos =
-        raw && raw.videos !== undefined ? validateLibrary(raw.videos) : null;
+      const parsed = parseBackup(raw);
+      const next = parsed.data;
+      const videos = parsed.library;
       if (
         confirm(
           `將以備份取代現有資料（${next.workouts.length} 筆運動、${next.metrics.length} 筆健康資料${videos ? `、${videos.custom.length} 部自訂影片` : ""}）。建議先匯出備份。確定還原？`,
@@ -422,7 +425,7 @@ function App() {
         <h2>運動紀錄</h2>
         <button
           className="text-button"
-          disabled={!!workspace.cloud}
+          disabled={!workspace.canEditCloud}
           onClick={() => begin()}
         >
           新增紀錄 <Plus size={16} />
@@ -462,7 +465,7 @@ function App() {
                   </div>
                   <button
                     className="icon-button"
-                    disabled={!!workspace.cloud}
+                    disabled={!workspace.canEditCloud}
                     aria-label="編輯運動"
                     onClick={() => begin(w)}
                   >
@@ -470,7 +473,7 @@ function App() {
                   </button>
                   <button
                     className="icon-button"
-                    disabled={!!workspace.cloud}
+                    disabled={!workspace.canEditCloud}
                     aria-label="刪除運動"
                     onClick={() => deleteWorkout(w.id)}
                   >
@@ -508,7 +511,7 @@ function App() {
       ) : (
         <div className="empty">
           你的運動故事，從第一筆開始。
-          <button disabled={!!workspace.cloud} onClick={() => begin()}>
+          <button disabled={!workspace.canEditCloud} onClick={() => begin()}>
             記錄一次運動 <ArrowUpRight size={15} />
           </button>
         </div>
@@ -570,7 +573,7 @@ function App() {
           </div>
           <div className="header-right">
             <span className="device-status">
-              {workspace.cloud ? "雲端唯讀" : online ? "本機模式" : "離線模式"}
+              {workspace.cloud ? "私人雲端" : online ? "本機模式" : "離線模式"}
             </span>
             <div className="avatar">我</div>
           </div>
@@ -596,7 +599,7 @@ function App() {
             </div>
             <button
               className="primary"
-              disabled={!!workspace.cloud}
+              disabled={!workspace.canEditCloud}
               onClick={() => begin()}
             >
               <Plus size={18} />
@@ -611,15 +614,17 @@ function App() {
           {workspace.cloud && (
             <div className="notice">
               <span>
-                雲端唯讀：{workspace.cloud.title} · {workspace.cloud.timezone}
-                。目前顯示每日摘要，沒有上傳本機資料。讀取時間：
+                私人雲端：{workspace.cloud.title} · {workspace.cloud.timezone}
+                。健康摘要由 Apple 健康同步；運動與影片可在這裡記錄。讀取時間：
                 {new Date(workspace.cloud.checkedAt).toLocaleString("zh-TW", {
                   timeZone: "Asia/Taipei",
                 })}
               </span>
               <div className="cloud-toolbar">
                 <button
-                  disabled={cloudReadState.busy || !online}
+                  disabled={
+                    cloudReadState.busy || workspace.syncBusy || !online
+                  }
                   onClick={() =>
                     window.dispatchEvent(new Event("daily-movement-refresh"))
                   }
@@ -630,6 +635,65 @@ function App() {
               </div>
             </div>
           )}
+          {workspace.cloud &&
+            (workspace.pending.length > 0 || workspace.syncError) && (
+              <div className="notice sync-notice" role="status">
+                <div className="grow">
+                  <strong>
+                    {workspace.syncBusy
+                      ? "正在同步…"
+                      : workspace.pending.length
+                        ? `${workspace.pending.length} 筆修改保留在此裝置`
+                        : "雲端同步狀態"}
+                  </strong>
+                  <p>
+                    {workspace.syncError ||
+                      "連線與 Google 授權有效時會自動補同步，其他裝置需同步完成後才看得到。"}
+                  </p>
+                  <ul>
+                    {workspace.pending.slice(0, 5).map((op) => (
+                      <li key={op.operationId}>
+                        {op.kind === "workout" ? "運動" : "影片"} ·{" "}
+                        {op.value ? "新增／修改" : "刪除"}
+                        {op.state === "conflict"
+                          ? " · 發生衝突"
+                          : op.state === "uncertain"
+                            ? " · 等候確認"
+                            : " · 待同步"}
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="cloud-actions">
+                    <button
+                      className="text-button"
+                      disabled={workspace.syncBusy || !online}
+                      onClick={() => void workspace.retrySync()}
+                    >
+                      重試同步
+                    </button>
+                    <button className="text-button" onClick={exportData}>
+                      匯出目前內容備份
+                    </button>
+                    {workspace.pending.some((op) => op.state !== "pending") && (
+                      <button
+                        className="text-button"
+                        disabled={workspace.syncBusy || !online}
+                        onClick={() => {
+                          if (
+                            confirm(
+                              "放棄此裝置全部待同步修改，改用試算表目前內容？建議先匯出備份。",
+                            )
+                          )
+                            void workspace.discardPending();
+                        }}
+                      >
+                        採用雲端內容
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           {workspace.cloud && cloudReadState.error && (
             <div className="notice" role="status">
               {cloudReadState.error}
@@ -639,7 +703,7 @@ function App() {
             <div className="notice">
               <WifiOff size={16} />
               {workspace.cloud
-                ? "目前離線，顯示的是先前讀取的雲端摘要。"
+                ? "目前離線，健康摘要為先前快取；新增運動與影片會先保留在此裝置，連線並登入後補同步。"
                 : "目前離線，仍可查看與記錄本機資料。"}
             </div>
           )}
@@ -776,11 +840,27 @@ function App() {
           )}
           {page === "運動影片" && (
             <VideoLibrary
-              key={videoVersion}
+              key={`${videoVersion}:${workspace.cloud?.subject || "local"}:${workspace.cloud?.spreadsheetId || ""}`}
               online={online}
               initialCategory={videoCategory}
               cloud={!!workspace.cloud}
               sheetVideos={workspace.cloud ? data.videos : undefined}
+              canEditCloud={workspace.canEditCloud}
+              onSaveVideo={(video) =>
+                save({
+                  ...data,
+                  videos: [
+                    ...(data.videos || []).filter((v) => v.id !== video.id),
+                    video,
+                  ],
+                })
+              }
+              onDeleteVideo={(id) =>
+                save({
+                  ...data,
+                  videos: (data.videos || []).filter((v) => v.id !== id),
+                })
+              }
             />
           )}
           {page === "健康趨勢" && (
@@ -837,6 +917,7 @@ function App() {
                 visible={page === "設定與備份"}
                 activeSpreadsheetId={workspace.cloud?.spreadsheetId ?? null}
                 onUseSnapshot={workspace.activateCloud}
+                onSessionChange={workspace.setGoogleSession}
                 onDisconnect={(reason) => {
                   workspace.disconnectCloud();
                   if (reason) setMessage(reason);
@@ -847,7 +928,7 @@ function App() {
                 <h2>資料與備份</h2>
                 <p className="guide">
                   本機紀錄存於此瀏覽器；可另外連線查看私人 Sheets
-                  的每日摘要，雲端寫入尚未啟用。清除網站資料或更換裝置前，請先匯出備份。備份含個人健康資料，請妥善保存。
+                  的每日摘要，並同步運動及影片修改。清除網站資料或更換裝置前，請先匯出備份。備份含個人健康資料，請妥善保存。
                 </p>
                 <button className="secondary" onClick={exportData}>
                   <Download size={18} />
@@ -892,7 +973,7 @@ function App() {
                   <br />
                   第三階段：Apple 健康與 iOS 捷徑
                 </p>
-                <span className="pill">雲端唯讀已就緒，寫入待驗收</span>
+                <span className="pill">運動與影片支援私人雲端同步</span>
               </section>
               <section className="card">
                 <h2>試用示範資料</h2>
@@ -926,7 +1007,12 @@ function App() {
           </footer>
         </div>
       </main>
-      <PwaUpdate blocked={!!modal} />
+      <PwaUpdate
+        blocked={!!modal || workspace.syncBusy}
+        blockedReason={
+          workspace.syncBusy ? "請稍候同步完成，再更新。" : undefined
+        }
+      />
       {modal && (
         <div className="overlay" onClick={() => setModal(null)}>
           <section
@@ -956,7 +1042,7 @@ function App() {
               <WorkoutForm
                 editing={editing}
                 today={viewToday}
-                disabled={!!workspace.cloud}
+                disabled={!workspace.canEditCloud}
                 onSave={(record) => {
                   const ok = save({
                     ...data,

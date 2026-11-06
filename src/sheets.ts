@@ -12,7 +12,13 @@ import {
   validateGrids,
   type Grids,
   type ValidationReport,
+  type Cell,
+  populated,
 } from "./sheet-schema";
+export type SheetSource = {
+  grids: Grids;
+  sheets: Partial<Record<TabName, { sheetId: number; rowCount: number }>>;
+};
 export type SheetInspection = {
   id: string;
   title: string;
@@ -20,12 +26,14 @@ export type SheetInspection = {
   report: ValidationReport;
   checkedAt: string;
   data?: Data;
+  source?: SheetSource;
 };
 type Metadata = {
   spreadsheetId: string;
   properties: { title: string; timeZone: string };
   sheets: {
     properties: {
+      sheetId: number;
       title: string;
       gridProperties: { rowCount: number; columnCount: number };
     };
@@ -44,10 +52,11 @@ export class GoogleAccessError extends Error {
     super(message);
   }
 }
-async function getJson<T>(
+export async function googleJson<T>(
   url: URL,
   session: GoogleSession,
   signal: AbortSignal,
+  body?: unknown,
 ): Promise<T> {
   if (Date.now() >= session.expiresAt)
     throw new GoogleAccessError(401, "Google 授權已過期，請重新登入。");
@@ -58,8 +67,12 @@ async function getJson<T>(
   const timeout = window.setTimeout(cancel, 20000);
   try {
     const response = await fetch(url, {
-      method: "GET",
-      headers: { Authorization: `Bearer ${session.accessToken}` },
+      method: body === undefined ? "GET" : "POST",
+      headers: {
+        Authorization: `Bearer ${session.accessToken}`,
+        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       credentials: "omit",
       cache: "no-store",
       signal: controller.signal,
@@ -97,7 +110,7 @@ export async function inspectSpreadsheet(
     "fields",
     "id,mimeType,ownedByMe,shared,capabilities(canEdit)",
   );
-  const file = await getJson<{
+  const file = await googleJson<{
     mimeType?: string;
     ownedByMe?: boolean;
     shared?: boolean;
@@ -120,9 +133,10 @@ export async function inspectSpreadsheet(
   );
   metaUrl.searchParams.set(
     "fields",
-    "spreadsheetId,properties(title,timeZone),sheets(properties(title,gridProperties)),developerMetadata(metadataKey,metadataValue,location)",
+    "spreadsheetId,properties(title,timeZone),sheets(properties(sheetId,title,gridProperties)),developerMetadata(metadataKey,metadataValue,location)",
   );
-  const meta = await getJson<Metadata>(metaUrl, session, signal);
+  const meta = await googleJson<Metadata>(metaUrl, session, signal);
+  if (meta.spreadsheetId !== id) throw Error("Google 回傳的試算表識別碼不符。");
   const markers =
     meta.developerMetadata?.filter(
       (m) => m.metadataKey === SCHEMA_KEY && m.location?.spreadsheet === true,
@@ -161,7 +175,7 @@ export async function inspectSpreadsheet(
       );
   }
   const valuesUrl = new URL(
-    `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}/values:batchGet`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}`,
   );
   for (const tab of tabs) {
     const end = String.fromCharCode(64 + HEADERS[tab].length);
@@ -169,24 +183,66 @@ export async function inspectSpreadsheet(
       .gridProperties.rowCount;
     valuesUrl.searchParams.append("ranges", `'${tab}'!A1:${end}${rows}`);
   }
-  // FORMULA returns formulas rather than evaluated values: formula-driven API data is rejected.
-  valuesUrl.searchParams.set("valueRenderOption", "FORMULA");
-  valuesUrl.searchParams.set("dateTimeRenderOption", "SERIAL_NUMBER");
-  const response = await getJson<{
-    valueRanges?: { values?: Grids[keyof Grids] }[];
+  // Read actual cell types: a literal '=...' is text; formulaValue is rejected.
+  valuesUrl.searchParams.set("includeGridData", "true");
+  valuesUrl.searchParams.set(
+    "fields",
+    "sheets(properties(title),data(startRow,startColumn,rowData(values(userEnteredValue))))",
+  );
+  const response = await googleJson<{
+    sheets?: {
+      properties: { title: string };
+      data?: {
+        startRow?: number;
+        startColumn?: number;
+        rowData?: {
+          values?: {
+            userEnteredValue?: {
+              stringValue?: string;
+              numberValue?: number;
+              boolValue?: boolean;
+              formulaValue?: string;
+            };
+          }[];
+        }[];
+      }[];
+    }[];
   }>(valuesUrl, session, signal);
-  if (response.valueRanges?.length !== tabs.length)
+  if (
+    response.sheets?.length !== tabs.length ||
+    new Set(response.sheets.map((s) => s.properties.title)).size !==
+      tabs.length ||
+    response.sheets.some((s) => !tabs.includes(s.properties.title as TabName))
+  )
     throw Error("Google 未回傳完整工作表資料，未完成驗收。");
+  const formulaTabs = new Set<TabName>();
   const grids = Object.fromEntries(
-    tabs.map((tab, index) => [tab, response.valueRanges![index].values || []]),
+    tabs.map((tab) => {
+      const blocks =
+        response.sheets!.find((s) => s.properties.title === tab)!.data || [];
+      if (blocks.length > 1 || blocks.some((b) => b.startRow || b.startColumn))
+        throw Error("Google 回傳的資料範圍不符，停止讀取。");
+      const rows: Cell[][] = (blocks[0]?.rowData || []).map((row) =>
+        (row.values || []).map((cell) => {
+          const v = cell.userEnteredValue;
+          if (v?.formulaValue !== undefined) formulaTabs.add(tab);
+          return v?.stringValue ?? v?.numberValue ?? v?.boolValue ?? null;
+        }),
+      );
+      const size = meta.sheets.find((s) => s.properties.title === tab)!
+        .properties.gridProperties;
+      if (
+        rows.length > size.rowCount ||
+        rows.some((r) => r.length > size.columnCount)
+      )
+        throw Error("Google 回傳的資料超出已驗證範圍。");
+      while (rows.length && !populated(rows[rows.length - 1])) rows.pop();
+      return [tab, rows];
+    }),
   ) as Grids;
   const report = validateGrids(grids);
   for (const tab of tabs) {
-    if (
-      grids[tab]!.some((row) =>
-        row.some((cell) => typeof cell === "string" && cell.startsWith("=")),
-      )
-    ) {
+    if (formulaTabs.has(tab)) {
       report.errors.push(`${tab} 含公式，API 資料區必須使用純值。`);
       report.ok = false;
     }
@@ -199,6 +255,20 @@ export async function inspectSpreadsheet(
     checkedAt: new Date().toISOString(),
     data: report.ok
       ? projectCloudData(grids, meta.properties.timeZone)
+      : undefined,
+    source: report.ok
+      ? {
+          grids,
+          sheets: Object.fromEntries(
+            meta.sheets.map((s) => [
+              s.properties.title,
+              {
+                sheetId: s.properties.sheetId,
+                rowCount: s.properties.gridProperties.rowCount,
+              },
+            ]),
+          ),
+        }
       : undefined,
   };
 }

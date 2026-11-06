@@ -1,6 +1,6 @@
 # 第二階段：Google 連線驗收
 
-目前已實作可選用的 Google Identity Services OAuth Token flow、Google Picker，以及只讀格式驗收。**已可將驗收通過的雲端資料投影到首頁唯讀查看；尚無雲端上傳、CRUD、背景同步或 Apps Script 寫入功能。**請先使用沒有健康資料的範本測試。
+目前已實作可選用的 Google Identity Services OAuth Token flow、Google Picker，以及只讀格式驗收。**已支援私人副本的健康摘要讀取、運動／影片 CRUD 與已登入工作階段的離線補同步。Apps Script 健康上傳仍待部署。**請先使用沒有健康資料的範本測試。
 
 ## 1. 建立範本（可交給 Gemini）
 

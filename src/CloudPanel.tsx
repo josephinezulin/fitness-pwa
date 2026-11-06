@@ -18,6 +18,7 @@ import {
   GoogleAccessError,
   inspectSpreadsheet,
   type SheetInspection,
+  type SheetSource,
 } from "./sheets";
 import type { Data } from "./model";
 import {
@@ -34,18 +35,27 @@ export function CloudPanel({
   visible,
   activeSpreadsheetId,
   onReadState,
+  onSessionChange,
 }: {
-  onUseSnapshot: (identity: CloudIdentity, data: Data) => void;
+  onUseSnapshot: (
+    identity: CloudIdentity,
+    data: Data,
+    source?: SheetSource,
+  ) => void;
   onDisconnect: (reason?: string) => void;
   visible: boolean;
   activeSpreadsheetId: string | null;
   onReadState?: (state: CloudReadState) => void;
+  onSessionChange?: (session: GoogleSession | null) => void;
 }) {
   const [config, setConfig] = useState<GoogleConfig | null>(null);
   const [configLoaded, setConfigLoaded] = useState(false);
   const [retry, setRetry] = useState(0);
   const [ready, setReady] = useState(false);
   const [session, setSession] = useState<GoogleSession | null>(null);
+  useEffect(() => {
+    onSessionChange?.(session);
+  }, [session, onSessionChange]);
   const [inspection, setInspection] = useState<SheetInspection | null>(null);
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
@@ -196,6 +206,7 @@ export function CloudPanel({
         checkedAt: result.checkedAt,
       },
       result.data,
+      result.source,
     );
     try {
       rememberSelection(localStorage, current.subject, {
@@ -308,10 +319,11 @@ export function CloudPanel({
           <ShieldCheck size={19} />
           Google 試算表連線
         </h2>
-        <span className="pill">連線驗收階段</span>
+        <span className="pill">私人雲端資料</span>
       </div>
       <p className="guide">
-        先檢查你自己的私人試算表副本。這一步只讀取與驗證格式，不會上傳本機健康資料，也不會修改試算表。通過後可選擇在首頁唯讀查看雲端資料，本機紀錄不會自動上傳或混入。
+        連線到你自己的私人試算表。格式檢查本身只讀取資料；選擇使用後，可新增、編輯及刪除雲端運動與影片。健康資料由
+        Apple 健康同步，本機紀錄不會自動上傳或混入。
       </p>
       {configLoaded && !config && (
         <p className="tiny muted">
@@ -422,7 +434,7 @@ export function CloudPanel({
               className="secondary"
               onClick={() => {
                 useSnapshot(inspection, session);
-                setNotice("已切換為雲端唯讀檢視，可前往首頁與健康趨勢查看。");
+                setNotice("已切換為雲端模式，可查看健康趨勢及記錄運動。");
               }}
             >
               在首頁查看這份雲端資料

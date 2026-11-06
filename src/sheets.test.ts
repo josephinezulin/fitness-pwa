@@ -22,9 +22,10 @@ const metadata = {
       location: { spreadsheet: true },
     },
   ],
-  sheets: TAB_NAMES.map((title) => ({
+  sheets: TAB_NAMES.map((title, sheetId) => ({
     properties: {
       title,
+      sheetId,
       gridProperties: { rowCount: 1000, columnCount: HEADERS[title].length },
     },
   })),
@@ -35,8 +36,35 @@ const privateFile = {
   shared: false,
   capabilities: { canEdit: true },
 };
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status });
+const json = (body: unknown, status = 200) => {
+  const input = body as { valueRanges?: { values: unknown[][] }[] };
+  if (input.valueRanges) {
+    const tabs = [...TAB_NAMES, ...OPTIONAL_TABS];
+    body = {
+      sheets: input.valueRanges.map((range, i) => ({
+        properties: { title: tabs[i] },
+        data: [
+          {
+            rowData: range.values.map((row) => ({
+              values: row.map((value) => ({
+                userEnteredValue:
+                  typeof value === "number"
+                    ? { numberValue: value }
+                    : typeof value === "boolean"
+                      ? { boolValue: value }
+                      : typeof value === "string" &&
+                          value.startsWith("=IMPORTXML")
+                        ? { formulaValue: value }
+                        : { stringValue: value },
+              })),
+            })),
+          },
+        ],
+      })),
+    };
+  }
+  return new Response(JSON.stringify(body), { status });
+};
 afterEach(() => vi.unstubAllGlobals());
 function browserTimers() {
   vi.stubGlobal("window", { setTimeout, clearTimeout });
@@ -231,9 +259,10 @@ describe("read-only Google Sheets gate", () => {
       .mockResolvedValueOnce(
         json({
           ...metadata,
-          sheets: tabs.map((title) => ({
+          sheets: tabs.map((title, sheetId) => ({
             properties: {
               title,
+              sheetId,
               gridProperties: {
                 rowCount: 1000,
                 columnCount: HEADERS[title].length,
@@ -308,4 +337,82 @@ describe("read-only Google Sheets gate", () => {
     ).rejects.toThrow("Aborted");
     expect(fetcher).not.toHaveBeenCalled();
   });
+});
+
+it("reads leading equals text safely and trims formatted empty rows while keeping interior row numbers", async () => {
+  browserTimers();
+  const { testSource } = await import("./test-fixtures");
+  const source = testSource();
+  source.grids.WorkoutLogs.push(
+    [],
+    [
+      "w1",
+      "2026-11-06",
+      "Asia/Taipei",
+      "home",
+      30,
+      0,
+      '=IMPORTXML("literal", "text")',
+      "pwa",
+      1,
+      "2026-11-06T12:00:00Z",
+      "",
+    ],
+    [],
+    [],
+  );
+  const tabs = [...TAB_NAMES, ...OPTIONAL_TABS];
+  const cells = {
+    sheets: tabs
+      .map((title) => ({
+        properties: { title },
+        data: [
+          {
+            rowData: source.grids[title]!.map((row) => ({
+              values: row.map((value) => ({
+                userEnteredValue:
+                  typeof value === "number"
+                    ? { numberValue: value }
+                    : typeof value === "boolean"
+                      ? { boolValue: value }
+                      : { stringValue: value },
+              })),
+            })),
+          },
+        ],
+      }))
+      .reverse(),
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockResolvedValueOnce(json(privateFile))
+      .mockResolvedValueOnce(
+        json({
+          ...metadata,
+          sheets: tabs.map((title, sheetId) => ({
+            properties: {
+              title,
+              sheetId,
+              gridProperties: {
+                rowCount: 1000,
+                columnCount: HEADERS[title].length,
+              },
+            },
+          })),
+        }),
+      )
+      .mockResolvedValueOnce(json(cells)),
+  );
+  const result = await inspectSpreadsheet(
+    "test_spreadsheet_id",
+    session,
+    new AbortController().signal,
+  );
+  expect(result.report.errors).toEqual([]);
+  expect(result.data!.workouts[0].note).toBe('=IMPORTXML("literal", "text")');
+  expect(result.source!.grids.WorkoutLogs).toHaveLength(3);
+  expect(result.source!.grids.WorkoutLogs[1]).toEqual([]);
+  expect(result.source!.grids.WorkoutLogs[2][0]).toBe("w1");
 });
