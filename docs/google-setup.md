@@ -8,24 +8,24 @@
 
 範本預設只有三筆課表，不包含任何健康紀錄。通過驗收後若要公開供他人複製，另行製作不含個資的公開範本；自己真正使用的資料副本繼續保持私人。
 
-## 2. Google Cloud 的手動設定
+## 2. 網站維護者一次性的 Google Cloud 設定
 
-這部分是網站的應用設定，Gemini 建立試算表不會自動完成。
+這部分只由網站維護者設定一次，Gemini 建立試算表不會自動完成。一般使用者不需要建立 Cloud 專案、申請 API Key 或輸入 client ID；他們只需登入 Google 並選擇自己的試算表。Google 登入會取得個人 access token，但仍需網站事先註冊的 OAuth client ID 來識別應用。
 
 1. 在 https://console.cloud.google.com/ 建立專用專案。啟用 **Google Sheets API、Google Drive API、Google Picker API**。
 2. 在 Google Auth Platform 設定應用名稱、聯絡 Email、受眾及測試使用者。先維持 Testing，把自己的 Google 帳號加入測試使用者。
 3. 建立 OAuth Client，類型選 **Web application**。Authorized JavaScript origins 加入實際 origin，例如 `https://josephinezulin.github.io`，不帶 `/fitness-pwa/` 路徑。此版本使用 popup token flow，不需要另外設定 redirect URI。若要本機測試，另加 `http://localhost:5173`。
 4. 使用最小存取範圍：`openid`、`email`、`https://www.googleapis.com/auth/drive.file`。不要求整個 Drive 或全部試算表的廣泛權限。這個 scope 在 Google 授權層級允許選定檔案讀寫，但此程式目前只發送 GET。
 5. 建立 API Key，設定「網站」HTTP referrer 限制，例如 `https://josephinezulin.github.io/*`。限制可呼叫的 API 至 Google Picker API（若 Google 當時的 Picker 設定要求其他 API，先依官方文件核對，不移除限制）。API Key 只是 Picker 的可公開識別設定，不能替代 OAuth。
-6. 取得同一專案的 OAuth Client ID、API Key 與**數字專案編號**。不是 project ID，也不是 Client Secret。三者在 PWA 設定頁輸入，只存在該瀏覽器的應用設定。
+6. 取得同一專案的 OAuth Client ID、API Key 與**數字專案編號**。不是 project ID，也不是 Client Secret。三者由維護者填入 repository 的 `public/google-config.json` 後部署，網站會自動讀取。檔案只允許 clientId、apiKey、projectNumber 三個欄位，禁止放 Token、Client Secret、私鑰或健康資料。
 
-前端可公開這些應用識別碼，但不要提供 OAuth Client Secret、私鑰或自己的登入 Token。此版沒有共用的預設 OAuth 專案；未來給他人使用時，可由維護者提供公開 client 設定，並先完成 Google 要求的 consent screen 發布或驗證。Testing 不代表任何 Google 帳號皆可使用。
+前端可公開這些應用識別碼，但不要提供 OAuth Client Secret、私鑰或自己的登入 Token。維護者完成這次共用設定後，所有使用者都使用同一組應用識別設定，但各自授權、各自取得 Token、各自使用私人試算表。未來開放給其他人前，先完成 Google 要求的 consent screen 發布或驗證。Testing 不代表任何 Google 帳號皆可使用。
 
 ## 3. 真實瀏覽器驗收
 
 1. 先完成 GitHub Pages 部署，開啟 PWA → 設定與備份 → Google 試算表連線。
-2. 輸入三個公開應用識別設定，點「儲存設定並載入連線元件」。只有使用者主動操作才載入 Google 第三方程式，不會在離線或初次首頁自行載入。
-3. 點「登入 Google 並授權選定檔案」。這個獨立按鈕保留 Safari popup 使用者操作；選自己的帳號，確認所要求範圍。
+2. 網站會自行讀取共用應用設定。進入設定頁且網站已完成設定時，才準備 Google 登入元件；首次首頁不自行載入 Google 第三方程式。尚未設定時只顯示「Google 連線準備中」，不要求使用者維護金鑰。
+3. 點「使用 Google 登入」。按鈕直接從使用者點擊開啟登入流程，以保留 Safari popup 權限；選自己的帳號，確認所要求範圍。
 4. 點「選擇自己的副本並驗收」。在 Picker 選擇自己的私人範本副本；授權綁定這個檔案，不由檔名推測。
 5. 應顯示格式檢查通過、筆數 0 / 0 / 0 / 3 / 0，以及檔名與時區。
 6. 點「在首頁查看這份雲端資料」後，首頁與趨勢應顯示該檔的每日摘要，編輯按鈕停用。切頁保留連線，登出或 Token 到期則返回本機資料。重載不自動顯示上個帳號的快取。

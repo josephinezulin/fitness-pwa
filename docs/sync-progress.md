@@ -30,9 +30,9 @@
 
 ## 需要使用者完成的外部設定
 
-1. GitHub repository 的 Settings → Pages → Source 設為 GitHub Actions。目前已嘗試使用現有授權啟用，但 GitHub 回傳 `Resource not accessible by integration`，需要 repository 擁有者操作。設定完成後可由開發流程重跑部署與檢查結果。
+1. GitHub repository 的 Settings → Pages → Source 設為 GitHub Actions。已由使用者完成設定，並已部署成功及驗證首頁、資產、manifest、圖示與 Service Worker 回傳 HTTP 200。
 2. 按 `docs/google-setup.md` 建立／設定 Google Cloud 專案、啟用 Sheets／Drive／Picker API、建立 Web OAuth client、設定實際 Pages origin、測試使用者，以及受網站與 API 限制的 Picker API Key。
-3. 在 PWA 輸入公開 client ID / API Key / 專案編號，親自完成 Google 授權。不要提供 Client Secret、access token 或私鑰。
+3. 由維護者將公開 client ID / API Key / 專案編號存入 public/google-config.json 後部署；一般使用者只需親自完成 Google 授權。不要提供 Client Secret、access token 或私鑰。
 4. 以私人副本測試讀取、拒絕授權、取消選檔、帳號切換、Token 過期與 iPhone Safari 主畫面模式。
 
 完成真實讀取閘門後，接著實作並測試寫入與離線 outbox，再部署捷徑 API。`docs/shortcuts.md` 定義七天回掃及手動補同步，但現階段尚無可用的健康上傳端點。

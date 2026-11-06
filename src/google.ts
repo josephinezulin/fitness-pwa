@@ -74,33 +74,6 @@ declare global {
     };
   }
 }
-const configKey = "daily-movement-google-config-v1";
-export function validConfig(config: GoogleConfig) {
-  return (
-    /^[a-zA-Z0-9-]+\.apps\.googleusercontent\.com$/.test(config.clientId) &&
-    /^AIza[\w-]{20,}$/.test(config.apiKey) &&
-    /^\d{5,}$/.test(config.projectNumber)
-  );
-}
-export function readConfig(): GoogleConfig {
-  try {
-    const c = JSON.parse(localStorage.getItem(configKey) || "{}");
-    return {
-      clientId: String(c.clientId || ""),
-      apiKey: String(c.apiKey || ""),
-      projectNumber: String(c.projectNumber || ""),
-    };
-  } catch {
-    return { clientId: "", apiKey: "", projectNumber: "" };
-  }
-}
-export function storeConfig(config: GoogleConfig) {
-  if (!validConfig(config))
-    throw Error(
-      "請確認 OAuth Client ID、API Key 與數字格式的專案編號。請勿輸入 Client Secret。",
-    );
-  localStorage.setItem(configKey, JSON.stringify(config));
-}
 const scripts = new Map<string, Promise<void>>();
 function script(src: string) {
   if (!scripts.has(src)) {

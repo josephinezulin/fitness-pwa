@@ -10,9 +10,7 @@ import {
   chooseSpreadsheet,
   login,
   prepareGoogle,
-  readConfig,
   revoke,
-  storeConfig,
   type GoogleConfig,
   type GoogleSession,
 } from "./google";
@@ -23,21 +21,25 @@ import {
 } from "./sheets";
 import type { Data } from "./model";
 import type { CloudIdentity } from "./workspace";
+import { loadSiteConfig } from "./site-config";
 import { TAB_NAMES } from "./sheet-schema";
 export function CloudPanel({
   onUseSnapshot,
   onDisconnect,
+  visible,
 }: {
   onUseSnapshot: (identity: CloudIdentity, data: Data) => void;
   onDisconnect: () => void;
+  visible: boolean;
 }) {
-  const [config, setConfig] = useState(readConfig);
+  const [config, setConfig] = useState<GoogleConfig | null>(null);
+  const [configLoaded, setConfigLoaded] = useState(false);
+  const [retry, setRetry] = useState(0);
   const [ready, setReady] = useState(false);
   const [session, setSession] = useState<GoogleSession | null>(null);
   const [inspection, setInspection] = useState<SheetInspection | null>(null);
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
-  const [configurationOpen, setConfigurationOpen] = useState(!config.clientId);
   const epoch = useRef(0);
   const request = useRef<AbortController | null>(null);
   const currentSession = useRef<GoogleSession | null>(null);
@@ -70,25 +72,55 @@ export function CloudPanel({
   }, [session]);
   const valid = (version: number) =>
     active.current && version === epoch.current;
-  async function setup(c: GoogleConfig) {
-    const version = ++epoch.current;
-    setReady(false);
-    setBusy("載入 Google 元件");
-    setNotice("");
-    try {
-      storeConfig(c);
-      await prepareGoogle();
-      if (valid(version)) {
-        setReady(true);
-        setConfigurationOpen(false);
-      }
-    } catch (error) {
-      if (valid(version)) setNotice((error as Error).message);
-    } finally {
-      if (valid(version)) setBusy("");
-    }
-  }
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 20000);
+    let cancelled = false;
+    setConfigLoaded(false);
+    loadSiteConfig(
+      new URL("google-config.json", document.baseURI),
+      controller.signal,
+    )
+      .then((next) => {
+        if (!cancelled) setConfig(next);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setConfig(null);
+          setNotice("暫時無法確認 Google 連線，請稍後重試。");
+        }
+      })
+      .finally(() => {
+        clearTimeout(timer);
+        if (!cancelled) setConfigLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [retry]);
+  useEffect(() => {
+    if (!visible || !config || ready) return;
+    let cancelled = false;
+    setBusy("準備 Google 登入");
+    prepareGoogle()
+      .then(() => {
+        if (!cancelled) setReady(true);
+      })
+      .catch(() => {
+        if (!cancelled)
+          setNotice("Google 登入暫時無法使用，請檢查網路後重試。");
+      })
+      .finally(() => {
+        if (!cancelled) setBusy("");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, config, retry]);
   function signIn() {
+    if (!config || !ready) return;
     const version = ++epoch.current;
     setBusy("等待 Google 登入");
     setNotice("");
@@ -108,7 +140,7 @@ export function CloudPanel({
       });
   }
   async function pick() {
-    if (!session) return;
+    if (!session || !config) return;
     const version = ++epoch.current;
     request.current?.abort();
     const controller = new AbortController();
@@ -156,85 +188,25 @@ export function CloudPanel({
       <p className="guide">
         先檢查你自己的私人試算表副本。這一步只讀取與驗證格式，不會上傳本機健康資料，也不會修改試算表。通過後可選擇在首頁唯讀查看雲端資料，本機紀錄不會自動上傳或混入。
       </p>
-      <details
-        open={configurationOpen}
-        onToggle={(event) => setConfigurationOpen(event.currentTarget.open)}
-      >
-        <summary>Google 專案設定</summary>
+      {configLoaded && !config && (
         <p className="tiny muted">
-          需先建立自己的 Google Cloud 專案並啟用
-          API。以下都是可公開的應用識別設定，不是登入
-          Token。請依專案說明設定來源限制，勿填入 Client Secret 或服務帳戶金鑰。
+          Google 連線準備中，目前可使用本機紀錄與 JSON
+          備份。開放連線後，你只需登入並選擇自己的試算表。
         </p>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            const form = new FormData(event.currentTarget);
-            const next = {
-              clientId: String(form.get("clientId")).trim(),
-              apiKey: String(form.get("apiKey")).trim(),
-              projectNumber: String(form.get("projectNumber")).trim(),
-            };
-            setConfig(next);
-            void setup(next);
-          }}
-        >
-          <label>
-            OAuth Web Client ID
-            <input
-              name="clientId"
-              autoComplete="off"
-              defaultValue={config.clientId}
-              required
-              disabled={!!session || !!busy}
-              placeholder="…apps.googleusercontent.com"
-            />
-          </label>
-          <label>
-            受網站與 API 限制的 API Key
-            <input
-              name="apiKey"
-              autoComplete="off"
-              defaultValue={config.apiKey}
-              required
-              disabled={!!session || !!busy}
-              placeholder="AIza…"
-            />
-          </label>
-          <label>
-            Google Cloud 專案編號
-            <input
-              name="projectNumber"
-              inputMode="numeric"
-              autoComplete="off"
-              defaultValue={config.projectNumber}
-              required
-              disabled={!!session || !!busy}
-              placeholder="數字編號，不是專案名稱"
-            />
-          </label>
-          <button className="secondary" disabled={!!session || !!busy}>
-            儲存設定並載入連線元件
-          </button>
-        </form>
-      </details>
+      )}
+      {!configLoaded && (
+        <p className="tiny muted" role="status">
+          正在確認 Google 連線狀態…
+        </p>
+      )}
       {!session ? (
         <div className="cloud-actions">
-          {!ready && (
-            <button
-              className="secondary"
-              disabled={!!busy}
-              onClick={() => void setup(config)}
-            >
-              載入 Google 連線元件
-            </button>
-          )}
           <button
             className="primary"
-            disabled={!ready || !!busy}
+            disabled={!config || !ready || !!busy}
             onClick={signIn}
           >
-            登入 Google 並授權選定檔案
+            使用 Google 登入
           </button>
           {busy && (
             <button
@@ -254,7 +226,7 @@ export function CloudPanel({
               className="text-button"
               onClick={() => {
                 const previous = currentSession.current;
-                reset("已登出。所有登入 Token 已從本次連線狀態移除。");
+                reset("已登出 Google。");
                 if (previous) revoke(previous);
               }}
             >
@@ -274,6 +246,17 @@ export function CloudPanel({
             Drive。授權會過期，重新開啟 PWA 需要再次登入。
           </p>
         </>
+      )}
+      {!session && !busy && (!config || !ready) && configLoaded && (
+        <button
+          className="text-button"
+          onClick={() => {
+            setNotice("");
+            setRetry((n) => n + 1);
+          }}
+        >
+          重新檢查連線
+        </button>
       )}
       {busy && (
         <p className="cloud-status" role="status">

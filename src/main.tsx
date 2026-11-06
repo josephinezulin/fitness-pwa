@@ -667,6 +667,7 @@ function App() {
               style={{ display: page === "設定與備份" ? "grid" : "none" }}
             >
               <CloudPanel
+                visible={page === "設定與備份"}
                 onUseSnapshot={workspace.activateCloud}
                 onDisconnect={workspace.disconnectCloud}
               />

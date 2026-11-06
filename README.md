@@ -50,6 +50,6 @@ npm run build
 - [Google Cloud 手動設定與 Safari 驗收](docs/google-setup.md)
 - [給 Gemini 的完整範本建立 Prompt](docs/gemini-template-prompt.md)
 
-連線功能需要使用者自己的 OAuth Web Client、受限制的 Picker API Key 及專案編號；不需要把私密憑證寫入 repo。現階段只驗收私人副本，沒有任何雲端寫入操作。真實 OAuth／Picker 需使用者建立專案及授權後測試，尚未宣告通過。
+連線功能由網站維護者一次設定共用的 OAuth Web Client、受限制的 Picker API Key 及專案編號，存於 `public/google-config.json`。一般使用者只需 Google 登入及選擇自己的檔案，不維護金鑰；私密憑證不寫入 repo。現階段只驗收私人副本，沒有任何雲端寫入操作。真實 OAuth／Picker 需使用者建立專案及授權後測試，尚未宣告通過。
 
 完整進度與尚待外部設定：見 [同步進度](docs/sync-progress.md)。
