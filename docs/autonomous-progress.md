@@ -52,7 +52,9 @@
 ## 最新階段 E 檢查點
 
 - E1 已實作受限的公開 YouTube 縮圖 runtime cache：24 張、14 天、quota 時可清除，不能快取登入／健康／Sheet／Apps Script 請求。完整 167 項 Vitest、6 項 Python、正式建置與 diff 檢查通過。
-- 詳見 docs/stage-e-progress.md。接續先確認縮圖補強的 PR／部署結果，再做主程式拆分與自訂課表；這兩項尚未完成。
+- E1 當時尚未完成頁面拆分與自訂課表，後續完成情況見下方 E2／E3 檢查點。
 
 - E1 的 PR #7 已合併與部署，main `3542d7adbcf90ce73f0407550e0b3b11405d8c31`，Pages run 42306449542 成功；已 HTTP 讀回新版資產及縮圖 Service Worker。
-- E2／E3 已完成頁面拆分、自訂課表投影及新增／編輯／停用、私人雲端 outbox／衝突、空課表與舊備份相容，以及帳號切換草稿保護。186 項 Vitest、6 項 Python、正式建置與 diff 檢查通過，準備 PR／CI／部署；詳見 docs/stage-e-progress.md。未修改使用者健康資料或實際課表，沒有新增 Google 授權或欄位。
+- E2／E3 已完成頁面拆分、自訂課表投影及新增／編輯／停用、私人雲端 outbox／衝突、空課表與舊備份相容，以及帳號切換草稿保護。186 項 Vitest、6 項 Python、正式建置與 diff 檢查通過；詳見 docs/stage-e-progress.md。未修改使用者健康資料或實際課表，沒有新增 Google 授權或欄位。
+- PR #8 已合併為 `ddd1f6c9b00fe20bd061183cc47adb2ec2ed56c5`。PR CI run 42313396460、Pages run 42313475934 成功；正式首頁、新 JS／CSS／Service Worker HTTP 200，JS 含課表管理及衝突規則，SW 已預快取新資產並保留縮圖邊界。
+- 接續維護：依實際部署的 Node 20 runtime 提示，已更新五個官方 Actions 至 Node 24 相容版本並固定 SHA，保留應用 Node 22、權限及檢查流程；以該修改的 PR CI 與 main Pages 最新 run 驗證後再視為完成。官方 release／相容性與 Recharts 3 調研見 docs/maintenance.md，圖表套件尚未升級。回來先查最新 PR／部署，避免重複已完成的自訂課表。

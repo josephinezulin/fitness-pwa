@@ -36,6 +36,8 @@ SettingsPage 持續掛載，切頁只改可見性，不能重建 CloudPanel 或�
 
 本輪檢查：186 項 Vitest（27 個檔案），6 項 Python，TypeScript／Vite／Service Worker 建置及 diff 檢查。測試只用虛構資料；DOM／mock 寫入測試不等於 iPhone OAuth 實際寫入驗收。PR／CI／正式部署完成後，記錄於 autonomous-progress.md。
 
+E2／E3 的 PR #8 已合併為 `ddd1f6c9b00fe20bd061183cc47adb2ec2ed56c5`；PR CI 及 Pages run 42313475934 成功。正式首頁、index-5MQcn3vJ.js、index-B7X9vcmP.css、sw.js 已 HTTP 200，讀回 JS 有管理／儲存課表與重複時段規則，SW 包含新版 JS 及既有縮圖快取。
+
 官方方案依據：
 
 - https://react.dev/learn/sharing-state-between-components （共享狀態留在共同父層）
@@ -52,7 +54,8 @@ SettingsPage 持續掛載，切頁只改可見性，不能重建 CloudPanel 或�
 ## 下一個可交付部分
 
 - 若有使用者實機回報，先修正再擴充；Apps Script 部署與 iOS 健康捷徑尚待本人授權與手機操作，不假造 Mac 或捷徑控制能力。
-- 研究 Recharts 官方升級與可及性方案、檢查實際依賴影響，再另案更新；不在課表改動中順便換主要圖表版本。
+- 已完成 Recharts 官方升級與可及性初步調研，見 docs/maintenance.md；尚未改圖表套件。可接續以獨立 PR 改善趨勢的文字／表格替代與缺值語意，再評估主要版本更新。
+- 實際 CI 出現的舊 Actions runtime 提示已另行更新工作流程，版本、SHA 與驗收要求亦見 maintenance.md；接續先確認其 PR／Pages 結果。
 - 保留「逐筆」課表同步的限制：跨裝置同時修改，或複雜離線時段對調，可能需要處理衝突；未實作多筆課表的條件交易。
 
 回來先檢查 PR／部署與使用者回報，保護其他工作階段的修改。
