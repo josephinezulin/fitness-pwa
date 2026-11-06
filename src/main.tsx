@@ -23,6 +23,11 @@ import {
   Settings,
   Play,
   Leaf,
+  MonitorPlay,
+  Bike,
+  Waves,
+  Mountain,
+  PersonStanding,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -44,13 +49,39 @@ import {
   completed,
   validate,
   demo,
+  WORKOUT_TYPES,
+  treadmillSummary,
+  type WorkoutType,
 } from "./model";
+import { WorkoutForm, TreadmillStats } from "./WorkoutForm";
+import { VideoLibrary } from "./VideoLibrary";
+import {
+  readLibrary,
+  storeLibrary,
+  validateLibrary,
+  type VideoCategory,
+} from "./videos";
 import { CloudPanel, type CloudReadState } from "./CloudPanel";
 import { PwaUpdate } from "./PwaUpdate";
 import { calendarDateInZone } from "./calendar";
 import { useWorkspace } from "./useWorkspace";
 import "./style.css";
-const names = { home: "居家徒手訓練", walk: "上坡快走", other: "其他運動" };
+const typeIcon = (type: WorkoutType) =>
+  ({
+    walk: Footprints,
+    run: Footprints,
+    hike: Mountain,
+    cycling: Bike,
+    swim: Waves,
+    yoga: PersonStanding,
+    pilates: PersonStanding,
+    stretch: PersonStanding,
+  })[type as string] || Dumbbell;
+function workoutDetail(w: Workout) {
+  if (!w.segments) return "";
+  const t = treadmillSummary(w.segments);
+  return `跑步機 ${w.segments.length} 段 · ${t.distanceKm} km · 均速 ${t.avgSpeed} km/h · 均坡 ${t.avgIncline}% · 爬升 ${t.elevationM} m`;
+}
 function App() {
   const workspace = useWorkspace();
   const data = workspace.data;
@@ -67,6 +98,11 @@ function App() {
     [message, setMessage] = useState(""),
     [online, setOnline] = useState(navigator.onLine),
     [range, setRange] = useState(30),
+    [videoCategory, setVideoCategory] = useState<VideoCategory | "全部">(
+      "全部",
+    ),
+    [videoVersion, setVideoVersion] = useState(0),
+    [expanded, setExpanded] = useState<string | null>(null),
     [metric, setMetric] = useState<"weight" | "fat" | "heart" | "steps">(
       "weight",
     );
@@ -146,7 +182,16 @@ function App() {
   };
   const exportData = () => {
     const url = URL.createObjectURL(
-      new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }),
+      new Blob(
+        [
+          JSON.stringify(
+            { ...data, videos: readLibrary(localStorage) },
+            null,
+            2,
+          ),
+        ],
+        { type: "application/json" },
+      ),
     );
     const a = document.createElement("a");
     a.href = url;
@@ -158,14 +203,22 @@ function App() {
     if (!file) return;
     try {
       if (file.size > 10_000_000) throw Error("檔案超過 10 MB");
-      const next = validate(JSON.parse(await file.text()));
+      const raw = JSON.parse(await file.text());
+      const next = validate(raw);
+      const videos =
+        raw && raw.videos !== undefined ? validateLibrary(raw.videos) : null;
       if (
         confirm(
-          `將以備份取代現有資料（${next.workouts.length} 筆運動、${next.metrics.length} 筆健康資料）。建議先匯出備份。確定還原？`,
+          `將以備份取代現有資料（${next.workouts.length} 筆運動、${next.metrics.length} 筆健康資料${videos ? `、${videos.custom.length} 部自訂影片` : ""}）。建議先匯出備份。確定還原？`,
         ) &&
         save(next)
-      )
+      ) {
+        if (videos) {
+          storeLibrary(localStorage, videos);
+          setVideoVersion((v) => v + 1);
+        }
         setMessage("已成功還原資料");
+      }
     } catch (e) {
       setMessage("無法還原：" + (e as Error).message);
     }
@@ -336,6 +389,33 @@ function App() {
       <p className="tiny muted">記錄同日、同類型運動，即自動完成打卡。</p>
     </section>
   );
+  const weekTreadmill = treadmillSummary(
+    weekWorkouts.flatMap((w) => w.segments || []),
+  );
+  const weekSummary = () => (
+    <div className="week-summary">
+      <div>
+        <span>本週運動</span>
+        <b>{weekWorkouts.length}</b>
+        <small>次</small>
+      </div>
+      <div>
+        <span>本週總時間</span>
+        <b>{Math.round(weekWorkouts.reduce((a, w) => a + w.minutes, 0))}</b>
+        <small>分鐘</small>
+      </div>
+      <div>
+        <span>跑步機距離</span>
+        <b>{weekTreadmill.distanceKm}</b>
+        <small>km</small>
+      </div>
+      <div>
+        <span>跑步機均速／均坡</span>
+        <b>{weekTreadmill.avgSpeed}</b>
+        <small>km/h · {weekTreadmill.avgIncline}%</small>
+      </div>
+    </div>
+  );
   const logs = () => (
     <section className="card logs">
       <div className="section-head">
@@ -352,36 +432,79 @@ function App() {
         [...data.workouts]
           .sort((a, b) => b.date.localeCompare(a.date))
           .slice(0, page === "運動紀錄" ? undefined : 4)
-          .map((w) => (
-            <div className="log" key={w.id}>
-              <div className="plan-icon">
-                <Dumbbell size={20} />
+          .map((w) => {
+            const Icon = typeIcon(w.type);
+            return (
+              <div className="log-wrap" key={w.id}>
+                <div className="log">
+                  <div className="plan-icon">
+                    <Icon size={20} />
+                  </div>
+                  <div className="grow">
+                    <h3>{WORKOUT_TYPES[w.type].label}</h3>
+                    <p>
+                      {w.date} · {w.minutes} 分鐘 · {w.calories} kcal
+                    </p>
+                    {w.segments && (
+                      <p className="treadmill-line">
+                        <button
+                          className="inline-link"
+                          aria-expanded={expanded === w.id}
+                          onClick={() =>
+                            setExpanded(expanded === w.id ? null : w.id)
+                          }
+                        >
+                          {workoutDetail(w)}
+                        </button>
+                      </p>
+                    )}
+                    {w.note && <p className="note">{w.note}</p>}
+                  </div>
+                  <button
+                    className="icon-button"
+                    disabled={!!workspace.cloud}
+                    aria-label="編輯運動"
+                    onClick={() => begin(w)}
+                  >
+                    <Pencil size={16} />
+                  </button>
+                  <button
+                    className="icon-button"
+                    disabled={!!workspace.cloud}
+                    aria-label="刪除運動"
+                    onClick={() => deleteWorkout(w.id)}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+                {w.segments && expanded === w.id && (
+                  <div className="segment-detail">
+                    <TreadmillStats segments={w.segments} />
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>段</th>
+                          <th>分鐘</th>
+                          <th>速度 km/h</th>
+                          <th>坡度 %</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {w.segments.map((s, i) => (
+                          <tr key={i}>
+                            <td>{i + 1}</td>
+                            <td>{s.minutes}</td>
+                            <td>{s.speed}</td>
+                            <td>{s.incline}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
-              <div className="grow">
-                <h3>{names[w.type]}</h3>
-                <p>
-                  {w.date} · {w.minutes} 分鐘 · {w.calories} kcal
-                </p>
-                {w.note && <p className="note">{w.note}</p>}
-              </div>
-              <button
-                className="icon-button"
-                disabled={!!workspace.cloud}
-                aria-label="編輯運動"
-                onClick={() => begin(w)}
-              >
-                <Pencil size={16} />
-              </button>
-              <button
-                className="icon-button"
-                disabled={!!workspace.cloud}
-                aria-label="刪除運動"
-                onClick={() => deleteWorkout(w.id)}
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
-          ))
+            );
+          })
       ) : (
         <div className="empty">
           你的運動故事，從第一筆開始。
@@ -410,6 +533,7 @@ function App() {
               ["總覽", LayoutDashboard],
               ["本週課表", CalendarDays],
               ["運動紀錄", Dumbbell],
+              ["運動影片", MonitorPlay],
               ["健康趨勢", ChartNoAxesCombined],
               ["設定與備份", Settings],
             ] as const
@@ -560,7 +684,7 @@ function App() {
                     value: done,
                     unit: "/ 3 次",
                     icon: Flame,
-                    sub: `已累積 ${weekWorkouts.reduce((a, w) => a + w.minutes, 0)} 分鐘`,
+                    sub: `已累積 ${Math.round(weekWorkouts.reduce((a, w) => a + w.minutes, 0))} 分鐘`,
                     color: "peach",
                   },
                 ].map((s) => (
@@ -616,34 +740,47 @@ function App() {
                   建議先暖身 5
                   分鐘，再依能力進行深蹲、靠牆伏地挺身、臀橋與鳥狗式，最後緩和伸展。從舒服的強度開始，疼痛或不適時停止。
                 </p>
-                <a
-                  className="video-link"
-                  href="https://www.youtube.com/results?search_query=初學者+徒手全身訓練+低衝擊+20分鐘"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <Play size={20} />
-                  YouTube 徒手訓練教學
-                  <ArrowUpRight size={16} />
-                </a>
-                <a
-                  className="video-link"
-                  href="https://www.youtube.com/results?search_query=運動前暖身+運動後伸展+教學"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <Play size={20} />
-                  暖身與伸展教學
-                  <ArrowUpRight size={16} />
-                </a>
+                {(
+                  [
+                    ["居家徒手", "居家徒手訓練影片"],
+                    ["快走／跑步機", "上坡快走／跑步機影片"],
+                    ["暖身", "運動前暖身"],
+                    ["伸展放鬆", "運動後伸展"],
+                  ] as const
+                ).map(([category, label]) => (
+                  <button
+                    key={category}
+                    className="video-link"
+                    onClick={() => {
+                      setVideoCategory(category);
+                      setPage("運動影片");
+                    }}
+                  >
+                    <Play size={20} />
+                    {label}
+                    <ChevronRight size={16} />
+                  </button>
+                ))}
                 <p className="tiny muted">
-                  連結前往 YouTube
-                  教學搜尋；需網路連線。上坡快走安排於週三，30–60 分鐘。
+                  影片在 App 內直接播放，需網路連線。上坡快走安排於週三，30–60
+                  分鐘。
                 </p>
               </section>
             </div>
           )}
-          {page === "運動紀錄" && logs()}
+          {page === "運動紀錄" && (
+            <>
+              {weekSummary()}
+              {logs()}
+            </>
+          )}
+          {page === "運動影片" && (
+            <VideoLibrary
+              key={videoVersion}
+              online={online}
+              initialCategory={videoCategory}
+            />
+          )}
           {page === "健康趨勢" && (
             <>
               <button
@@ -813,152 +950,102 @@ function App() {
                 <X />
               </button>
             </div>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const form = new FormData(e.currentTarget);
-                if (modal === "workout") {
-                  const record: Workout = {
-                    id: editing?.id || crypto.randomUUID(),
-                    date: String(form.get("date")),
-                    type: form.get("type") as Workout["type"],
-                    minutes: Number(form.get("minutes")),
-                    calories: Number(form.get("calories")),
-                    note: String(form.get("note")).trim(),
-                  };
-                  if (
-                    save({
-                      ...data,
-                      workouts: [
-                        ...data.workouts.filter((w) => w.id !== record.id),
-                        record,
-                      ],
-                    })
-                  )
-                    setModal(null);
-                } else {
-                  const date = String(form.get("date"));
-                  const old = data.metrics.find((m) => m.date === date);
-                  const record: Metric = {
-                    id: old?.id || crypto.randomUUID(),
-                    date,
-                  };
-                  for (const k of [
-                    "weight",
-                    "fat",
-                    "heart",
-                    "steps",
-                  ] as const) {
-                    const v = String(form.get(k));
-                    if (v !== "") record[k] = Number(v);
-                  }
-                  if (
-                    save({
-                      ...data,
-                      metrics: [
-                        ...data.metrics.filter((m) => m.date !== date),
-                        record,
-                      ],
-                    })
-                  )
-                    setModal(null);
-                }
-              }}
-            >
-              <label>
-                日期
-                <input
-                  name="date"
-                  type="date"
-                  required
-                  defaultValue={
-                    modal === "workout" ? editing?.date || viewToday : viewToday
-                  }
-                  max={viewToday}
-                />
-              </label>
-              {modal === "workout" ? (
-                <>
-                  <label>
-                    運動類型
-                    <select name="type" defaultValue={editing?.type || "home"}>
-                      {Object.entries(names).map(([key, name]) => (
-                        <option value={key} key={key}>
-                          {name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <div className="form-row">
-                    <label>
-                      分鐘數
-                      <input
-                        name="minutes"
-                        type="number"
-                        min="1"
-                        max="1440"
-                        step="1"
-                        required
-                        defaultValue={editing?.minutes || 30}
-                      />
-                    </label>
-                    <label>
-                      消耗熱量（kcal）
-                      <input
-                        name="calories"
-                        type="number"
-                        min="0"
-                        max="20000"
-                        required
-                        defaultValue={editing?.calories ?? 0}
-                      />
-                    </label>
-                  </div>
-                  <label>
-                    備註
-                    <textarea
-                      name="note"
-                      maxLength={2000}
-                      rows={3}
-                      defaultValue={editing?.note}
-                      placeholder="今天的感受、訓練內容…"
-                    />
-                  </label>
-                </>
-              ) : (
-                <>
-                  <p className="tiny muted">
-                    至少填寫一項。相同日期會取代當天摘要；未填欄位將清空。
-                  </p>
-                  {(
-                    [
-                      ["weight", "體重（kg）", 1, 500, 0.1],
-                      ["fat", "體脂率（%）", 0, 100, 0.1],
-                      ["heart", "心率（bpm）", 20, 250, 1],
-                      ["steps", "每日步數", 0, 200000, 1],
-                    ] as const
-                  ).map(([key, label, min, max, step]) => (
-                    <label key={key}>
-                      {label}
-                      <input
-                        name={key}
-                        type="number"
-                        min={min}
-                        max={max}
-                        step={step}
-                      />
-                    </label>
-                  ))}
-                </>
-              )}
-              <button
-                className="primary full"
+            {modal === "workout" ? (
+              <WorkoutForm
+                editing={editing}
+                today={viewToday}
                 disabled={!!workspace.cloud}
-                type="submit"
+                onSave={(record) => {
+                  const ok = save({
+                    ...data,
+                    workouts: [
+                      ...data.workouts.filter((w) => w.id !== record.id),
+                      record,
+                    ],
+                  });
+                  if (ok) setModal(null);
+                  return ok;
+                }}
+              />
+            ) : (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const form = new FormData(e.currentTarget);
+                  {
+                    const date = String(form.get("date"));
+                    const old = data.metrics.find((m) => m.date === date);
+                    const record: Metric = {
+                      id: old?.id || crypto.randomUUID(),
+                      date,
+                    };
+                    for (const k of [
+                      "weight",
+                      "fat",
+                      "heart",
+                      "steps",
+                    ] as const) {
+                      const v = String(form.get(k));
+                      if (v !== "") record[k] = Number(v);
+                    }
+                    if (
+                      save({
+                        ...data,
+                        metrics: [
+                          ...data.metrics.filter((m) => m.date !== date),
+                          record,
+                        ],
+                      })
+                    )
+                      setModal(null);
+                  }
+                }}
               >
-                儲存紀錄 <Check size={18} />
-              </button>
-            </form>
+                <label>
+                  日期
+                  <input
+                    name="date"
+                    type="date"
+                    required
+                    defaultValue={viewToday}
+                    max={viewToday}
+                  />
+                </label>
+                {
+                  <>
+                    <p className="tiny muted">
+                      至少填寫一項。相同日期會取代當天摘要；未填欄位將清空。
+                    </p>
+                    {(
+                      [
+                        ["weight", "體重（kg）", 1, 500, 0.1],
+                        ["fat", "體脂率（%）", 0, 100, 0.1],
+                        ["heart", "心率（bpm）", 20, 250, 1],
+                        ["steps", "每日步數", 0, 200000, 1],
+                      ] as const
+                    ).map(([key, label, min, max, step]) => (
+                      <label key={key}>
+                        {label}
+                        <input
+                          name={key}
+                          type="number"
+                          min={min}
+                          max={max}
+                          step={step}
+                        />
+                      </label>
+                    ))}
+                  </>
+                }
+                <button
+                  className="primary full"
+                  disabled={!!workspace.cloud}
+                  type="submit"
+                >
+                  儲存紀錄 <Check size={18} />
+                </button>
+              </form>
+            )}
           </section>
         </div>
       )}

@@ -1139,3 +1139,352 @@ button:disabled {
     justify-content: flex-end;
   }
 }
+
+/* Workout types, treadmill segments */
+.dialog label.check {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 10px;
+}
+.dialog label.check input {
+  width: 20px;
+  min-height: 20px;
+  height: 20px;
+  accent-color: #5f7f57;
+}
+.segments {
+  border: 1px solid #e3e9da;
+  border-radius: 10px;
+  padding: 12px 12px 6px;
+  margin: 0 0 6px;
+  background: #f7f9f3;
+}
+.segments legend {
+  font-size: 12px;
+  color: #5f7a55;
+  padding: 0 6px;
+}
+.segment-head,
+.segment {
+  display: grid;
+  grid-template-columns: 20px 1fr 1fr 1fr 36px;
+  gap: 6px;
+  align-items: center;
+}
+.segment-head {
+  font-size: 10px;
+  color: #93a089;
+  margin-bottom: 4px;
+}
+.segment {
+  margin-bottom: 6px;
+}
+.dialog .segment input {
+  padding: 8px;
+  min-height: 40px;
+  text-align: center;
+}
+.segment-no {
+  font-size: 11px;
+  color: #93a089;
+  text-align: center;
+}
+.segment-actions {
+  display: flex;
+  flex-wrap: wrap;
+}
+.segment-actions .secondary {
+  padding: 9px 12px;
+  margin: 4px 8px 4px 0;
+}
+.treadmill-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 10px 0 4px;
+}
+.treadmill-stats div {
+  background: #fff;
+  border: 1px solid #e6ebdf;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.treadmill-stats dt {
+  font-size: 10px;
+  color: #93a089;
+}
+.treadmill-stats dd {
+  margin: 4px 0 0;
+  font-size: 16px;
+  color: #3f5c3e;
+  font-weight: 500;
+}
+.treadmill-stats small {
+  font-size: 10px;
+  color: #93a089;
+  font-weight: 400;
+}
+.inline-link {
+  background: none;
+  padding: 0;
+  color: #6a835d;
+  font-size: inherit;
+  text-align: left;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.log-wrap {
+  border-bottom: 1px solid #eff1eb;
+}
+.log-wrap .log {
+  border-bottom: 0;
+}
+.segment-detail {
+  padding: 0 0 14px 51px;
+}
+.segment-detail table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  color: #6f7d66;
+  margin-top: 8px;
+}
+.segment-detail th,
+.segment-detail td {
+  text-align: right;
+  padding: 5px 6px;
+  border-bottom: 1px solid #f0f2ec;
+}
+.segment-detail th {
+  font-weight: 500;
+  color: #9aa390;
+}
+.week-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.week-summary > div {
+  background: #fff;
+  border: 1px solid #e8ece2;
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+}
+.week-summary span {
+  width: 100%;
+  font-size: 10px;
+  color: #93a089;
+}
+.week-summary b {
+  font-size: 22px;
+  font-weight: 500;
+  color: #3f5c3e;
+}
+.week-summary small {
+  font-size: 10px;
+  color: #93a089;
+}
+button.video-link {
+  width: 100%;
+  background: none;
+  text-align: left;
+}
+
+/* Video library */
+.video-library .notice {
+  margin: 12px 0;
+}
+.video-form {
+  border: 1px solid #e3e9da;
+  background: #f7f9f3;
+  border-radius: 10px;
+  padding: 4px 14px 14px;
+  margin: 12px 0;
+}
+.video-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 12px;
+  color: #738369;
+  margin: 12px 0;
+}
+.video-form input,
+.video-form select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #dfe5d6;
+  border-radius: 6px;
+  background: #fff;
+  min-height: 44px;
+  color: #3f5736;
+}
+.chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 14px 0 12px;
+  scrollbar-width: none;
+}
+.chips::-webkit-scrollbar {
+  display: none;
+}
+.chips button {
+  flex-shrink: 0;
+  background: #f2f4ee;
+  color: #6f7d66;
+  border-radius: 999px;
+  padding: 8px 13px;
+  font-size: 11px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-height: 36px;
+}
+.chips button small {
+  color: #a3ad97;
+  font-size: 10px;
+}
+.chips button.selected {
+  background: #42694b;
+  color: #fff;
+}
+.chips button.selected small {
+  color: #cfe0c5;
+}
+.player {
+  margin: 4px 0 18px;
+  scroll-margin-top: 16px;
+}
+.player-frame {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #111;
+}
+.player-frame iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.player-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 10px;
+}
+.player-bar h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+.player-bar p {
+  margin: 0;
+}
+.video-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.video-card {
+  border: 1px solid #edf0e7;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+}
+.video-card.active {
+  border-color: #8fae84;
+  box-shadow: 0 0 0 2px #dbe7d3;
+}
+.video-card .thumb {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  aspect-ratio: 16 / 9;
+  background: #e9ede4;
+  overflow: hidden;
+}
+.video-card .thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.video-card .play {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #ffffffe6;
+  color: #42694b;
+  display: grid;
+  place-items: center;
+}
+.video-card .length {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  background: #000000b3;
+  color: #fff;
+  font-size: 10px;
+  padding: 3px 6px;
+  border-radius: 4px;
+}
+.video-meta {
+  display: flex;
+  gap: 4px;
+  align-items: flex-start;
+  padding: 10px 6px 10px 12px;
+}
+.video-meta h3 {
+  margin: 0 0 4px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.video-meta p {
+  margin: 0;
+  font-size: 10px;
+  color: #9ba38f;
+}
+@media (max-width: 800px) {
+  .week-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 540px) {
+  .video-grid {
+    grid-template-columns: 1fr;
+  }
+  .treadmill-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .segment-detail {
+    padding-left: 0;
+  }
+  .player {
+    margin-left: -8px;
+    margin-right: -8px;
+  }
+  nav button {
+    min-width: 0;
+    flex: 1;
+  }
+  nav button span {
+    font-size: 8px;
+  }
+}

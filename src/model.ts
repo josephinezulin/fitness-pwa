@@ -1,11 +1,69 @@
+export const WORKOUT_TYPES = {
+  home: { label: "居家徒手訓練", group: "肌力與體能", treadmill: false },
+  strength: {
+    label: "重量訓練／健身房",
+    group: "肌力與體能",
+    treadmill: false,
+  },
+  jumprope: { label: "跳繩", group: "肌力與體能", treadmill: false },
+  walk: { label: "上坡快走／健走", group: "有氧", treadmill: true },
+  run: { label: "跑步／慢跑", group: "有氧", treadmill: true },
+  cycling: { label: "騎車／飛輪", group: "有氧", treadmill: false },
+  swim: { label: "游泳", group: "有氧", treadmill: false },
+  hike: { label: "健行／登山", group: "有氧", treadmill: false },
+  yoga: { label: "瑜伽", group: "柔軟與核心", treadmill: false },
+  pilates: { label: "皮拉提斯", group: "柔軟與核心", treadmill: false },
+  stretch: { label: "伸展／放鬆", group: "柔軟與核心", treadmill: false },
+  ball: { label: "球類運動", group: "其他", treadmill: false },
+  other: { label: "其他運動", group: "其他", treadmill: false },
+} as const;
+export type WorkoutType = keyof typeof WORKOUT_TYPES;
+export const isWorkoutType = (v: unknown): v is WorkoutType =>
+  typeof v === "string" && Object.hasOwn(WORKOUT_TYPES, v);
+/** One treadmill block: speed in km/h, incline in percent grade. */
+export type Segment = { minutes: number; speed: number; incline: number };
+export const SEGMENT_LIMITS = {
+  minutes: [0.5, 300],
+  speed: [0.5, 25],
+  incline: [-5, 40],
+  count: 50,
+} as const;
 export type Workout = {
   id: string;
   date: string;
-  type: "home" | "walk" | "other";
+  type: WorkoutType;
   minutes: number;
   calories: number;
   note: string;
+  segments?: Segment[];
 };
+const round = (n: number, digits: number) =>
+  Math.round(n * 10 ** digits) / 10 ** digits;
+/** Time-weighted totals; distance = speed × time, elevation ≈ distance × grade. */
+export function treadmillSummary(segments: Segment[]) {
+  let minutes = 0,
+    km = 0,
+    inclineTime = 0,
+    climb = 0;
+  for (const s of segments) {
+    const d = (s.speed * s.minutes) / 60;
+    minutes += s.minutes;
+    km += d;
+    inclineTime += s.incline * s.minutes;
+    climb += Math.max(0, d * 1000 * (s.incline / 100));
+  }
+  return {
+    minutes: round(minutes, 1),
+    distanceKm: round(km, 2),
+    avgSpeed: minutes ? round(km / (minutes / 60), 1) : 0,
+    avgIncline: minutes ? round(inclineTime / minutes, 1) : 0,
+    maxSpeed: segments.length ? Math.max(...segments.map((s) => s.speed)) : 0,
+    maxIncline: segments.length
+      ? Math.max(...segments.map((s) => s.incline))
+      : 0,
+    elevationM: Math.round(climb),
+  };
+}
 export type Metric = {
   id: string;
   date: string;
@@ -65,13 +123,31 @@ export function validate(raw: unknown): Data {
       !w.id ||
       ids.has(w.id) ||
       !validDate(w.date) ||
-      !["home", "walk", "other"].includes(w.type) ||
+      !isWorkoutType(w.type) ||
       !number(w.minutes, 1, 1440) ||
       !number(w.calories, 0, 20000) ||
       typeof w.note !== "string" ||
       w.note.length > 2000
     )
       throw Error("運動紀錄格式錯誤");
+    if (w.segments !== undefined) {
+      const segs = w.segments;
+      if (
+        !WORKOUT_TYPES[w.type].treadmill ||
+        !Array.isArray(segs) ||
+        segs.length < 1 ||
+        segs.length > SEGMENT_LIMITS.count ||
+        segs.some(
+          (s) =>
+            !s ||
+            !number(s.minutes, ...SEGMENT_LIMITS.minutes) ||
+            !number(s.speed, ...SEGMENT_LIMITS.speed) ||
+            !number(s.incline, ...SEGMENT_LIMITS.incline),
+        ) ||
+        Math.abs(treadmillSummary(segs).minutes - w.minutes) > 0.051
+      )
+        throw Error("跑步機分段格式錯誤");
+    }
     ids.add(w.id);
   }
   const mids = new Set<string>();
@@ -106,14 +182,25 @@ export function validate(raw: unknown): Data {
   }
   return {
     version: 1,
-    workouts: d.workouts.map(({ id, date, type, minutes, calories, note }) => ({
-      id,
-      date,
-      type,
-      minutes,
-      calories,
-      note,
-    })),
+    workouts: d.workouts.map(
+      ({ id, date, type, minutes, calories, note, segments }) => ({
+        id,
+        date,
+        type,
+        minutes,
+        calories,
+        note,
+        ...(segments
+          ? {
+              segments: segments.map(({ minutes, speed, incline }) => ({
+                minutes,
+                speed,
+                incline,
+              })),
+            }
+          : {}),
+      }),
+    ),
     metrics: d.metrics.map((m) => {
       const result: Metric = { id: m.id, date: m.date };
       for (const field of ["weight", "fat", "heart", "steps"] as const) {
@@ -141,13 +228,26 @@ export function demo(): Data {
     })),
     workouts: weekDays()
       .filter((_, i) => i === 0)
-      .map((date) => ({
+      .map((date): Workout => ({
         id: "demo-workout",
         date,
         type: "home",
         minutes: 25,
         calories: 130,
         note: "全身循環，完成後伸展 5 分鐘",
-      })),
+      }))
+      .concat({
+        id: "demo-treadmill",
+        date: dates[11],
+        type: "walk",
+        minutes: 40,
+        calories: 260,
+        note: "跑步機上坡快走",
+        segments: [
+          { minutes: 5, speed: 4.5, incline: 1 },
+          { minutes: 30, speed: 5.5, incline: 8 },
+          { minutes: 5, speed: 4.5, incline: 0 },
+        ],
+      } as Workout),
   };
 }

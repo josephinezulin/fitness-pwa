@@ -62,3 +62,84 @@ describe("健康紀錄與備份", () => {
     ).toThrow();
   });
 });
+import { treadmillSummary, demo } from "./model";
+describe("運動類型與跑步機分段", () => {
+  const segments = [
+    { minutes: 10, speed: 6, incline: 2 },
+    { minutes: 20, speed: 9, incline: 5 },
+  ];
+  const run: Workout = {
+    ...workout,
+    id: "run",
+    type: "run",
+    minutes: 30,
+    segments,
+  };
+  it("以時間加權計算總量與平均", () =>
+    expect(treadmillSummary(segments)).toEqual({
+      minutes: 30,
+      distanceKm: 4,
+      avgSpeed: 8,
+      avgIncline: 4,
+      maxSpeed: 9,
+      maxIncline: 5,
+      elevationM: 170,
+    }));
+  it("下坡不計入爬升，空分段為零", () => {
+    expect(
+      treadmillSummary([{ minutes: 60, speed: 5, incline: -2 }]).elevationM,
+    ).toBe(0);
+    expect(treadmillSummary([]).avgSpeed).toBe(0);
+  });
+  it("分段資料可 JSON 往返，舊紀錄不需分段", () => {
+    const back = validate(
+      JSON.parse(JSON.stringify({ ...empty, workouts: [run, workout] })),
+    );
+    expect(back.workouts).toEqual([run, workout]);
+    expect("segments" in back.workouts[1]).toBe(false);
+  });
+  it("接受新增的常見運動類型，拒絕未知類型", () => {
+    for (const type of [
+      "strength",
+      "yoga",
+      "pilates",
+      "cycling",
+      "swim",
+      "hike",
+      "jumprope",
+      "ball",
+      "stretch",
+    ])
+      expect(() =>
+        validate({ ...empty, workouts: [{ ...workout, type }] }),
+      ).not.toThrow();
+    expect(() =>
+      validate({ ...empty, workouts: [{ ...workout, type: "dance" }] }),
+    ).toThrow();
+  });
+  it("拒絕分鐘數與分段不符、非跑步機類型或超範圍", () => {
+    expect(() =>
+      validate({ ...empty, workouts: [{ ...run, minutes: 25 }] }),
+    ).toThrow();
+    expect(() =>
+      validate({ ...empty, workouts: [{ ...run, type: "yoga" }] }),
+    ).toThrow();
+    expect(() =>
+      validate({
+        ...empty,
+        workouts: [
+          {
+            ...run,
+            minutes: 10,
+            segments: [{ minutes: 10, speed: 40, incline: 0 }],
+          },
+        ],
+      }),
+    ).toThrow();
+    expect(() =>
+      validate({ ...empty, workouts: [{ ...run, segments: [] }] }),
+    ).toThrow();
+  });
+  it("示範資料通過驗證並含跑步機範例", () =>
+    expect(validate(demo()).workouts.some((w) => w.segments)).toBe(true));
+});

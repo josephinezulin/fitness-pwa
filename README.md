@@ -57,3 +57,10 @@ npm run build
 捷徑上傳端程式已備妥但預設關閉，需使用者部署後實機驗收：[Apps Script 上傳 API 設定](docs/health-ingest-setup.md)。同帳號選擇私人表後，下次登入會自動重新讀取；PWA 雲端寫入仍未啟用。
 
 PWA 新版會顯示更新提示，表單開啟時先保留草稿；雲端摘要列提供手動更新與失敗狀態。測試包含 TypeScript / DOM 介面測試（`npm test`）及未授權端點檢查工具測試（`python3 -m unittest discover -s scripts -p 'test_*.py'`）。
+
+## 運動紀錄與影片庫
+
+- 運動類型：居家徒手、重量訓練、跳繩、上坡快走、跑步、騎車／飛輪、游泳、健行、瑜伽、皮拉提斯、伸展、球類、其他。
+- 快走與跑步可勾選「使用跑步機」，逐段記錄分鐘、速度（km/h）、坡度（%）。自動計算總時間、總距離、時間加權平均速度與坡度、最高速／坡、估算爬升（距離×坡度，下坡不計）。運動紀錄頁顯示本週總量。
+- 運動影片頁：內建分類教學影片，以 YouTube 隱私強化模式（youtube-nocookie.com）在頁面內嵌播放；可貼上 YouTube 網址新增、移除或隱藏內建影片。清單存於本機（`daily-movement-videos-v1`），JSON 備份會一併匯出與還原。部分影片若被作者關閉嵌入，播放器會提示並提供「在 YouTube 開啟」。
+- 限制：雲端 Sheets 結構（WorkoutLogs.type）仍只接受 home／walk／other，且尚未有分段欄位與影片分頁；新類型與跑步機分段目前僅存於本機，雲端寫入啟用時需同步擴充 schema。

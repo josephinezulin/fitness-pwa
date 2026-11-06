@@ -160,7 +160,7 @@ export function planWorkoutChanges(
         ? {
             value: Object.fromEntries(
               workoutFields.map((field) => [field, edit[field]]),
-            ) as Workout,
+            ) as unknown as Workout,
           }
         : {}),
     });
