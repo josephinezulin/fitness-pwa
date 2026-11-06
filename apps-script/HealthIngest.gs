@@ -42,6 +42,7 @@ var HEALTH_HEADERS = {
     "deletedAt",
   ],
   WorkoutPlans: [
+    // Header compatibility only; health ingestion never seeds or modifies weekly plans.
     "id",
     "weekday",
     "type",

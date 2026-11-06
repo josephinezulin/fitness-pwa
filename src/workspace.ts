@@ -47,6 +47,23 @@ export function storeSnapshot(
   };
   storage.setItem(snapshotKey(identity), JSON.stringify(cache));
 }
+/** Used only to retain the last valid local intent when a fresh projection conflicts. */
+export function readSnapshot(
+  storage: Pick<Storage, "getItem">,
+  identity: Pick<CloudIdentity, "subject" | "spreadsheetId">,
+): Data | null {
+  try {
+    const raw = JSON.parse(storage.getItem(snapshotKey(identity)) || "null");
+    if (
+      raw?.identity?.subject !== identity.subject ||
+      raw?.identity?.spreadsheetId !== identity.spreadsheetId
+    )
+      return null;
+    return validate(raw.data);
+  } catch {
+    return null;
+  }
+}
 
 export function selectionKey(subject: string) {
   if (!subject) throw Error("缺少 Google 帳號識別碼。");

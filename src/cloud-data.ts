@@ -6,6 +6,7 @@ import {
   type Grids,
 } from "./sheet-schema";
 import { parseYouTubeId } from "./videos";
+import { planOf } from "./plans";
 
 /** Project raw rows to the daily summaries used by the UI. Never mutates source rows. */
 export function projectCloudData(grids: Grids, timezone: string): Data {
@@ -87,6 +88,7 @@ export function projectCloudData(grids: Grids, timezone: string): Data {
     : undefined;
   return validate({
     version: 1,
+    plans: grids.WorkoutPlans.slice(1).filter(populated).map(planOf),
     ...(videos ? { videos } : {}),
     workouts,
     metrics: [...metrics.values()].sort((a, b) => a.date.localeCompare(b.date)),

@@ -80,11 +80,23 @@ export type SheetVideo = {
   category: string;
   minutes?: number;
 };
+/** ISO weekday 1 = Monday. Disabled plans remain available for editing. */
+export type WorkoutPlan = {
+  id: string;
+  weekday: number;
+  type: WorkoutType;
+  title: string;
+  minMinutes: number;
+  maxMinutes: number;
+  tutorialUrl: string;
+  active: boolean;
+};
 export type Data = {
   version: 1;
   workouts: Workout[];
   metrics: Metric[];
   videos?: SheetVideo[];
+  plans?: WorkoutPlan[];
 };
 export const empty: Data = { version: 1, workouts: [], metrics: [] };
 export const today = () => dateKey(new Date());
@@ -101,11 +113,102 @@ export function weekDays(reference = new Date()) {
     return dateKey(day);
   });
 }
-export const plans = [
-  { day: 0, type: "home", label: "居家徒手訓練", duration: "20–30 分鐘" },
-  { day: 2, type: "walk", label: "健身房上坡快走", duration: "30–60 分鐘" },
-  { day: 5, type: "home", label: "居家徒手訓練", duration: "20–30 分鐘" },
-] as const;
+export const defaultPlans: readonly WorkoutPlan[] = [
+  {
+    id: "home-mon",
+    weekday: 1,
+    type: "home",
+    title: "居家徒手訓練",
+    minMinutes: 20,
+    maxMinutes: 30,
+    tutorialUrl: "",
+    active: true,
+  },
+  {
+    id: "walk-wed",
+    weekday: 3,
+    type: "walk",
+    title: "健身房上坡快走",
+    minMinutes: 30,
+    maxMinutes: 60,
+    tutorialUrl: "",
+    active: true,
+  },
+  {
+    id: "home-sat",
+    weekday: 6,
+    type: "home",
+    title: "居家徒手訓練",
+    minMinutes: 20,
+    maxMinutes: 30,
+    tutorialUrl: "",
+    active: true,
+  },
+];
+/** Only missing legacy data uses defaults; an explicit empty list stays empty. */
+export const workoutPlans = (data: Pick<Data, "plans">): WorkoutPlan[] =>
+  (data.plans ?? defaultPlans).map((p) => ({ ...p }));
+export const validTutorialUrl = (value: unknown): value is string => {
+  if (value === "") return true;
+  if (typeof value !== "string" || value.length > 2000) return false;
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      !url.username &&
+      !url.password &&
+      !url.port &&
+      ["youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"].includes(
+        url.hostname,
+      )
+    );
+  } catch {
+    return false;
+  }
+};
+export function validatePlans(raw: unknown): WorkoutPlan[] {
+  if (!Array.isArray(raw) || raw.length > 5000) throw Error("課表資料格式錯誤");
+  const ids = new Set<string>(),
+    slots = new Set<string>();
+  return raw.map((p: WorkoutPlan) => {
+    if (
+      !p ||
+      typeof p.id !== "string" ||
+      !p.id ||
+      ids.has(p.id) ||
+      !Number.isInteger(p.weekday) ||
+      p.weekday < 1 ||
+      p.weekday > 7 ||
+      !isWorkoutType(p.type) ||
+      typeof p.title !== "string" ||
+      !p.title.trim() ||
+      p.title.length > 200 ||
+      !Number.isInteger(p.minMinutes) ||
+      p.minMinutes < 1 ||
+      !Number.isInteger(p.maxMinutes) ||
+      p.maxMinutes > 1440 ||
+      p.minMinutes > p.maxMinutes ||
+      typeof p.active !== "boolean" ||
+      !validTutorialUrl(p.tutorialUrl)
+    )
+      throw Error("課表日期、名稱、分鐘數或教學網址格式錯誤");
+    const slot = `${p.weekday}:${p.type}`;
+    if (p.active && slots.has(slot))
+      throw Error("同一天、同類型只能啟用一個課表，請先停用重複課表。");
+    ids.add(p.id);
+    if (p.active) slots.add(slot);
+    return {
+      id: p.id,
+      weekday: p.weekday,
+      type: p.type,
+      title: p.title,
+      minMinutes: p.minMinutes,
+      maxMinutes: p.maxMinutes,
+      tutorialUrl: p.tutorialUrl,
+      active: p.active,
+    };
+  });
+}
 export function completed(workouts: Workout[], date: string, type: string) {
   return workouts.some(
     (w) => w.date === date && w.type === type && w.minutes > 0,
@@ -218,6 +321,7 @@ export function validate(raw: unknown): Data {
   }
   return {
     version: 1,
+    ...(d.plans !== undefined ? { plans: validatePlans(d.plans) } : {}),
     ...(d.videos
       ? {
           videos: d.videos.map(

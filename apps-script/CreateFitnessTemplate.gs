@@ -32,6 +32,7 @@ function createFitnessTemplate() {
     },
     {
       name: 'WorkoutPlans',
+      // Only initial defaults; the PWA may edit/disable all plans without changing these columns.
       headers: ['id', 'weekday', 'type', 'title', 'minMinutes', 'maxMinutes', 'tutorialUrl', 'active', 'updatedAt'],
       numbers: { weekday: '0', minMinutes: '0', maxMinutes: '0' },
       lists: { type: workoutTypes },

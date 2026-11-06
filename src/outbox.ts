@@ -1,4 +1,5 @@
-import { validate, type Data } from "./model";
+import { validate, validatePlans, workoutPlans, type Data } from "./model";
+import type { RemotePlan } from "./plans";
 import { snapshotKey, type CloudIdentity } from "./workspace";
 import { type CloudOperation, type RemoteVideo } from "./sheets-write";
 import type { RemoteWorkout } from "./sync-rules";
@@ -91,6 +92,19 @@ export function cleanOperation(raw: PendingOperation): PendingOperation {
       base,
       value: raw.value ? video(raw.value) : null,
     };
+  } else if (raw.kind === "plan") {
+    const base: RemotePlan | null = raw.base
+      ? {
+          ...validatePlans([raw.base])[0],
+          updatedAt: stamp(raw.base.updatedAt, true),
+        }
+      : null;
+    safe = {
+      ...common,
+      kind: "plan",
+      base,
+      value: validatePlans([raw.value])[0],
+    };
   } else throw Error("待同步類型不符。");
   if (
     (safe.base && safe.base.id !== safe.id) ||
@@ -151,11 +165,17 @@ export function overlayOutbox(
 ): Data {
   let workouts = [...data.workouts],
     videos = data.videos ? [...data.videos] : undefined;
+  let plans = data.plans ? [...data.plans] : undefined;
   for (const op of operations) {
     if (op.kind === "workout")
       workouts = [
         ...workouts.filter((w) => w.id !== op.id),
         ...(op.value ? [op.value] : []),
+      ];
+    else if (op.kind === "plan")
+      plans = [
+        ...(plans ?? workoutPlans(data)).filter((p) => p.id !== op.id),
+        op.value,
       ];
     else
       videos = [
@@ -163,5 +183,10 @@ export function overlayOutbox(
         ...(op.value ? [op.value] : []),
       ];
   }
-  return validate({ ...data, workouts, ...(videos ? { videos } : {}) });
+  return validate({
+    ...data,
+    workouts,
+    ...(videos ? { videos } : {}),
+    ...(plans ? { plans } : {}),
+  });
 }

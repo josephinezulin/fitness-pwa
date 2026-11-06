@@ -58,4 +58,6 @@ curl 可檢查 header，但不能代表 Safari 的 CORS 與 OAuth 測試通過�
 
 運動／分段一起原子更新；寫後讀回確認，回應遺失後先比對遠端再重試。outbox 按帳號與檔案隔離並嚴格挑選欄位，未確認的意圖不可直接改寫。Web Locks 限制同源同檔案只有一個編輯分頁；不支援時唯讀。跨裝置仍沒有條件交易鎖，避免同時改同一筆。
 
+自訂課表沿用相同私人檔案閘門與 drive.file。只以明確 stringValue／numberValue／boolValue 更新 WorkoutPlans 九欄，包含文字開頭的等號；active=false 代表停用，不刪列。寫前比較完整內容及 updatedAt，另檢查其他 ID 是否佔用相同啟用 weekday/type。離線覆蓋與新遠端課表衝突時，保留帳號／檔案分區的上次裝置內容與待同步意圖，暫停該課表寫入，必須重讀雲端才可放棄意圖。沒有新增跨裝置條件鎖或更廣 OAuth scope。
+
 細節、真實工具驗證與待完成實機清單見 docs/stage-c-progress.md。

@@ -1,5 +1,10 @@
 /** Shared contract for the PWA, Gemini template and future Apps Script writer. */
-import { WORKOUT_TYPES, SEGMENT_LIMITS, isWorkoutType } from "./model";
+import {
+  WORKOUT_TYPES,
+  SEGMENT_LIMITS,
+  isWorkoutType,
+  validTutorialUrl,
+} from "./model";
 import { VIDEO_CATEGORIES, parseYouTubeId } from "./videos";
 export const SCHEMA_VERSION = "1";
 export const SCHEMA_KEY = "fitnessSchemaVersion";
@@ -270,7 +275,8 @@ export function validateGrids(grids: Grids): ValidationReport {
         if (
           !number(r.weekday, 1, 7, true) ||
           !isWorkoutType(r.type) ||
-          !text(r.title)
+          !text(r.title) ||
+          String(r.title).length > 200
         )
           add(tab, row, "課表日期、類型或名稱不符");
         if (
@@ -281,20 +287,8 @@ export function validateGrids(grids: Grids): ValidationReport {
           add(tab, row, "建議分鐘數範圍錯誤");
         if (typeof r.active !== "boolean")
           add(tab, row, "active 必須為真正的布林值");
-        if (!missing(r.tutorialUrl)) {
-          try {
-            const url = new URL(String(r.tutorialUrl));
-            if (
-              url.protocol !== "https:" ||
-              !["youtube.com", "www.youtube.com", "youtu.be"].includes(
-                url.hostname,
-              )
-            )
-              throw Error();
-          } catch {
-            add(tab, row, "tutorialUrl 必須為 HTTPS YouTube 網址");
-          }
-        }
+        if (!validTutorialUrl(r.tutorialUrl ?? ""))
+          add(tab, row, "tutorialUrl 必須為 HTTPS YouTube 網址");
       }
       if (tab === "TreadmillSegments") {
         if (!text(r.workoutId)) add(tab, row, "workoutId 不可為空");
@@ -343,28 +337,14 @@ export function validateGrids(grids: Grids): ValidationReport {
     });
   }
   crossCheckSegments(grids, add);
-  const plans = grids.WorkoutPlans?.slice(1).filter(populated) || [];
-  for (const [weekday, type, min, max] of [
-    [1, "home", 20, 30],
-    [3, "walk", 30, 60],
-    [6, "home", 20, 30],
-  ]) {
-    if (
-      !plans.some(
-        (r) =>
-          r[1] === weekday &&
-          r[2] === type &&
-          r[4] === min &&
-          r[5] === max &&
-          r[7] === true,
-      )
-    )
-      add(
-        "WorkoutPlans",
-        2,
-        `缺少預設週 ${weekday} ${type} 課表（${min}–${max} 分鐘）`,
-      );
-  }
+  const activeSlots = new Set<string>();
+  grids.WorkoutPlans?.slice(1).forEach((r, i) => {
+    if (!populated(r) || r[7] !== true) return;
+    const slot = `${r[1]}:${r[2]}`;
+    if (activeSlots.has(slot))
+      add("WorkoutPlans", i + 2, "同一天、同類型只能啟用一個課表");
+    activeSlots.add(slot);
+  });
   return { ok: errors.length === 0, errors, counts };
 }
 

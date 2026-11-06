@@ -29,6 +29,10 @@ DailySteps 只保存健康服務計算的該日本地時間總數；同日來源
 
 WorkoutPlans 預設 weekday 採 ISO 1–7：1 / home / 20–30；3 / walk / 30–60；6 / home / 20–30。完成狀態由日期與 WorkoutLogs 推導，不另外儲存布林值。健康趨勢讀取時依日聚合：體重、體脂取當日最後一筆；心率需選擇並標示「靜息心率」或「每日平均心率」，不能混用；步數取 DailySteps。
 
+WorkoutPlans 的三筆資料僅為新範本初始值，不是必要固定課表。PWA 讀取實際列（含 active=false），可新增、修改與停用；空表或全部停用代表沒有安排，不自動補回三筆預設值。同一 weekday/type 最多一個 active=true，避免一筆運動完成重複目標；同日不同類型可並存。建議分鐘數不作打卡門檻。title 最多 200 字，分鐘數為 1–1440 整數且 min≤max，教學網址只允許 HTTPS YouTube（含 youtu.be），也可留白。直接影片可在課表內點選播放，搜尋連結在 YouTube 開啟。
+
+沿用原有九欄及 schema 版本 1，無須升級表格或重新授權。課表沒有 deletedAt，停用以 active=false 保留，雲端不能實體刪列。寫入比對完整內容與 updatedAt，待同步按帳號／檔案隔離；回應遺失後重讀相同結果不重複新增。舊本機備份缺少 plans 才沿用預設值，明確的 plans=[] 保持空白。App 匯出與還原會保留自訂課表。
+
 ## 寫入與衝突
 
 服務端先認證、驗證版本與所有欄位，再取得 Script Lock，檢查 requestId 與樣本 key。重試的 requestId 必須回傳既有結果。同步中斷後靠唯一鍵 upsert 修復部分寫入，成功前不記 committed。Sheets 沒有真正多表交易，重試安全不可只依 SyncLogs。
