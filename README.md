@@ -1,6 +1,6 @@
 # 日常動作 · 個人健身追蹤 PWA
 
-繁體中文、iPhone 優先，React + TypeScript + Vite。第一階段為裝置端應用，第二階段已新增可選用的 **Google 登入、選擇私人試算表及只讀格式驗收**；尚未啟用雲端資料同步、Apps Script 或 Apple 健康。首頁仍使用本機資料，示範資料需於設定頁手動載入。
+繁體中文、iPhone 優先，React + TypeScript + Vite。第一階段為裝置端應用，第二階段已新增可選用的 **Google 登入、選擇私人試算表及只讀格式驗收**；尚未啟用雲端資料同步、Apps Script 或 Apple 健康。首頁預設使用本機資料，也可明確切換為驗收通過的雲端每日摘要唯讀檢視；示範資料需於設定頁手動載入。
 
 ## 開發
 
@@ -42,7 +42,7 @@ npm run build
 先閱讀 [安全決策與整合閘門](docs/security.md)、[Sheets 資料模型](docs/sheets.md)、[iOS 捷徑規格](docs/shortcuts.md)。依使用者要求，安全可行性未驗證前不開啟雲端 API。
 
 
-未來擴充保留「共用 PWA、各自登入 Google、各自複製範本到 Google Drive」模式，詳見 [範本與資料隔離規格](docs/sheets.md#保留-google-範本與各自資料的擴充彈性)。第一版維持單人使用；已實作登入與 Picker 選擇副本的驗收流程；帳號健康資料分區、雲端同步及捷徑部署尚未實作。不支援 OneDrive／Excel。
+未來擴充保留「共用 PWA、各自登入 Google、各自複製範本到 Google Drive」模式，詳見 [範本與資料隔離規格](docs/sheets.md#保留-google-範本與各自資料的擴充彈性)。第一版維持單人使用；已實作登入與 Picker 選擇副本的驗收流程；帳號與檔案的摘要快取分區已實作；雲端寫入、離線 outbox 及捷徑部署尚未實作。不支援 OneDrive／Excel。
 
 
 ## Google 連線與 Gemini 範本
@@ -51,3 +51,5 @@ npm run build
 - [給 Gemini 的完整範本建立 Prompt](docs/gemini-template-prompt.md)
 
 連線功能需要使用者自己的 OAuth Web Client、受限制的 Picker API Key 及專案編號；不需要把私密憑證寫入 repo。現階段只驗收私人副本，沒有任何雲端寫入操作。真實 OAuth／Picker 需使用者建立專案及授權後測試，尚未宣告通過。
+
+完整進度與尚待外部設定：見 [同步進度](docs/sync-progress.md)。
