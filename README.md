@@ -53,3 +53,5 @@ npm run build
 連線功能由網站維護者一次設定共用的 OAuth Web Client、受限制的 Picker API Key 及專案編號，存於 `public/google-config.json`。一般使用者只需 Google 登入及選擇自己的檔案，不維護金鑰；私密憑證不寫入 repo。現階段只驗收私人副本，沒有任何雲端寫入操作。真實 OAuth／Picker 需使用者建立專案及授權後測試，尚未宣告通過。
 
 完整進度與尚待外部設定：見 [同步進度](docs/sync-progress.md)。
+
+捷徑上傳端程式已備妥但預設關閉，需使用者部署後實機驗收：[Apps Script 上傳 API 設定](docs/health-ingest-setup.md)。同帳號選擇私人表後，下次登入會自動重新讀取；PWA 雲端寫入仍未啟用。

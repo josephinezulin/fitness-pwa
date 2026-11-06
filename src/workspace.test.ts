@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { LOCAL_KEY, readLocal, snapshotKey, storeSnapshot } from "./workspace";
+import {
+  LOCAL_KEY,
+  readLocal,
+  snapshotKey,
+  storeSnapshot,
+  rememberSelection,
+  readSelection,
+} from "./workspace";
 import { empty } from "./model";
 const identity = {
   subject: "A",
@@ -63,4 +70,18 @@ describe("account and file storage isolation", () => {
     expect(readLocal(storage).error).toContain("尚未覆蓋");
     expect(storage.getItem()).toBe(raw);
   });
+});
+
+it("remembers a selected file per account without leaking another account selection or tokens", () => {
+  const values = new Map<string, string>();
+  const storage = {
+    setItem: (key: string, value: string) => {
+      values.set(key, value);
+    },
+    getItem: (key: string) => values.get(key) || null,
+  };
+  rememberSelection(storage, "A", { id: "sheet-private-1", title: "A 私人表" });
+  expect(readSelection(storage, "A")?.id).toBe("sheet-private-1");
+  expect(readSelection(storage, "B")).toBeNull();
+  expect([...values.values()].join("")).not.toContain("accessToken");
 });

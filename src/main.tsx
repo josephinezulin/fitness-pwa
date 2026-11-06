@@ -478,7 +478,10 @@ function App() {
             <div className="notice">
               <span>
                 雲端唯讀：{workspace.cloud.title} · {workspace.cloud.timezone}
-                。目前顯示每日摘要，沒有上傳本機資料。
+                。目前顯示每日摘要，沒有上傳本機資料。讀取時間：
+                {new Date(workspace.cloud.checkedAt).toLocaleString("zh-TW", {
+                  timeZone: "Asia/Taipei",
+                })}
               </span>
               <button onClick={workspace.disconnectCloud}>切回本機</button>
             </div>
@@ -668,6 +671,7 @@ function App() {
             >
               <CloudPanel
                 visible={page === "設定與備份"}
+                activeSpreadsheetId={workspace.cloud?.spreadsheetId ?? null}
                 onUseSnapshot={workspace.activateCloud}
                 onDisconnect={workspace.disconnectCloud}
               />

@@ -20,17 +20,23 @@ import {
   type SheetInspection,
 } from "./sheets";
 import type { Data } from "./model";
-import type { CloudIdentity } from "./workspace";
+import {
+  readSelection,
+  rememberSelection,
+  type CloudIdentity,
+} from "./workspace";
 import { loadSiteConfig } from "./site-config";
 import { TAB_NAMES } from "./sheet-schema";
 export function CloudPanel({
   onUseSnapshot,
   onDisconnect,
   visible,
+  activeSpreadsheetId,
 }: {
   onUseSnapshot: (identity: CloudIdentity, data: Data) => void;
   onDisconnect: () => void;
   visible: boolean;
+  activeSpreadsheetId: string | null;
 }) {
   const [config, setConfig] = useState<GoogleConfig | null>(null);
   const [configLoaded, setConfigLoaded] = useState(false);
@@ -44,6 +50,7 @@ export function CloudPanel({
   const request = useRef<AbortController | null>(null);
   const currentSession = useRef<GoogleSession | null>(null);
   const active = useRef(true);
+  const lastRefresh = useRef(0);
   useEffect(() => {
     active.current = true;
     return () => {
@@ -126,19 +133,113 @@ export function CloudPanel({
     setNotice("");
     // Invoke synchronously within the click, preserving Safari's popup permission.
     login(config)
-      .then((next) => {
+      .then(async (next) => {
         if (!valid(version)) return;
         currentSession.current = next;
         setSession(next);
         setInspection(null);
+        const previous = readSelection(localStorage, next.subject);
+        if (previous) {
+          const controller = new AbortController();
+          request.current = controller;
+          setBusy("讀取上次使用的試算表");
+          const result = await inspectSpreadsheet(
+            previous.id,
+            next,
+            controller.signal,
+          );
+          if (!valid(version)) return;
+          setInspection(result);
+          if (result.report.ok && result.data) useSnapshot(result, next);
+        }
       })
       .catch((error) => {
-        if (valid(version)) setNotice((error as Error).message);
+        if (!valid(version)) return;
+        if (error instanceof GoogleAccessError && error.status === 401) {
+          reset(error.message);
+          return;
+        }
+        setNotice((error as Error).message);
       })
       .finally(() => {
         if (valid(version)) setBusy("");
       });
   }
+  function useSnapshot(result: SheetInspection, current: GoogleSession) {
+    if (
+      !result.data ||
+      !result.report.ok ||
+      currentSession.current?.subject !== current.subject ||
+      Date.now() >= current.expiresAt
+    )
+      return;
+    onUseSnapshot(
+      {
+        subject: current.subject,
+        spreadsheetId: result.id,
+        title: result.title,
+        timezone: result.timezone,
+        checkedAt: result.checkedAt,
+      },
+      result.data,
+    );
+    try {
+      rememberSelection(localStorage, current.subject, {
+        id: result.id,
+        title: result.title,
+      });
+    } catch {
+      setNotice("已讀取資料，但無法記住這份檔案，下次登入需重新選擇。");
+    }
+    lastRefresh.current = Date.now();
+  }
+  async function refresh(id: string, automatic = false) {
+    const current = currentSession.current;
+    if (
+      !current ||
+      busy ||
+      (automatic && Date.now() - lastRefresh.current < 30000)
+    )
+      return;
+    const version = ++epoch.current;
+    request.current?.abort();
+    const controller = new AbortController();
+    request.current = controller;
+    lastRefresh.current = Date.now();
+    setBusy("更新雲端資料");
+    setNotice("");
+    try {
+      const result = await inspectSpreadsheet(id, current, controller.signal);
+      if (!valid(version)) return;
+      setInspection(result);
+      if (activeSpreadsheetId === id && result.report.ok && result.data)
+        useSnapshot(result, current);
+    } catch (error) {
+      if (!valid(version)) return;
+      if (error instanceof GoogleAccessError && error.status === 401) {
+        reset(error.message);
+        return;
+      }
+      setNotice("未能更新，仍保留上次讀取的摘要。可重新選檔或稍後重試。");
+    } finally {
+      if (valid(version)) setBusy("");
+    }
+  }
+  useEffect(() => {
+    if (!session || !activeSpreadsheetId) return;
+    const update = () => {
+      if (document.visibilityState === "visible" && navigator.onLine)
+        void refresh(activeSpreadsheetId, true);
+    };
+    window.addEventListener("online", update);
+    window.addEventListener("focus", update);
+    document.addEventListener("visibilitychange", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("focus", update);
+      document.removeEventListener("visibilitychange", update);
+    };
+  }, [session, activeSpreadsheetId, busy]);
   async function pick() {
     if (!session || !config) return;
     const version = ++epoch.current;
@@ -293,16 +394,7 @@ export function CloudPanel({
             <button
               className="secondary"
               onClick={() => {
-                onUseSnapshot(
-                  {
-                    subject: session.subject,
-                    spreadsheetId: inspection.id,
-                    title: inspection.title,
-                    timezone: inspection.timezone,
-                    checkedAt: inspection.checkedAt,
-                  },
-                  inspection.data!,
-                );
+                useSnapshot(inspection, session);
                 setNotice("已切換為雲端唯讀檢視，可前往首頁與健康趨勢查看。");
               }}
             >
@@ -317,6 +409,19 @@ export function CloudPanel({
           >
             開啟已選擇的試算表 <ExternalLink size={14} />
           </a>
+          {session && (
+            <button
+              className="text-button"
+              disabled={!!busy}
+              onClick={() => void refresh(inspection.id)}
+            >
+              重新讀取這份試算表
+            </button>
+          )}
+          <p className="tiny muted">
+            選擇在首頁查看後，下次登入同一個 Google
+            帳號會自動讀取這份檔案。也可隨時重新選檔。
+          </p>
           <p className="tiny muted">
             通過僅代表目前版本及資料格式相容；不代表已啟用同步、iOS 捷徑或完成
             Safari 跨裝置測試。

@@ -47,3 +47,37 @@ export function storeSnapshot(
   };
   storage.setItem(snapshotKey(identity), JSON.stringify(cache));
 }
+
+export function selectionKey(subject: string) {
+  if (!subject) throw Error("缺少 Google 帳號識別碼。");
+  return `daily-movement-selection-v1:${encodeURIComponent(subject)}`;
+}
+export function rememberSelection(
+  storage: Pick<Storage, "setItem">,
+  subject: string,
+  selection: { id: string; title: string },
+) {
+  if (!/^[\w-]{10,}$/.test(selection.id)) throw Error("試算表識別碼格式錯誤。");
+  storage.setItem(
+    selectionKey(subject),
+    JSON.stringify({ subject, id: selection.id, title: selection.title }),
+  );
+}
+export function readSelection(
+  storage: Pick<Storage, "getItem">,
+  subject: string,
+): { id: string; title: string } | null {
+  try {
+    const value = JSON.parse(storage.getItem(selectionKey(subject)) || "null");
+    if (
+      value?.subject !== subject ||
+      typeof value.id !== "string" ||
+      !/^[\w-]{10,}$/.test(value.id) ||
+      typeof value.title !== "string"
+    )
+      return null;
+    return { id: value.id, title: value.title };
+  } catch {
+    return null;
+  }
+}
