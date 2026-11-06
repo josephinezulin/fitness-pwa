@@ -7,6 +7,7 @@ import {
   storeOutbox,
   type PendingOperation,
 } from "./outbox";
+import { defaultPlans, empty } from "./model";
 const identity = { subject: "A", spreadsheetId: "sheet-private-1" };
 const op = (): Extract<PendingOperation, { kind: "workout" }> => ({
   kind: "workout",
@@ -35,6 +36,29 @@ function storage() {
   };
 }
 describe("durable account-scoped outbox", () => {
+  it("round trips whitelisted plan intent and preserves a disabled plan overlay", () => {
+    const s = storage();
+    const p = defaultPlans[0];
+    const pending = {
+      ...op(),
+      kind: "plan",
+      id: p.id,
+      base: {
+        ...p,
+        updatedAt: "2026-11-06T00:00:00Z",
+        accessToken: "discard-me",
+      },
+      value: { ...p, active: false, accessToken: "discard-me" },
+    } as unknown as PendingOperation;
+    storeOutbox(s, identity, [pending]);
+    const queue = readOutbox(s, identity);
+    expect([...s.values.values()].join("")).not.toContain("discard-me");
+    const visible = overlayOutbox({ ...empty, plans: [p] }, queue);
+    expect(visible.plans).toEqual([{ ...p, active: false }]);
+    expect(() =>
+      cleanOperation({ ...pending, value: null } as PendingOperation),
+    ).toThrow();
+  });
   it("separates accounts and sheets, including ambiguous separators", () => {
     const s = storage();
     storeOutbox(s, identity, [op()]);

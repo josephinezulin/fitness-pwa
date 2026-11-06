@@ -5,6 +5,7 @@ import { useWorkspace } from "./useWorkspace";
 import { testInspection, testSource, TEST_TIME } from "./test-fixtures";
 import { outboxKey, readOutbox } from "./outbox";
 import { SyncConflictError } from "./sheets-write";
+import { snapshotKey } from "./workspace";
 const mock = vi.hoisted(() => ({ write: vi.fn(), inspect: vi.fn() }));
 vi.mock("./sheets", async (original) => ({
   ...(await original<typeof import("./sheets")>()),
@@ -67,6 +68,154 @@ async function connect(
   await waitFor(() => expect(result.current.canEditCloud).toBe(true));
 }
 describe("cloud workspace lifecycle", () => {
+  it("coalesces offline plan edits in order and isolates them by Google account", async () => {
+    const { result } = renderHook(() => useWorkspace());
+    await connect(result);
+    const first = result.current.data.plans![0];
+    const disabled = result.current.data.plans!.map((p) =>
+      p.id === first.id ? { ...p, active: false } : p,
+    );
+    const addition = { ...first, id: "new-plan", title: "新課表" };
+    act(() => result.current.save({ ...result.current.data, plans: disabled }));
+    act(() =>
+      result.current.save({
+        ...result.current.data,
+        plans: [...disabled, addition],
+      }),
+    );
+    act(() =>
+      result.current.save({
+        ...result.current.data,
+        plans: [
+          ...disabled.map((p) =>
+            p.id === first.id ? { ...p, title: "停用保留" } : p,
+          ),
+          addition,
+        ],
+      }),
+    );
+    const queue = readOutbox(localStorage, identity);
+    expect(queue.map((p) => p.id)).toEqual([first.id, addition.id]);
+    expect(queue[0].base).toMatchObject({ active: true });
+    expect(queue[0].value).toMatchObject({ active: false, title: "停用保留" });
+    expect(() =>
+      result.current.save({ ...result.current.data, plans: [] }),
+    ).toThrow("停用課表");
+    await connect(result, { ...identity, subject: "B" });
+    expect(result.current.pending).toEqual([]);
+    expect(result.current.data.plans?.[0].title).toBe("預設課表");
+  });
+  it.each([true, false])(
+    "retains an offline plan when its remote slot is occupied (cache present: %s)",
+    async (cached) => {
+      const { result } = renderHook(() => useWorkspace());
+      await connect(result);
+      const p = {
+        ...result.current.data.plans![0],
+        id: "offline-plan",
+        weekday: 2,
+        title: "離線瑜伽",
+        type: "yoga" as const,
+      };
+      act(() =>
+        result.current.save({
+          ...result.current.data,
+          plans: [...result.current.data.plans!, p],
+        }),
+      );
+      if (!cached) localStorage.removeItem(snapshotKey(identity));
+      const remote = testSource();
+      remote.grids.WorkoutPlans.push([
+        "remote-plan",
+        2,
+        "yoga",
+        "另一個裝置",
+        20,
+        30,
+        "",
+        true,
+        TEST_TIME,
+      ]);
+      const inspection = testInspection(remote);
+      act(() =>
+        result.current.activateCloud(
+          identity,
+          inspection.data!,
+          inspection.source,
+        ),
+      );
+      expect(result.current.pending[0].state).toBe("conflict");
+      expect(result.current.canEditCloud).toBe(false);
+      expect(result.current.data.plans?.find((x) => x.id === p.id)?.title).toBe(
+        "離線瑜伽",
+      );
+      expect(result.current.syncError).toContain("課表");
+      mock.inspect.mockResolvedValueOnce(inspection);
+      await act(async () => {
+        online(true);
+        await result.current.discardPending();
+      });
+      expect(result.current.pending).toEqual([]);
+      expect(
+        result.current.data.plans?.some((x) => x.id === "remote-plan"),
+      ).toBe(true);
+    },
+  );
+  it("stops the remaining queue if a newly read plan conflicts after another write is confirmed", async () => {
+    const { result } = renderHook(() => useWorkspace());
+    await connect(result);
+    const p = {
+      ...result.current.data.plans![0],
+      id: "offline-plan",
+      weekday: 2,
+      type: "yoga" as const,
+    };
+    act(() =>
+      result.current.save({ ...result.current.data, workouts: [workout] }),
+    );
+    act(() =>
+      result.current.save({
+        ...result.current.data,
+        plans: [...result.current.data.plans!, p],
+      }),
+    );
+    const source = testSource();
+    source.grids.WorkoutLogs.push([
+      workout.id,
+      workout.date,
+      identity.timezone,
+      workout.type,
+      workout.minutes,
+      0,
+      workout.note,
+      "pwa",
+      1,
+      TEST_TIME,
+      "",
+    ]);
+    source.grids.WorkoutPlans.push([
+      "remote-plan",
+      2,
+      "yoga",
+      "另一個裝置",
+      20,
+      30,
+      "",
+      true,
+      TEST_TIME,
+    ]);
+    mock.write.mockResolvedValueOnce(testInspection(source));
+    online(true);
+    await act(async () => result.current.retrySync());
+    expect(mock.write).toHaveBeenCalledTimes(1);
+    expect(readOutbox(localStorage, identity)).toHaveLength(1);
+    expect(result.current.pending[0]).toMatchObject({
+      kind: "plan",
+      state: "conflict",
+    });
+    expect(result.current.data.workouts).toEqual([workout]);
+    expect(result.current.data.plans?.some((x) => x.id === p.id)).toBe(true);
+  });
   it("retains conflicts until a fresh remote read permits explicitly adopting cloud content", async () => {
     const { result } = renderHook(() => useWorkspace());
     await connect(result);

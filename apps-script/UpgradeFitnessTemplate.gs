@@ -10,6 +10,7 @@ function upgradeFitnessTemplate() {
   const workoutTypes = ['home', 'strength', 'jumprope', 'walk', 'run', 'cycling', 'swim', 'hike', 'yoga', 'pilates', 'stretch', 'ball', 'other'];
   const videoCategories = ['暖身', '居家徒手', '快走／跑步機', '跑步', '重量訓練', '瑜伽', '皮拉提斯', '伸展放鬆', '飛輪／騎車', '跳繩', '其他'];
   const core = {
+    // WorkoutPlans stays v1: customized/disabled plans must never be reseeded by an upgrade.
     HealthMetrics: ['id', 'sampleKey', 'measuredAt', 'date', 'timezone', 'metricType', 'value', 'unit', 'source', 'deviceId', 'updatedAt', 'deletedAt'],
     DailySteps: ['id', 'date', 'timezone', 'totalSteps', 'source', 'deviceId', 'revision', 'updatedAt'],
     WorkoutLogs: ['id', 'date', 'timezone', 'type', 'minutes', 'calories', 'note', 'source', 'revision', 'updatedAt', 'deletedAt'],

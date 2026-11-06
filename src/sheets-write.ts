@@ -1,4 +1,11 @@
-import { validate, type Workout, type SheetVideo } from "./model";
+import {
+  validate,
+  validatePlans,
+  type Workout,
+  type SheetVideo,
+  type WorkoutPlan,
+} from "./model";
+import { planOf, samePlan, type RemotePlan } from "./plans";
 import {
   activeSegments,
   populated,
@@ -26,6 +33,7 @@ export type CloudOperation = {
 } & (
   | { kind: "workout"; base: RemoteWorkout | null; value: Workout | null }
   | { kind: "video"; base: RemoteVideo | null; value: SheetVideo | null }
+  | { kind: "plan"; base: RemotePlan | null; value: WorkoutPlan }
 );
 export class SyncConflictError extends Error {
   constructor(public recordId: string) {
@@ -68,6 +76,8 @@ export function remoteVideos(source: SheetSource): RemoteVideo[] {
       deletedAt: String(row[6] || ""),
     }));
 }
+export const remotePlans = (source: SheetSource): RemotePlan[] =>
+  source.grids.WorkoutPlans.slice(1).filter(populated).map(planOf);
 export const sameVideo = (
   a: SheetVideo | null | undefined,
   b: SheetVideo | null | undefined,
@@ -215,6 +225,42 @@ export function planSheetWrite(
         "",
       ]);
     }
+  } else if (op.kind === "plan") {
+    const p = validatePlans([op.value])[0];
+    const server = remotePlans(source).find((v) => v.id === op.id);
+    if (samePlan(server, p)) return [];
+    if (
+      op.base
+        ? !server ||
+          !samePlan(op.base, server) ||
+          op.base.updatedAt !== server.updatedAt
+        : !!server
+    )
+      throw new SyncConflictError(op.id);
+    // A new active plan in the same slot is a conflict, even when it has a different ID.
+    if (
+      p.active &&
+      remotePlans(source).some(
+        (v) =>
+          v.id !== p.id &&
+          v.active &&
+          v.weekday === p.weekday &&
+          v.type === p.type,
+      )
+    )
+      throw new SyncConflictError(op.id);
+    const index = grids.WorkoutPlans.findIndex((r) => r[0] === op.id);
+    put("WorkoutPlans", index > 0 ? index : grids.WorkoutPlans.length, [
+      p.id,
+      p.weekday,
+      p.type,
+      p.title,
+      p.minMinutes,
+      p.maxMinutes,
+      p.tutorialUrl,
+      p.active,
+      now,
+    ]);
   } else {
     if (!grids.Videos) throw Error("請先升級試算表，加入 Videos 分頁。");
     if (op.value)

@@ -53,3 +53,6 @@
 
 - E1 已實作受限的公開 YouTube 縮圖 runtime cache：24 張、14 天、quota 時可清除，不能快取登入／健康／Sheet／Apps Script 請求。完整 167 項 Vitest、6 項 Python、正式建置與 diff 檢查通過。
 - 詳見 docs/stage-e-progress.md。接續先確認縮圖補強的 PR／部署結果，再做主程式拆分與自訂課表；這兩項尚未完成。
+
+- E1 的 PR #7 已合併與部署，main `3542d7adbcf90ce73f0407550e0b3b11405d8c31`，Pages run 42306449542 成功；已 HTTP 讀回新版資產及縮圖 Service Worker。
+- E2／E3 已完成頁面拆分、自訂課表投影及新增／編輯／停用、私人雲端 outbox／衝突、空課表與舊備份相容，以及帳號切換草稿保護。186 項 Vitest、6 項 Python、正式建置與 diff 檢查通過，準備 PR／CI／部署；詳見 docs/stage-e-progress.md。未修改使用者健康資料或實際課表，沒有新增 Google 授權或欄位。

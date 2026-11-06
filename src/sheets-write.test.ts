@@ -3,6 +3,7 @@ import {
   planSheetWrite,
   remoteWorkouts,
   remoteVideos,
+  remotePlans,
   typedCell,
   writeCloudOperation,
   SyncConflictError,
@@ -74,6 +75,86 @@ const plan = (source: SheetSource, op: CloudOperation = operation()) =>
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.clearAllMocks();
+});
+describe("safe custom plan writes", () => {
+  const operation = (
+    source = testSource(),
+  ): Extract<CloudOperation, { kind: "plan" }> => {
+    const base = remotePlans(source)[0];
+    return {
+      kind: "plan",
+      operationId: "plan-operation-1",
+      id: base.id,
+      timezone: TEST_ZONE,
+      base,
+      value: { ...base, title: "=輕鬆肌力", minMinutes: 10, maxMinutes: 20 },
+    };
+  };
+  it("updates typed cells in place, preserving all other tables and retrying idempotently", () => {
+    const source = testSource(),
+      op = operation(source),
+      requests = plan(source, op);
+    expect(requests).toHaveLength(1);
+    const update = requests[0].updateCells as any;
+    expect(update.rows[0].values[3].userEnteredValue).toEqual({
+      stringValue: "=輕鬆肌力",
+    });
+    expect(update.rows[0].values[7].userEnteredValue).toEqual({
+      boolValue: true,
+    });
+    expect(update.fields).toBe("userEnteredValue");
+    const written = apply(source, requests);
+    expect(written.grids.WorkoutPlans[1][8]).toBe(TEST_TIME);
+    expect(written.grids.WorkoutLogs).toEqual(source.grids.WorkoutLogs);
+    expect(written.grids.HealthMetrics).toEqual(source.grids.HealthMetrics);
+    expect(plan(written, op)).toEqual([]);
+  });
+  it("pauses all default plans without resurrecting or deleting rows", () => {
+    let source = testSource();
+    for (const base of remotePlans(source)) {
+      const op = {
+        ...operation(source),
+        id: base.id,
+        base,
+        value: { ...base, active: false },
+      };
+      source = apply(source, plan(source, op));
+    }
+    expect(testInspection(source).data!.plans?.filter((p) => p.active)).toEqual(
+      [],
+    );
+    expect(source.grids.WorkoutPlans).toHaveLength(4);
+  });
+  it("detects content edits, timestamp-only changes, removal and a different ID in the desired slot", () => {
+    const source = testSource(),
+      op = operation(source);
+    for (const [col, value] of [
+      [3, "人工編輯"],
+      [8, "2026-11-06T13:00:00.000Z"],
+    ] as const) {
+      const changed = structuredClone(source);
+      changed.grids.WorkoutPlans[1][col] = value;
+      expect(() => plan(changed, op)).toThrow(SyncConflictError);
+    }
+    const removed = structuredClone(source);
+    removed.grids.WorkoutPlans.splice(1, 1);
+    expect(() => plan(removed, op)).toThrow(SyncConflictError);
+    const duplicate = {
+      ...op,
+      id: "new-plan",
+      base: null,
+      value: { ...op.value, id: "new-plan" },
+    };
+    expect(() => plan(source, duplicate)).toThrow(SyncConflictError);
+  });
+  it("adds a plan to an empty grid and retains explicit integer and boolean types", () => {
+    const source = testSource(),
+      op = operation(source);
+    source.grids.WorkoutPlans.length = 1;
+    const written = apply(source, plan(source, { ...op, base: null }));
+    expect(remotePlans(written)[0]).toMatchObject(op.value);
+    expect(plan(written, { ...op, base: null })).toEqual([]);
+  });
 });
 describe("atomic workout and video writes", () => {
   it("rounds the raw segment sum, and rejects a changed sheet timezone", () => {

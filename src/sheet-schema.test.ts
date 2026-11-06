@@ -58,7 +58,7 @@ describe("Google Sheets v1 contract", () => {
     grids.DailySteps[0][0] = "編號";
     expect(validateGrids(grids).ok).toBe(false);
   });
-  it("requires a genuine boolean and all three default plans", () => {
+  it("requires a genuine boolean for plan activation", () => {
     const grids = fixture();
     grids.WorkoutPlans[1][7] = "TRUE";
     expect(validateGrids(grids).ok).toBe(false);

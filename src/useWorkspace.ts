@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { validate, type Data } from "./model";
+import { validate, workoutPlans, type Data } from "./model";
 import {
   LOCAL_KEY,
   readLocal,
+  readSnapshot,
   snapshotKey,
   storeSnapshot,
   type CloudIdentity,
 } from "./workspace";
+import { samePlan } from "./plans";
 import type { GoogleSession } from "./google";
 import {
   GoogleAccessError,
@@ -16,6 +18,7 @@ import {
 import {
   remoteWorkouts,
   remoteVideos,
+  remotePlans,
   sameWorkout,
   sameVideo,
   SyncConflictError,
@@ -75,12 +78,56 @@ export function useWorkspace() {
       setStorageError("雲端資料已讀取，但裝置快取儲存失敗；請先匯出備份。");
     }
   }
+  function projectPending(
+    identity: CloudIdentity,
+    next: Data,
+    queue: PendingOperation[],
+  ) {
+    try {
+      return { visible: overlayOutbox(next, queue), queue };
+    } catch {
+      // Different remote/local plan IDs can now occupy the same weekly slot.
+      const conflicts = queue.map((op) =>
+        op.kind === "plan" ? { ...op, state: "conflict" as const } : op,
+      );
+      storeOutbox(localStorage, identity, conflicts);
+      setSyncError(
+        "雲端課表與離線修改衝突，先保留上次裝置內容；請先匯出備份，再選擇採用雲端內容。",
+      );
+      const desired = queue.flatMap((op) =>
+        op.kind === "plan" && op.value.active ? [op.value] : [],
+      );
+      // A cache can be evicted independently of the outbox. Still show/export every local intent;
+      // temporarily omit remote competitors in this preview, without writing or deleting them.
+      const preview = () =>
+        overlayOutbox(
+          {
+            ...next,
+            plans: workoutPlans(next).filter(
+              (p) =>
+                !p.active ||
+                !desired.some(
+                  (v) =>
+                    v.id !== p.id &&
+                    v.weekday === p.weekday &&
+                    v.type === p.type,
+                ),
+            ),
+          },
+          queue,
+        );
+      return {
+        visible: readSnapshot(localStorage, identity) ?? preview(),
+        queue: conflicts,
+      };
+    }
+  }
   const flush = useCallback(async () => {
     if (
       running.current ||
       !ownsLock.current ||
       !navigator.onLine ||
-      !current.current
+      !current.current?.source
     )
       return;
     const owner = current.current.identity,
@@ -147,7 +194,9 @@ export function useWorkspace() {
           data: result.data!,
           source: result.source,
         };
-        const visible = overlayOutbox(result.data!, queue);
+        const projected = projectPending(identity, result.data!, queue);
+        const visible = projected.visible;
+        queue = projected.queue;
         cache(identity, visible);
         show(visible);
         setPending(queue);
@@ -277,13 +326,21 @@ export function useWorkspace() {
     if (queue.some((o) => o.state !== "pending"))
       throw Error("請先確認上次同步結果，再編輯新內容；待同步紀錄已保留。");
     const workouts = remoteWorkouts(active.source),
-      videos = remoteVideos(active.source);
-    for (const kind of ["workout", "video"] as const) {
+      videos = remoteVideos(active.source),
+      plans = remotePlans(active.source);
+    for (const kind of ["workout", "video", "plan"] as const) {
       const before =
         kind === "workout"
           ? display.current.workouts
-          : display.current.videos || [];
-      const after = kind === "workout" ? safe.workouts : safe.videos || [];
+          : kind === "video"
+            ? display.current.videos || []
+            : workoutPlans(display.current);
+      const after =
+        kind === "workout"
+          ? safe.workouts
+          : kind === "video"
+            ? safe.videos || []
+            : workoutPlans(safe);
       for (const id of new Set([
         ...before.map((x) => x.id),
         ...after.map((x) => x.id),
@@ -296,19 +353,31 @@ export function useWorkspace() {
                 previous as Data["workouts"][number],
                 value as Data["workouts"][number],
               )
-            : sameVideo(
-                previous as NonNullable<Data["videos"]>[number],
-                value as NonNullable<Data["videos"]>[number],
-              );
+            : kind === "video"
+              ? sameVideo(
+                  previous as NonNullable<Data["videos"]>[number],
+                  value as NonNullable<Data["videos"]>[number],
+                )
+              : samePlan(
+                  previous as NonNullable<Data["plans"]>[number],
+                  value as NonNullable<Data["plans"]>[number],
+                );
         if (equal) continue;
+        if (kind === "plan" && !value)
+          throw Error("請停用課表以保留歷史設定，不能直接刪除雲端課表。");
         const old = queue.find((o) => o.kind === kind && o.id === id);
         const base = old
           ? old.base
-          : (kind === "workout" ? workouts : videos).find((x) => x.id === id) ||
-            null;
+          : (kind === "workout"
+              ? workouts
+              : kind === "video"
+                ? videos
+                : plans
+            ).find((x) => x.id === id) || null;
+        const position = old ? queue.indexOf(old) : queue.length;
         queue = queue.filter((o) => o.kind !== kind || o.id !== id);
         if (!base && !value) continue;
-        queue.push({
+        queue.splice(position, 0, {
           kind,
           id,
           base,
@@ -358,7 +427,19 @@ export function useWorkspace() {
       setPending([]);
       return;
     }
-    const visible = overlayOutbox(validate(next), queue);
+    let visible: Data;
+    try {
+      const projected = projectPending(identity, validate(next), queue);
+      visible = projected.visible;
+      queue = projected.queue;
+    } catch {
+      setStorageError("待同步狀態無法儲存，原始內容已保留；請先匯出備份。");
+      current.current = { identity, data: validate(next) };
+      show(readSnapshot(localStorage, identity) ?? validate(next));
+      setCloud(identity);
+      setPending(queue);
+      return;
+    }
     current.current = { identity, data: validate(next), source };
     cache(identity, visible);
     show(visible);
