@@ -31,6 +31,12 @@
 
 這是已連線工具的 Sheets API 寫入驗證，**不是** 使用者 PWA OAuth Token 在 iPhone 上的端到端寫入驗收，也不代表影片已實機試播。真實檔案 URL 留在本次對話，不把私人表 ID 或健康資料寫入 repository。
 
+## 部署與跨來源預檢
+
+PR #4 已合併為 `7f8b1bb9be99d9de84c00e59a4c79de91226ebbc`；GitHub Actions 建置與 Pages 部署成功，首頁與新 JS／CSS 回傳 HTTP 200，已確認部署資產包含同步介面。
+
+對官方 batchUpdate 路徑使用虛構檔案 ID、不附 Token 的 OPTIONS，指定實際 Pages origin、POST 與 authorization,content-type：HTTP 200，Access-Control-Allow-Origin 為 https://josephinezulin.github.io，允許 POST 與上述兩個 header。這驗證 Google API 的預檢回應，不表示實際 Token／檔案寫入或 iPhone 已驗收。
+
 ## 實機驗收清單
 
 1. 更新 PWA，登入原帳號並使用私人副本；新增一筆測試運動，待同步提示消失後，到試算表確認一筆記錄。重新整理後仍存在。

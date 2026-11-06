@@ -17,7 +17,7 @@
 ## 下一步
 
 1. 階段 0 部署已完成；保留尚未完成的實機驗收清單，見 `docs/stage-0-report.md`。
-2. 完成階段 C：分段納入差異比較、Google Sheets 安全寫入、版本衝突、帳號隔離的離線 outbox、運動及影片 CRUD。
+2. 階段 C 程式與部署已完成；先查有無新的實機回報，再開始階段 D。尚待使用者的實機驗收清單見階段 C 文件，不重複建立登入／欄位。
 3. Sheets `spreadsheets.batchUpdate` 官方支援同一請求內原子更新，應把父運動及子分段放在同一請求；文件需解釋這比先後兩次寫入可靠。寫前重讀不等於跨裝置原子版本鎖，不可聲稱完全解決同時修改。
 4. 再做階段 D、E 的使用體驗優化。每個階段執行交接文件中的完整檢查並記錄實際結果；適當分段提交、開 PR，通過後合併。
 
@@ -37,5 +37,7 @@
 
 - 已實作 typed cell 讀寫、運動／分段原子 CRUD、影片 CRUD、outbox、重試／衝突、Web Locks、帳號切換取消，以及舊備份相容。
 - 已直接升級使用者授權的私人原表，升級前私人原生副本已驗證；獨立私人 QA 副本已實際建立／修改虛構運動、兩段分段及影片，原生純文字與批次失敗未套用已讀回。私人檔案 ID 不寫 repo。
-- 完整檢查通過：141 項 Vitest、6 項 Python、TypeScript／Vite／Service Worker 建置及 diff 檢查。接著開 PR、CI 通過後合併部署；不得把 iPhone PWA OAuth 寫入／試播尚待實機驗收寫成已通過。
+- 階段 C 的 PR #4 已合併為 `7f8b1bb9be99d9de84c00e59a4c79de91226ebbc`；CI 與 Pages 部署成功，首頁與新版 JS／CSS HTTP 200，部署 JS 已包含新同步介面。完整檢查通過：141 項 Vitest、6 項 Python、正式建置與 diff 檢查。iPhone OAuth 寫入／試播仍待實機驗收。
 - 自動排程訊息若在此工作階段進行時到達，視為繼續同一任務，不另外啟動重疊工作。
+
+- 已以實際 Pages origin 對 Google Sheets batchUpdate URL 發送不含 Token 的 OPTIONS：HTTP 200，Allow-Origin 符合，允許 POST 與 authorization,content-type。這僅驗證預檢，不取代本人 OAuth 寫入驗收。
