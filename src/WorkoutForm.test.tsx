@@ -3,6 +3,8 @@ import React from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorkoutForm } from "./WorkoutForm";
+import { repeatWorkoutDraft } from "./exercise";
+import type { Workout } from "./model";
 const props = () => ({
   editing: null,
   today: "2026-11-06",
@@ -14,6 +16,71 @@ function field(name: string) {
   return screen.getByRole("spinbutton", { name }) as HTMLInputElement;
 }
 describe("workout recording experience", () => {
+  it("opens repeated treadmill settings for today with independent segments, a new ID and fresh calories", () => {
+    const p = props();
+    const original: Workout = {
+      id: "previous",
+      date: "2026-10-30",
+      type: "walk",
+      minutes: 30,
+      calories: 222,
+      note: "上坡機台",
+      segments: [
+        { minutes: 12.5, speed: 4, incline: 0 },
+        { minutes: 17.5, speed: 5, incline: 3 },
+      ],
+    };
+    render(<WorkoutForm {...p} initialDraft={repeatWorkoutDraft(original)} />);
+    expect((screen.getByLabelText("日期") as HTMLInputElement).value).toBe(
+      p.today,
+    );
+    expect(field("消耗熱量（kcal）").value).toBe("0");
+    expect(field("第 2 段分鐘").value).toBe("17.5");
+    expect(field("第 2 段坡度").value).toBe("3");
+    expect(screen.getByText(/已帶入 2026-10-30/)).toBeTruthy();
+    expect(p.onSave).not.toHaveBeenCalled();
+    fireEvent.change(field("第 1 段速度"), { target: { value: "4.5" } });
+    fireEvent.click(screen.getByRole("button", { name: /儲存紀錄/ }));
+    const saved = p.onSave.mock.calls[0][0];
+    expect(saved).toMatchObject({
+      date: p.today,
+      type: "walk",
+      minutes: 30,
+      calories: 0,
+      note: "上坡機台",
+    });
+    expect(saved.id).not.toBe(original.id);
+    expect(saved.segments![0].speed).toBe(4.5);
+    expect(original.segments![0].speed).toBe(4);
+    expect(saved).not.toHaveProperty("fromDate");
+  });
+  it("repeats outdoor walking without enabling treadmill or copying the previous calories", () => {
+    const p = props();
+    render(
+      <WorkoutForm
+        {...p}
+        initialDraft={repeatWorkoutDraft({
+          id: "outdoor",
+          date: "2026-10-30",
+          type: "walk",
+          minutes: 23,
+          calories: 80,
+          note: "公園走路",
+        })}
+      />,
+    );
+    expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(
+      false,
+    );
+    expect(field("分鐘數").value).toBe("23");
+    fireEvent.click(screen.getByRole("button", { name: /儲存紀錄/ }));
+    expect(p.onSave.mock.calls[0][0]).not.toHaveProperty("segments");
+    expect(p.onSave.mock.calls[0][0]).toMatchObject({
+      type: "walk",
+      calories: 0,
+      note: "公園走路",
+    });
+  });
   it("opens walk with treadmill enabled and applies a complete preset", () => {
     const p = props();
     render(<WorkoutForm {...p} />);

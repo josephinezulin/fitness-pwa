@@ -1479,6 +1479,24 @@ button:disabled {
 .log-wrap .log {
   border-bottom: 0;
 }
+.repeat-workout {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  margin: 0 0 12px 51px;
+  padding: 8px;
+  font-size: 13px;
+  color: #465a3f;
+}
+.workout-draft-note {
+  background: #f1f5ed;
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #465a3f;
+}
 .segment-detail {
   padding: 0 0 14px 51px;
 }

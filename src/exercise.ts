@@ -16,7 +16,22 @@ export type WorkoutDraft = {
   treadmill?: boolean;
   videoId?: string;
   countWatch?: boolean;
+  segments?: Segment[];
+  fromDate?: string;
 };
+/** Reuse settings as a new draft; identity, date, calories and watch counts are not copied. */
+export function repeatWorkoutDraft(workout: Workout): WorkoutDraft {
+  return {
+    type: workout.type,
+    minutes: workout.minutes,
+    note: workout.note,
+    treadmill: !!workout.segments,
+    fromDate: workout.date,
+    ...(workout.segments
+      ? { segments: workout.segments.map((segment) => ({ ...segment })) }
+      : {}),
+  };
+}
 export const CATEGORY_WORKOUT: Record<VideoCategory, WorkoutType> = {
   暖身: "stretch",
   居家徒手: "home",

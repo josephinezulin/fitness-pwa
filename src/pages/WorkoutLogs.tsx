@@ -9,6 +9,7 @@ import {
   Waves,
   PersonStanding,
   Dumbbell,
+  Copy,
 } from "lucide-react";
 import {
   WORKOUT_TYPES,
@@ -73,6 +74,7 @@ export function WorkoutLogs({
   workouts,
   canEdit,
   onBegin,
+  onRepeat,
   onDelete,
   limit,
   expanded,
@@ -81,6 +83,7 @@ export function WorkoutLogs({
   workouts: Workout[];
   canEdit: boolean;
   onBegin: (workout?: Workout) => void;
+  onRepeat: (workout: Workout) => void;
   onDelete: (id: string) => void;
   limit?: number;
   expanded: string | null;
@@ -147,6 +150,14 @@ export function WorkoutLogs({
                     <Trash2 size={16} />
                   </button>
                 </div>
+                <button
+                  className="text-button repeat-workout"
+                  disabled={!canEdit}
+                  aria-label={`以 ${w.date} 的${WORKOUT_TYPES[w.type].label}再記一次`}
+                  onClick={() => onRepeat(w)}
+                >
+                  <Copy size={15} /> 再記一次
+                </button>
                 {w.segments && expanded === w.id && (
                   <div className="segment-detail">
                     <TreadmillStats segments={w.segments} />

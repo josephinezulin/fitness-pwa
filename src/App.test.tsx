@@ -10,6 +10,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { App } from "./App";
+import { today, type Workout } from "./model";
 const lifecycle = vi.hoisted(() => ({ mounts: 0, unmounts: 0 }));
 vi.mock("./pages/HealthChart", () => ({
   HealthChart: () => <div>健康圖表</div>,
@@ -87,6 +88,55 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
+it("repeats a workout only after save, preserving the source and cancelling without writes", () => {
+  const original: Workout = {
+    id: "source",
+    date: "2026-01-01",
+    type: "walk",
+    minutes: 30,
+    calories: 222,
+    note: "虛構原始紀錄",
+    segments: [
+      { minutes: 10, speed: 4, incline: 0 },
+      { minutes: 20, speed: 5, incline: 3 },
+    ],
+  };
+  localStorage.setItem(
+    "daily-movement-v1",
+    JSON.stringify({ version: 1, metrics: [], workouts: [original] }),
+  );
+  const read = () =>
+    JSON.parse(localStorage.getItem("daily-movement-v1")!)
+      .workouts as Workout[];
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "運動紀錄" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: /以 2026-01-01 .*再記一次/ }),
+  );
+  expect(read()).toEqual([original]);
+  expect((screen.getByLabelText("日期") as HTMLInputElement).value).toBe(
+    today(),
+  );
+  fireEvent.change(screen.getByLabelText("第 1 段速度"), {
+    target: { value: "4.5" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "關閉" }));
+  expect(read()).toEqual([original]);
+  fireEvent.click(screen.getByRole("button", { name: /再記一次/ }));
+  expect((screen.getByLabelText("第 1 段速度") as HTMLInputElement).value).toBe(
+    "4",
+  );
+  fireEvent.click(screen.getByRole("button", { name: /儲存紀錄/ }));
+  const saved = read();
+  expect(saved).toHaveLength(2);
+  expect(saved.find((workout) => workout.id === original.id)).toEqual(original);
+  expect(saved.find((workout) => workout.id !== original.id)).toMatchObject({
+    date: today(),
+    type: "walk",
+    calories: 0,
+    segments: original.segments,
+  });
+});
 it("keeps Google mounted across pages, preserves a navigation draft, and clears it across accounts", async () => {
   render(<App />);
   expect(lifecycle.mounts).toBe(1);
