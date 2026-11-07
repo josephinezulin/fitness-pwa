@@ -191,6 +191,34 @@ export function App() {
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
+  const exportOriginal = (
+    source: Parameters<typeof workspace.readLocalRecovery>[0],
+  ) => {
+    try {
+      const raw = workspace.readLocalRecovery(source);
+      const url = URL.createObjectURL(
+        new Blob(
+          [
+            JSON.stringify(
+              { format: "daily-movement-unreadable-local-v1", raw },
+              null,
+              2,
+            ),
+          ],
+          { type: "application/json" },
+        ),
+      );
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `日常動作-待修復原始內容-${viewToday}.json`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      return true;
+    } catch (error) {
+      setMessage("無法下載原始檔案：" + (error as Error).message);
+      return false;
+    }
+  };
   const chartProps = {
     metrics: data.metrics,
     viewToday,
@@ -335,6 +363,8 @@ export function App() {
                     ? "暫時無法確認本機儲存內容。"
                     : "本機儲存內容已與目前畫面不同。"}
                   未儲存表單會暫時保留，請先複製需要的內容，再關閉表單並重新讀取。
+                  {workspace.localRecovery &&
+                    "若仍無法讀取，可至「設定與備份」另存原始內容，再用有效備份修復。"}
                 </p>
                 <button
                   className="secondary"
@@ -564,6 +594,14 @@ export function App() {
             visible={page === "設定與備份"}
             cloud={!!workspace.cloud}
             localWritable={!workspace.cloud && workspace.canEditCloud}
+            localRecovery={workspace.localRecovery}
+            recoveryBlocked={!!modal || planDraftOpen}
+            onExportOriginal={exportOriginal}
+            onRepair={(file, source) =>
+              backupRestore.restore(file, () =>
+                workspace.prepareLocalRestore(source),
+              )
+            }
             healthSync={workspace.healthSync}
             timezone={workspace.cloud?.timezone}
             readAt={workspace.cloud?.checkedAt}

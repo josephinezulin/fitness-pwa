@@ -93,6 +93,79 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
+it("exports the exact unreadable original and restores a valid backup through the explicit repair flow", async () => {
+  const raw = "{fictional-unreadable \ud800";
+  localStorage.setItem(LOCAL_KEY, raw);
+  const create = vi.fn(
+    (_blob: Blob | MediaSource) => "blob:fictional-original",
+  );
+  vi.stubGlobal(
+    "URL",
+    class extends URL {
+      static createObjectURL = create;
+      static revokeObjectURL = vi.fn();
+    },
+  );
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "設定與備份" }));
+  vi.useFakeTimers();
+  fireEvent.click(screen.getByRole("button", { name: "下載待修復原始檔案" }));
+  vi.advanceTimersByTime(1000);
+  vi.useRealTimers();
+  const original = await new Promise<string>((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.readAsText(create.mock.calls[0][0] as Blob);
+  });
+  expect(JSON.parse(original)).toEqual({
+    format: "daily-movement-unreadable-local-v1",
+    raw,
+  });
+  expect(localStorage.getItem(LOCAL_KEY)).toBe(raw);
+  fireEvent.click(
+    screen.getByRole("checkbox", { name: "我已確認原始檔案保存在自己的裝置" }),
+  );
+  const next = {
+    version: 1,
+    metrics: [],
+    workouts: [
+      {
+        id: "fictional-restored",
+        date: today(),
+        type: "home",
+        minutes: 20,
+        calories: 0,
+        note: "虛構修復後紀錄",
+      },
+    ],
+  };
+  const file = new File([JSON.stringify(next)], "fictional-backup.json", {
+    type: "application/json",
+  });
+  Object.defineProperty(file, "text", {
+    value: async () => JSON.stringify(next),
+  });
+  fireEvent.change(screen.getByLabelText("選擇有效備份來修復"), {
+    target: { files: [file] },
+  });
+  await waitFor(() =>
+    expect(screen.queryByText("以備份修復本機資料")).toBeNull(),
+  );
+  expect(confirm).toHaveBeenCalledOnce();
+  expect(confirm).toHaveBeenCalledWith(
+    expect.stringContaining("無法解讀的本機原始內容"),
+  );
+  expect(JSON.parse(localStorage.getItem(LOCAL_KEY)!)).toEqual(next);
+  expect(
+    (screen.getByRole("button", { name: "記錄運動" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(false);
+  expect(screen.getByText("已成功還原資料")).toBeTruthy();
 });
 it("offers a retry on an initially unreadable store without replacing its contents", () => {
   localStorage.setItem(LOCAL_KEY, "{fictional-invalid");

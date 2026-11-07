@@ -4,7 +4,11 @@ import type { Data } from "./model";
 import { preferenceKey, type Preferences } from "./preferences";
 import { storeLibrary, VIDEO_KEY } from "./videos";
 
-type RestoreHandle = { check: () => void; apply: (data: Data) => void };
+type RestoreHandle = {
+  check: () => void;
+  apply: (data: Data) => void;
+  warning?: string;
+};
 
 export function useBackupRestore({
   scopeKey,
@@ -47,7 +51,7 @@ export function useBackupRestore({
     setBusy(false);
     onMessage("已取消讀取備份，現有資料未變更。");
   }
-  async function restore(file?: File) {
+  async function restore(file?: File, prepareTarget = prepare) {
     if (!file) return;
     const attempt = ++sequence.current;
     pending.current = attempt;
@@ -56,7 +60,7 @@ export function useBackupRestore({
     let applied = false;
     try {
       if (file.size > 10_000_000) throw Error("檔案超過 10 MB");
-      const target = prepare();
+      const target = prepareTarget();
       const before = [VIDEO_KEY, preferenceKey(null)].map(
         (key) => [key, localStorage.getItem(key)] as const,
       );
@@ -73,7 +77,7 @@ export function useBackupRestore({
         videos = parsed.library;
       if (
         !confirm(
-          `將以備份取代現有資料（${next.workouts.length} 筆運動、${next.metrics.length} 筆健康資料${videos ? `、${videos.custom.length} 部自訂影片` : ""}）。建議先匯出備份。確定還原？`,
+          `${target.warning ? target.warning + "\n" : ""}將以備份取代現有資料（${next.workouts.length} 筆運動、${next.metrics.length} 筆健康資料${videos ? `、${videos.custom.length} 部自訂影片` : ""}）。建議先匯出備份。確定還原？`,
         )
       )
         return;

@@ -77,6 +77,20 @@ describe("local storage version protection", () => {
     key: string | null = LOCAL_KEY,
     storageArea: Storage = localStorage,
   ) => window.dispatchEvent(new StorageEvent("storage", { key, storageArea }));
+  it("allows explicit repair of unchanged unreadable content while ordinary edits stay blocked", () => {
+    localStorage.setItem(LOCAL_KEY, "{fictional-unreadable");
+    const { result } = renderHook(() => useWorkspace());
+    expect(result.current.canEditCloud).toBe(false);
+    const repair = result.current.prepareLocalRestore(
+      result.current.localRecovery!,
+    );
+    expect(localStorage.getItem(LOCAL_KEY)).toBe("{fictional-unreadable");
+    act(() => repair.apply(changedData()));
+    expect(result.current.storageError).toBe("");
+    expect(result.current.localChanged).toBe(false);
+    expect(result.current.canEditCloud).toBe(true);
+    expect(JSON.parse(localStorage.getItem(LOCAL_KEY)!)).toEqual(changedData());
+  });
   it("rejects a stale save before any storage event and resumes only after an explicit refresh", () => {
     const { result } = renderHook(() => useWorkspace());
     const restore = result.current.prepareLocalRestore();
@@ -105,6 +119,102 @@ describe("local storage version protection", () => {
     expect(JSON.parse(localStorage.getItem(LOCAL_KEY)!).workouts).toHaveLength(
       2,
     );
+  });
+  it.each(["valid", "unreadable", "cleared"])(
+    "rejects repair and original export after an external %s change",
+    (change) => {
+      localStorage.setItem(LOCAL_KEY, "{fictional-original");
+      const { result } = renderHook(() => useWorkspace());
+      const source = result.current.localRecovery!;
+      const repair = result.current.prepareLocalRestore(source);
+      if (change === "cleared") localStorage.removeItem(LOCAL_KEY);
+      else
+        localStorage.setItem(
+          LOCAL_KEY,
+          change === "valid"
+            ? JSON.stringify(changedData())
+            : "{fictional-new-invalid",
+        );
+      const newer = localStorage.getItem(LOCAL_KEY);
+      expect(() => result.current.readLocalRecovery(source)).toThrow(/已變更/);
+      expect(() => result.current.prepareLocalRestore(source)).toThrow(
+        /已變更/,
+      );
+      expect(() => repair.apply(changedData())).toThrow(/已變更/);
+      expect(localStorage.getItem(LOCAL_KEY)).toBe(newer);
+    },
+  );
+  it("requires a fresh original-file acknowledgement after rereading a failure and retains the valid view", () => {
+    const { result } = renderHook(() => useWorkspace());
+    act(() => result.current.save(changedData()));
+    localStorage.setItem(LOCAL_KEY, "{fictional-unreadable");
+    act(() => result.current.refreshLocal());
+    const source = result.current.localRecovery!;
+    const repair = result.current.prepareLocalRestore(source);
+    expect(result.current.data).toEqual(changedData());
+    expect(result.current.readLocalRecovery(source)).toBe(
+      "{fictional-unreadable",
+    );
+    act(() => result.current.refreshLocal());
+    expect(result.current.localRecovery).not.toBe(source);
+    expect(() => repair.check()).toThrow(/已變更/);
+    expect(result.current.data).toEqual(changedData());
+    localStorage.setItem(LOCAL_KEY, "{fictional-other-unreadable");
+    act(() => storageEvent());
+    expect(result.current.localRecovery).toBeNull();
+    act(() => result.current.refreshLocal());
+    expect(result.current.localRecovery?.raw).toBe(
+      "{fictional-other-unreadable",
+    );
+  });
+  it("keeps unreadable contents and the repair opportunity when a replacement cannot be stored", () => {
+    localStorage.setItem(LOCAL_KEY, "{fictional-unreadable");
+    const { result } = renderHook(() => useWorkspace());
+    const source = result.current.localRecovery!;
+    const repair = result.current.prepareLocalRestore(source);
+    const writer = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new DOMException("fictional quota", "QuotaExceededError");
+      });
+    expect(() => repair.apply(changedData())).toThrow(/quota/);
+    expect(result.current.readLocalRecovery(source)).toBe(
+      "{fictional-unreadable",
+    );
+    expect(result.current.localRecovery).toBe(source);
+    expect(result.current.canEditCloud).toBe(false);
+    writer.mockRestore();
+    act(() => repair.apply(changedData()));
+    expect(result.current.localRecovery).toBeNull();
+    expect(result.current.canEditCloud).toBe(true);
+  });
+  it("invalidates repair across a cloud round trip and never repairs cloud data", async () => {
+    localStorage.setItem(LOCAL_KEY, "{fictional-unreadable");
+    const { result } = renderHook(() => useWorkspace());
+    const source = result.current.localRecovery!;
+    const repair = result.current.prepareLocalRestore(source);
+    await connect(result);
+    expect(result.current.localRecovery).toBeNull();
+    expect(() => repair.apply(changedData())).toThrow(/已變更/);
+    expect(() => result.current.prepareLocalRestore(source)).toThrow(
+      /本機模式/,
+    );
+    act(() => result.current.disconnectCloud());
+    expect(result.current.localRecovery).not.toBe(source);
+    expect(() => repair.check()).toThrow(/已變更/);
+    expect(localStorage.getItem(LOCAL_KEY)).toBe("{fictional-unreadable");
+    expect(readOutbox(localStorage, identity)).toEqual([]);
+  });
+  it("never treats readable data or a caller-created payload as a recovery source", () => {
+    localStorage.setItem(LOCAL_KEY, JSON.stringify(changedData()));
+    const { result } = renderHook(() => useWorkspace());
+    expect(result.current.localRecovery).toBeNull();
+    expect(() =>
+      result.current.prepareLocalRestore({
+        raw: localStorage.getItem(LOCAL_KEY)!,
+      }),
+    ).toThrow(/已變更/);
+    expect(result.current.data).toEqual(changedData());
   });
   it("ignores unrelated or session storage events and keeps the old view for an actual local change", () => {
     const { result } = renderHook(() => useWorkspace());
@@ -175,6 +285,7 @@ describe("local storage version protection", () => {
     vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
     act(() => window.dispatchEvent(new Event("focus")));
     expect(result.current.storageError).toContain("無法確認");
+    expect(result.current.localRecovery).toBeNull();
     act(() => result.current.refreshLocal());
     expect(result.current.data.workouts).toEqual([workout]);
     expect(result.current.localChanged).toBe(true);

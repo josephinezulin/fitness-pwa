@@ -7,6 +7,7 @@ import {
   snapshotKey,
   storeSnapshot,
   type CloudIdentity,
+  type LocalRecovery,
 } from "./workspace";
 import { samePlan } from "./plans";
 import { summarizeHealthSync } from "./health-sync-status";
@@ -32,6 +33,14 @@ import {
   type PendingOperation,
 } from "./outbox";
 
+function recoveryFor(
+  local: ReturnType<typeof readLocal>,
+): LocalRecovery | null {
+  return local.error && typeof local.raw === "string"
+    ? { raw: local.raw }
+    : null;
+}
+
 export function useWorkspace() {
   const [initial] = useState(() => readLocal(localStorage));
   const [data, setData] = useState(initial.data);
@@ -40,6 +49,15 @@ export function useWorkspace() {
   const [localChanged, setLocalChanged] = useState(!!initial.error);
   const localRaw = useRef(initial.raw);
   const localStale = useRef(!!initial.error);
+  const [localRecovery, setLocalRecovery] = useState(() =>
+    recoveryFor(initial),
+  );
+  const recovery = useRef(localRecovery);
+  function noteLocalRead(local: ReturnType<typeof readLocal>) {
+    const next = recoveryFor(local);
+    recovery.current = next;
+    setLocalRecovery(next);
+  }
   const [pending, setPending] = useState<PendingOperation[]>([]);
   const [syncBusy, setSyncBusy] = useState(false);
   const [syncError, setSyncError] = useState("");
@@ -328,12 +346,15 @@ export function useWorkspace() {
     const check = () => {
       if (current.current) return;
       try {
-        if (
-          localStale.current ||
-          localStorage.getItem(LOCAL_KEY) !== localRaw.current
-        )
-          markLocalChanged();
+        const raw = localStorage.getItem(LOCAL_KEY);
+        if (recovery.current && raw !== recovery.current.raw) {
+          recovery.current = null;
+          setLocalRecovery(null);
+        }
+        if (localStale.current || raw !== localRaw.current) markLocalChanged();
       } catch {
+        recovery.current = null;
+        setLocalRecovery(null);
         setStorageError(
           "無法確認本機儲存內容；目前畫面與原始內容已保留，請重新讀取後再記錄。",
         );
@@ -361,15 +382,26 @@ export function useWorkspace() {
     };
   }, []);
 
+  function readLocalRecovery(source: LocalRecovery) {
+    if (
+      current.current ||
+      recovery.current !== source ||
+      localStorage.getItem(LOCAL_KEY) !== source.raw
+    )
+      throw Error("本機原始內容或工作區已變更，請重新讀取並另存原始檔案。");
+    return source.raw;
+  }
   /** A file read must not later replace another workspace or newer local records. */
-  function prepareLocalRestore() {
+  function prepareLocalRestore(repair?: LocalRecovery) {
     if (current.current)
       throw Error("還原備份只適用於本機模式，請先切回本機。");
-    checkLocalVersion();
+    if (repair) readLocalRecovery(repair);
+    else checkLocalVersion();
     const version = epoch.current,
       base = display.current,
       raw = localStorage.getItem(LOCAL_KEY);
     const check = () => {
+      if (repair) readLocalRecovery(repair);
       if (
         version !== epoch.current ||
         current.current ||
@@ -380,9 +412,23 @@ export function useWorkspace() {
     };
     return {
       check,
+      warning: repair
+        ? "這會取代無法解讀的本機原始內容；請確認原始檔案已保存於自己的裝置。"
+        : undefined,
       apply(next: Data) {
         check();
-        save(next);
+        if (!repair) return save(next);
+        const safe = validate(next);
+        const raw = JSON.stringify(safe);
+        check();
+        localStorage.setItem(LOCAL_KEY, raw);
+        localRaw.current = raw;
+        localStale.current = false;
+        recovery.current = null;
+        setLocalRecovery(null);
+        setLocalChanged(false);
+        setStorageError("");
+        show(safe);
       },
     };
   }
@@ -534,6 +580,7 @@ export function useWorkspace() {
     current.current = null;
     ownsLock.current = false;
     const local = readLocal(localStorage);
+    noteLocalRead(local);
     localRaw.current = local.raw;
     localStale.current = !!local.error;
     setLocalChanged(!!local.error);
@@ -546,6 +593,7 @@ export function useWorkspace() {
   function refreshLocal() {
     if (current.current) return;
     const local = readLocal(localStorage);
+    noteLocalRead(local);
     if (local.error) {
       setStorageError(local.error);
       markLocalChanged();
@@ -614,6 +662,8 @@ export function useWorkspace() {
     cloud,
     storageError,
     localChanged,
+    localRecovery: cloud ? null : localRecovery,
+    readLocalRecovery,
     refreshLocal,
     save,
     prepareLocalRestore,
