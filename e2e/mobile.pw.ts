@@ -3,6 +3,7 @@ import {
   expect,
   TODAY,
   fixtureData,
+  STORAGE_KEY,
   sourceWorkout,
   longWorkout,
   workoutRow,
@@ -295,5 +296,90 @@ test("JSON 備份可下載及還原，取消與壞檔保留原資料", async ({ 
   expect(confirmations).toBe(2);
   expect((await readData(page)).workouts).toEqual(exported.workouts);
   expect((await readData(page)).metrics).toEqual(exported.metrics);
+  await expectNoOverflow(page);
+});
+
+test("運動歷史可篩選與分批，保留全部資料並可再記一次", async ({ page }) => {
+  await page.goto("./");
+  const stored = {
+    ...fixtureData,
+    workouts: [
+      ...fixtureData.workouts,
+      ...Array.from({ length: 30 }, (_, index) => ({
+        id: `fictional-history-${index}`,
+        date: fixtureData.metrics[index + 1].date,
+        type: "yoga" as const,
+        minutes: 10,
+        calories: 30,
+        note: `虛構歷史 Yoga ${index}${index === 29 ? " 下班伸展" : ""}`,
+      })),
+    ],
+  };
+  await page.evaluate(
+    ({ key, data }) => localStorage.setItem(key, JSON.stringify(data)),
+    { key: STORAGE_KEY, data: stored },
+  );
+  await page.reload();
+  await page.getByRole("button", { name: "運動紀錄", exact: true }).click();
+  const history = page.getByRole("region", { name: "運動紀錄", exact: true });
+  const rows = history.locator(".log-wrap");
+  await expect(rows).toHaveCount(12);
+  await expect(history.getByRole("status")).toContainText(
+    "找到 34 筆 · 已顯示 12 筆",
+  );
+  const weekly = await page.locator(".week-summary").innerText();
+  await history.getByRole("button", { name: "再顯示 12 筆運動" }).click();
+  await expect(rows).toHaveCount(24);
+  await expect(rows.nth(12).getByRole("heading")).toBeFocused();
+  const search = history.getByRole("searchbox", { name: "搜尋運動紀錄" });
+  await search.fill("虛構歷史 yoga");
+  await expect(search).toBeFocused();
+  await expect(rows).toHaveCount(12);
+  await history
+    .getByRole("combobox", { name: "運動種類" })
+    .selectOption("yoga");
+  await history.getByText("日期範圍", { exact: true }).click();
+  await history.getByLabel("開始日期", { exact: true }).fill("2026-11-01");
+  await history.getByLabel("結束日期", { exact: true }).fill(TODAY);
+  await expect(rows).toHaveCount(6);
+  await expect(history.getByText(/符合條件的全部紀錄：60 分鐘/)).toBeVisible();
+  for (const field of [
+    search,
+    history.getByLabel("開始日期"),
+    history.getByLabel("結束日期"),
+  ]) {
+    const bounds = (await field.boundingBox())!;
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(
+      page.viewportSize()!.width + 1,
+    );
+    expect(
+      await field.evaluate((el) => parseFloat(getComputedStyle(el).fontSize)),
+    ).toBeGreaterThanOrEqual(16);
+    expect(bounds.height).toBeGreaterThanOrEqual(44);
+  }
+  expect(await page.locator(".week-summary").innerText()).toBe(weekly);
+  expect((await readData(page)).workouts).toEqual(stored.workouts);
+  await search.fill("完全不存在的虛構關鍵字");
+  await expect(rows).toHaveCount(0);
+  await expect(history.getByText(/沒有符合條件的紀錄/)).toBeVisible();
+  await history.getByRole("button", { name: "清除篩選" }).click();
+  await expect(rows).toHaveCount(12);
+  await search.fill("下班伸展");
+  await expect(rows).toHaveCount(1);
+  await rows.getByRole("button", { name: /再記一次/ }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByLabel("日期", { exact: true })).toHaveValue(TODAY);
+  await expect(dialog.getByLabel("分鐘數", { exact: true })).toHaveValue("10");
+  await dialog.getByRole("button", { name: "關閉", exact: true }).click();
+  expect((await readData(page)).workouts).toEqual(stored.workouts);
+  await expectNoOverflow(page);
+  await reloadOffline(page);
+  await page.getByRole("button", { name: "運動紀錄", exact: true }).click();
+  await expect(history.getByRole("searchbox")).toHaveValue("");
+  await expect(rows).toHaveCount(12);
+  await history.getByRole("searchbox").fill("虛構歷史");
+  await expect(history.getByRole("status")).toContainText("找到 30 筆");
+  expect((await readData(page)).workouts).toEqual(stored.workouts);
   await expectNoOverflow(page);
 });

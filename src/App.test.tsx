@@ -93,6 +93,33 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
 });
+it("resets workout filters across cloud accounts without resetting the Google panel", async () => {
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "運動紀錄" }));
+  fireEvent.change(screen.getByRole("searchbox", { name: "搜尋運動紀錄" }), {
+    target: { value: "虛構本機篩選" },
+  });
+  fireEvent.click(screen.getByText("連線測試帳號A"));
+  await waitFor(() =>
+    expect((screen.getByRole("searchbox") as HTMLInputElement).value).toBe(""),
+  );
+  fireEvent.change(screen.getByRole("searchbox"), {
+    target: { value: "虛構帳號A篩選" },
+  });
+  fireEvent.change(screen.getByRole("combobox", { name: "運動種類" }), {
+    target: { value: "yoga" },
+  });
+  fireEvent.click(screen.getByText("連線測試帳號B"));
+  await waitFor(() =>
+    expect((screen.getByRole("searchbox") as HTMLInputElement).value).toBe(""),
+  );
+  expect(
+    (screen.getByRole("combobox", { name: "運動種類" }) as HTMLSelectElement)
+      .value,
+  ).toBe("all");
+  expect(lifecycle.mounts).toBe(1);
+  expect(lifecycle.unmounts).toBe(0);
+});
 it("does not apply a local backup after switching to a cloud account while its file is loading", async () => {
   const backup = testInspection().data!;
   backup.plans![0].title = "帳號A課表";
