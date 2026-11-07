@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { registerSW } from "virtual:pwa-register";
+import { registerPwa, reloadPwaPage } from "./pwa-registration";
 import { Download, X } from "lucide-react";
 import { watchPwaUpdates } from "./pwa-updates";
 export function PwaUpdate({
@@ -13,13 +13,14 @@ export function PwaUpdate({
   const [offlineReady, setOfflineReady] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState("");
-  const apply = useRef<((reload?: boolean) => Promise<void>) | null>(null);
+  const apply = useRef<(() => Promise<void>) | null>(null);
+  const blockedNow = useRef(blocked);
+  blockedNow.current = blocked;
   useEffect(() => {
     if (!import.meta.env.PROD) return;
     let active = true;
     let stopWatching: (() => void) | undefined;
-    apply.current = registerSW({
-      immediate: true,
+    const manager = registerPwa({
       onRegisteredSW: (_url, registration) => {
         if (!active) return;
         stopWatching?.();
@@ -34,10 +35,17 @@ export function PwaUpdate({
       onRegisterError: () => {
         if (active) setError("離線介面暫時未能準備完成，連網功能仍可使用。");
       },
+      onReloadReady: () => {
+        if (!active) return;
+        if (blockedNow.current) setUpdateReady(true);
+        else reloadPwaPage();
+      },
     });
+    apply.current = manager.update;
     return () => {
       active = false;
       stopWatching?.();
+      manager.dispose();
       apply.current = null;
     };
   }, []);
@@ -46,7 +54,7 @@ export function PwaUpdate({
     setUpdating(true);
     setError("");
     try {
-      await apply.current(true);
+      await apply.current();
     } catch {
       setError("更新未完成，請確認網路後重試。");
     } finally {
