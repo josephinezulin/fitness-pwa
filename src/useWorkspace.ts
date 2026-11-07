@@ -37,6 +37,9 @@ export function useWorkspace() {
   const [data, setData] = useState(initial.data);
   const [cloud, setCloud] = useState<CloudIdentity | null>(null);
   const [storageError, setStorageError] = useState(initial.error);
+  const [localChanged, setLocalChanged] = useState(!!initial.error);
+  const localRaw = useRef(initial.raw);
+  const localStale = useRef(!!initial.error);
   const [pending, setPending] = useState<PendingOperation[]>([]);
   const [syncBusy, setSyncBusy] = useState(false);
   const [syncError, setSyncError] = useState("");
@@ -55,6 +58,21 @@ export function useWorkspace() {
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryCount = useRef(0);
   const cloudKey = cloud ? snapshotKey(cloud) : "";
+  const markLocalChanged = () => {
+    localStale.current = true;
+    setLocalChanged(true);
+  };
+  function checkLocalVersion() {
+    if (
+      localStale.current ||
+      localStorage.getItem(LOCAL_KEY) !== localRaw.current
+    ) {
+      markLocalChanged();
+      throw Error(
+        "本機資料已在其他分頁變更。請先保留草稿並關閉表單，再重新讀取本機資料。",
+      );
+    }
+  }
   const show = (next: Data) => {
     display.current = next;
     setData(next);
@@ -306,11 +324,48 @@ export function useWorkspace() {
     },
     [],
   );
+  useEffect(() => {
+    const check = () => {
+      if (current.current) return;
+      try {
+        if (
+          localStale.current ||
+          localStorage.getItem(LOCAL_KEY) !== localRaw.current
+        )
+          markLocalChanged();
+      } catch {
+        setStorageError(
+          "無法確認本機儲存內容；目前畫面與原始內容已保留，請重新讀取後再記錄。",
+        );
+        markLocalChanged();
+      }
+    };
+    const storage = (event: StorageEvent) => {
+      if (
+        event.storageArea !== localStorage ||
+        (event.key !== null && event.key !== LOCAL_KEY)
+      )
+        return;
+      check();
+    };
+    const visible = () => {
+      if (document.visibilityState === "visible") check();
+    };
+    window.addEventListener("storage", storage);
+    window.addEventListener("focus", visible);
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      window.removeEventListener("storage", storage);
+      window.removeEventListener("focus", visible);
+      document.removeEventListener("visibilitychange", visible);
+    };
+  }, []);
 
   /** A file read must not later replace another workspace or newer local records. */
   function prepareLocalRestore() {
     if (current.current)
       throw Error("還原備份只適用於本機模式，請先切回本機。");
+    checkLocalVersion();
     const version = epoch.current,
       base = display.current,
       raw = localStorage.getItem(LOCAL_KEY);
@@ -337,7 +392,10 @@ export function useWorkspace() {
     const safe = validate(next),
       active = current.current;
     if (!active) {
-      localStorage.setItem(LOCAL_KEY, JSON.stringify(safe));
+      checkLocalVersion();
+      const raw = JSON.stringify(safe);
+      localStorage.setItem(LOCAL_KEY, raw);
+      localRaw.current = raw;
       show(safe);
       return;
     }
@@ -476,11 +534,29 @@ export function useWorkspace() {
     current.current = null;
     ownsLock.current = false;
     const local = readLocal(localStorage);
+    localRaw.current = local.raw;
+    localStale.current = !!local.error;
+    setLocalChanged(!!local.error);
     show(local.data);
     setCloud(null);
     setPending([]);
     setStorageError(local.error);
     setSyncError("");
+  }
+  function refreshLocal() {
+    if (current.current) return;
+    const local = readLocal(localStorage);
+    if (local.error) {
+      setStorageError(local.error);
+      markLocalChanged();
+      return;
+    }
+    cancel();
+    localRaw.current = local.raw;
+    localStale.current = false;
+    setLocalChanged(false);
+    setStorageError("");
+    show(local.data);
   }
   async function discardPending() {
     if (
@@ -525,8 +601,9 @@ export function useWorkspace() {
     }
   }
   const canEditCloud =
-    !cloud ||
-    (!!current.current?.source &&
+    (!cloud && !localChanged && !storageError) ||
+    (!!cloud &&
+      !!current.current?.source &&
       session.current?.subject === cloud.subject &&
       lockReady &&
       !syncBusy &&
@@ -536,6 +613,8 @@ export function useWorkspace() {
     data,
     cloud,
     storageError,
+    localChanged,
+    refreshLocal,
     save,
     prepareLocalRestore,
     activateCloud,

@@ -199,6 +199,7 @@ export function App() {
     metric,
     setMetric,
     cloud: !!workspace.cloud,
+    canEdit: workspace.canEditCloud,
     onAdd: () => setModal("metric"),
   };
   const scheduleProps = {
@@ -319,6 +320,33 @@ export function App() {
           {workspace.storageError && (
             <div className="notice" role="status">
               {workspace.storageError}
+            </div>
+          )}
+          {!workspace.cloud && workspace.localChanged && (
+            <div className="notice sync-notice" role="status">
+              <div className="grow">
+                <strong>
+                  {workspace.storageError
+                    ? "本機資料需要重新讀取"
+                    : "本機資料已變更"}
+                </strong>
+                <p>
+                  {workspace.storageError
+                    ? "暫時無法確認本機儲存內容。"
+                    : "本機儲存內容已與目前畫面不同。"}
+                  未儲存表單會暫時保留，請先複製需要的內容，再關閉表單並重新讀取。
+                </p>
+                <button
+                  className="secondary"
+                  disabled={!!modal || planDraftOpen || backupRestore.busy}
+                  onClick={() => {
+                    if (!modal && !planDraftOpen && !backupRestore.busy)
+                      workspace.refreshLocal();
+                  }}
+                >
+                  重新讀取本機資料
+                </button>
+              </div>
             </div>
           )}
           {workspace.cloud &&
@@ -517,6 +545,7 @@ export function App() {
             <HealthPage
               metrics={data.metrics}
               cloud={!!workspace.cloud}
+              canEdit={workspace.canEditCloud}
               workspaceKey={preferenceKey(workspace.cloud)}
               viewToday={viewToday}
               range={range}
@@ -534,6 +563,7 @@ export function App() {
           <SettingsPage
             visible={page === "設定與備份"}
             cloud={!!workspace.cloud}
+            localWritable={!workspace.cloud && workspace.canEditCloud}
             healthSync={workspace.healthSync}
             timezone={workspace.cloud?.timezone}
             readAt={workspace.cloud?.checkedAt}
@@ -565,7 +595,7 @@ export function App() {
               <Leaf size={13} /> 日常動作 · 為自己，慢慢變好
             </span>
             <button
-              disabled={!!workspace.cloud}
+              disabled={!!workspace.cloud || !workspace.canEditCloud}
               onClick={() => setModal("metric")}
             >
               <Heart size={14} />
@@ -709,7 +739,7 @@ export function App() {
                 }
                 <button
                   className="primary full"
-                  disabled={!!workspace.cloud}
+                  disabled={!!workspace.cloud || !workspace.canEditCloud}
                   type="submit"
                 >
                   儲存紀錄 <Check size={18} />

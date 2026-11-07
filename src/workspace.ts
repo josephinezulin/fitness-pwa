@@ -17,13 +17,16 @@ export function snapshotKey(
 export function readLocal(storage: Pick<Storage, "getItem">): {
   data: Data;
   error: string;
+  raw: string | null | undefined;
 } {
+  let raw: string | null | undefined;
   try {
-    const saved = storage.getItem(LOCAL_KEY);
-    return { data: saved ? validate(JSON.parse(saved)) : empty, error: "" };
+    raw = storage.getItem(LOCAL_KEY);
+    return { data: raw ? validate(JSON.parse(raw)) : empty, error: "", raw };
   } catch {
     return {
       data: empty,
+      raw,
       error:
         "無法讀取本機資料；原始內容尚未覆蓋，請先確認瀏覽器儲存權限或備份。",
     };

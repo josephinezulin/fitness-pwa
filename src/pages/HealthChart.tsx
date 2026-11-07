@@ -26,6 +26,7 @@ export function HealthChart({
   metric,
   setMetric,
   cloud,
+  canEdit = !cloud,
   onAdd,
 }: {
   metrics: Metric[];
@@ -35,6 +36,7 @@ export function HealthChart({
   metric: HealthField;
   setMetric: (metric: HealthField) => void;
   cloud: boolean;
+  canEdit?: boolean;
   onAdd: () => void;
 }) {
   const id = `health-${useId().replace(/:/g, "")}`;
@@ -192,7 +194,7 @@ export function HealthChart({
       ) : (
         <div className="empty">
           這 {range} 天尚無{chosen.label}紀錄，有新的量測時再記下一筆。
-          <button disabled={cloud} onClick={onAdd}>
+          <button disabled={cloud || !canEdit} onClick={onAdd}>
             新增健康數據 <Plus size={15} />
           </button>
         </div>

@@ -383,3 +383,63 @@ test("運動歷史可篩選與分批，保留全部資料並可再記一次", as
   expect((await readData(page)).workouts).toEqual(stored.workouts);
   await expectNoOverflow(page);
 });
+
+test("本機舊分頁不覆蓋新紀錄，關閉草稿後可重新讀取並繼續記錄", async ({
+  page,
+  context,
+}) => {
+  await page.goto("./");
+  await page.getByRole("button", { name: "記錄運動", exact: true }).click();
+  const draft = page.getByRole("dialog");
+  await draft.getByLabel("備註", { exact: true }).fill("虛構 A 未儲存草稿");
+  const other = await context.newPage();
+  await other.clock.setFixedTime(new Date(`${TODAY}T04:00:00Z`));
+  await other.goto("http://127.0.0.1:4173/fitness-pwa/");
+  await other.getByRole("button", { name: "記錄運動", exact: true }).click();
+  const otherForm = other.getByRole("dialog");
+  await otherForm.getByLabel("備註", { exact: true }).fill("虛構 B 已儲存紀錄");
+  await otherForm.getByRole("button", { name: /儲存紀錄/ }).click();
+  await expect(otherForm).toHaveCount(0);
+  expect(
+    (await readData(page)).workouts.some((w) => w.note === "虛構 B 已儲存紀錄"),
+  ).toBe(true);
+  await expect(draft.getByRole("button", { name: /儲存紀錄/ })).toBeDisabled();
+  await expect(draft.getByLabel("備註", { exact: true })).toHaveValue(
+    "虛構 A 未儲存草稿",
+  );
+  const refresh = page.getByRole("button", {
+    name: "重新讀取本機資料",
+    exact: true,
+  });
+  await expect(refresh).toBeDisabled();
+  await expectNoOverflow(page);
+  expect(
+    (await readData(page)).workouts.some((w) => w.note === "虛構 B 已儲存紀錄"),
+  ).toBe(true);
+  await draft.getByRole("button", { name: "關閉", exact: true }).click();
+  await refresh.click();
+  await expect(page.getByText("本機資料已變更", { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(
+    page.getByText("虛構 B 已儲存紀錄", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "記錄運動", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByLabel("備註", { exact: true })
+    .fill("虛構 A 重新記錄");
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: /儲存紀錄/ })
+    .click();
+  const stored = await readData(page);
+  expect(stored.workouts).toHaveLength(6);
+  expect(stored.workouts.some((w) => w.note === "虛構 B 已儲存紀錄")).toBe(
+    true,
+  );
+  expect(stored.workouts.some((w) => w.note === "虛構 A 重新記錄")).toBe(true);
+  for (const source of fixtureData.workouts)
+    expect(stored.workouts.find((w) => w.id === source.id)).toEqual(source);
+  await expectNoOverflow(page);
+});

@@ -19,7 +19,7 @@ Linux CI 使用官方 `npx playwright install --with-deps chromium` 安裝 Chrom
 
 ## 範圍
 
-十個使用情境，各在 320×852、390×844、844×390 執行，共 30 個案例：
+十一個使用情境，各在 320×852、390×844、844×390 執行，共 33 個案例：
 
 - 平滑曲線、相鄰量測、缺日斷線、真實零及鍵盤 Tooltip，並與每日數值表比對。
 - 每日／每週清單最大高度、內部鍵盤捲動、固定欄名，以及捲到底後直接收合。
@@ -32,6 +32,7 @@ Linux CI 使用官方 `npx playwright install --with-deps chromium` 安裝 Chrom
 
 - PWA 回前景偵測真實新版 Service Worker、保留開著的運動草稿、關閉表單後明確更新才重載，並讀回新版 controller 與原始資料。
 - 同一 context 的兩個分頁共用真實 worker：另一頁先套用新版，目前頁的 controller 也變更，但草稿仍在；儲存後自行更新畫面，讀回新增紀錄與完整原資料。
+- 本機兩個分頁：A 頁開草稿、B 頁儲存新運動後，A 頁保留草稿但停用儲存與重新讀取；關閉草稿並明確讀取後能看到 B 的紀錄，再新增 A 的新紀錄時兩筆都保留，畫面不溢出。
 
 每個案例使用新的瀏覽器 context，僅填入 e2e/fixtures.ts 的虛構 localStorage 資料。Date 固定為 2026-11-07，避免 CI 跨午夜造成日期漂移，計時器與繪圖仍正常執行。請求以 loopback origin 過濾，不進行 Google 登入、Picker、私人 Sheets、健康 API 或真實 YouTube 播放，也沒有 storageState、Token 或真實帳號 fixture。離線案例明確等待 Service Worker 就緒與控制頁面後才切斷網路。
 
@@ -47,7 +48,9 @@ Playwright 固定 1.65.0（npm 官方 metadata：Node ≥20，現有 Node 22 符
 
 檢查失敗時，從該 run 的 browser-failure artifact 下載報告，再用 `npx playwright show-report` 或 `npx playwright show-trace 路徑/trace.zip` 在自己的機器閱讀。trace 只在失敗時保留；成功的案例不保留 trace／截圖，也不上傳診斷 artifact。
 
-E15 本機完整結果：265 項 Vitest、8 項 Python、TypeScript／Vite／Service Worker 建置、瀏覽器測試型別檢查與 30 個 Playwright 案例通過。本機瀏覽器為系統 Chromium 156；E11 的 PR #18 與 Pages 均已實際安裝並通過原 18 個案例；E12 的 PR #19 與 Pages 均已通過 21 個案例；E13 的 PR #20 與 Pages 已通過 24 個案例；E14 的 PR #21 與 Pages 已通過 27 個案例；E15 擴增至 30 個案例，結果以本次 PR／Pages 記錄為準。失敗 artifact 上傳條件已設定，成功執行不代表實際觸發過上傳。
+E16 的本機雙分頁案例先在舊程式重現「A 頁儲存後 B 頁新紀錄消失」的失敗，再確認偵測變更、保留草稿、明確重新讀取與重新記錄的流程通過。這只驗證同來源 localStorage 的先後修改；比對後寫入不是原子操作，不保證真正同時寫入的所有交錯順序，也不驗證不同 iOS 容器是否共享儲存。
+
+E16 本機完整結果：277 項 Vitest、8 項 Python、TypeScript／Vite／Service Worker 建置、瀏覽器測試型別檢查與 33 個 Playwright 案例通過。本機瀏覽器為系統 Chromium 156；E11 的 PR #18 與 Pages 均已實際安裝並通過原 18 個案例；E12 的 PR #19 與 Pages 均已通過 21 個案例；E13 的 PR #20 與 Pages 已通過 24 個案例；E14 的 PR #21 與 Pages 已通過 27 個案例；E15 的 PR #22 與 Pages 已通過 30 個案例；E16 擴增至 33 個案例，結果以本次 PR／Pages 記錄為準。失敗 artifact 上傳條件已設定，成功執行不代表實際觸發過上傳。
 
 官方依據：
 
