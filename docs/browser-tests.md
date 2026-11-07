@@ -19,7 +19,7 @@ Linux CI 使用官方 `npx playwright install --with-deps chromium` 安裝 Chrom
 
 ## 範圍
 
-八個使用情境，各在 320×852、390×844、844×390 執行，共 24 個案例：
+九個使用情境，各在 320×852、390×844、844×390 執行，共 27 個案例：
 
 - 平滑曲線、相鄰量測、缺日斷線、真實零及鍵盤 Tooltip，並與每日數值表比對。
 - 每日／每週清單最大高度、內部鍵盤捲動、固定欄名，以及捲到底後直接收合。
@@ -30,7 +30,11 @@ Linux CI 使用官方 `npx playwright install --with-deps chromium` 安裝 Chrom
 - 真正下載 JSON、檢查匯出內容、拒絕壞檔及取消取代不改原資料，再選相同檔案還原運動與健康資料。
 - 34 筆運動歷史分批、首筆新增運動焦點、關鍵字／種類／起迄日組合、16px／44px 日期與搜尋欄位、清除／無結果、從舊紀錄再記一次取消、統計不變，以及離線重開後搜尋完整資料。
 
+- PWA 回前景偵測真實新版 Service Worker、保留開著的運動草稿、關閉表單後明確更新才重載，並讀回新版 controller 與原始資料。
+
 每個案例使用新的瀏覽器 context，僅填入 e2e/fixtures.ts 的虛構 localStorage 資料。Date 固定為 2026-11-07，避免 CI 跨午夜造成日期漂移，計時器與繪圖仍正常執行。請求以 loopback origin 過濾，不進行 Google 登入、Picker、私人 Sheets、健康 API 或真實 YouTube 播放，也沒有 storageState、Token 或真實帳號 fixture。離線案例明確等待 Service Worker 就緒與控制頁面後才切斷網路。
+
+PWA 升級案例另以 e2e/pwa-server.ts 建立獨立 127.0.0.1 隨機 port 的靜態測試 server，提供同一份 dist 的 `/fitness-pwa/` 路徑。僅在記憶體中的 sw.js HTTP 回應附加虛構版本辨識，先註冊版本 1，再提供版本 2；透過真實 MessageChannel 讀取 active controller 版本，沒有 mock 瀏覽器的 ServiceWorker API。推進測試的 Date 61 秒並發送 focus 事件，驗證節流後的實際註冊更新。沒有修改 dist、正式 worker 或公開部署，也不是兩套不同前端產物的快取遷移測試；額外 server 於測試後關閉。每個案例僅允許自己的 loopback origin。
 
 這是 Chromium 的 viewport 回歸，並非 iPhone Safari、軟體鍵盤、VoiceOver、OAuth 或 iOS 捷徑驗收。Google 與 iPhone 手動驗收維持原清單。
 
@@ -42,7 +46,7 @@ Playwright 固定 1.65.0（npm 官方 metadata：Node ≥20，現有 Node 22 符
 
 檢查失敗時，從該 run 的 browser-failure artifact 下載報告，再用 `npx playwright show-report` 或 `npx playwright show-trace 路徑/trace.zip` 在自己的機器閱讀。trace 只在失敗時保留；成功的案例不保留 trace／截圖，也不上傳診斷 artifact。
 
-E13 本機完整結果：246 項 Vitest、8 項 Python、TypeScript／Vite／Service Worker 建置、瀏覽器測試型別檢查與 24 個 Playwright 案例通過。本機瀏覽器為系統 Chromium 156；E11 的 PR #18 與 Pages 均已實際安裝並通過原 18 個案例；E12 的 PR #19 與 Pages 均已通過 21 個案例；E13 擴增至 24 個案例，結果以本次 PR／Pages 記錄為準。失敗 artifact 上傳條件已設定，成功執行不代表實際觸發過上傳。
+E14 本機完整結果：253 項 Vitest、8 項 Python、TypeScript／Vite／Service Worker 建置、瀏覽器測試型別檢查與 27 個 Playwright 案例通過。本機瀏覽器為系統 Chromium 156；E11 的 PR #18 與 Pages 均已實際安裝並通過原 18 個案例；E12 的 PR #19 與 Pages 均已通過 21 個案例；E13 的 PR #20 與 Pages 已通過 24 個案例；E14 擴增至 27 個案例，結果以本次 PR／Pages 記錄為準。失敗 artifact 上傳條件已設定，成功執行不代表實際觸發過上傳。
 
 官方依據：
 

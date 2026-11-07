@@ -177,3 +177,22 @@ iPhone 手動驗收：設定與備份 → 匯出 JSON 至自己的檔案 App，�
 完整本機檢查：246 項 Vitest（36 檔）、8 項 Python、TypeScript／Vite／Service Worker 建置、格式及 diff 檢查通過。新增測試涵蓋多條件交集、包含邊界／單側日期、同日排序、全形／大小寫／字面搜尋、無效與反向日期、首筆新增項目焦點、全部符合條件的總計、重讀／刪除保留批次、條件改變重設、權限停用與換帳號清除篩選且不重掛 Google。三種尺寸共 24 個 Playwright 案例通過；新增 34 筆運動歷史的篩選／分批／再記一次取消／離線重開搜尋與原資料及本週統計不變，並檢查 16px／44px 欄位與不溢出。已檢視 320px 與橫向篩選區截圖，調整清除按鈕為 14px 深色文字；最終建置與瀏覽器回歸再次確認。CI／合併／Pages 結果追加於本次 PR。測試只使用虛構本機與 mock 帳號，沒有登入 Google 或修改私人試算表。iPhone Safari／主畫面 PWA／軟體鍵盤與 VoiceOver 保留實機待驗收。
 
 實機方式：開啟運動紀錄 → 輸入備註或「跑步機」→ 選運動種類 → 展開日期範圍並選起迄日，確認結果數量及總時間；清除篩選後按「再顯示」找到舊紀錄，按「再記一次」應以今天開新草稿，取消後原紀錄不變。旋轉螢幕、日期欄位聚焦及離線重開後重新搜尋，確認不溢出與資料仍完整。本輪沒有新增手動 Google 授權步驟。
+
+
+## E14：PWA 回前景檢查新版並驗證真實升級
+
+先前只在元件掛載時註冊 Service Worker，長時間不關閉的主畫面 PWA 可能繼續使用舊介面。現在由已註冊的 worker 在 window focus、online 或 document visibilitychange 時嘗試 update()；只在畫面可見且有網路、沒有安裝／等待中的 worker 時執行。註冊已自行檢查一次，因此事件檢查設 60 秒冷卻，同時只容許一個進行中請求；沒有 setInterval、背景排程或喚醒手機。
+
+使用 Date.now() 判斷距上次檢查的時間，讓裝置暫停後的時間仍能計入；時鐘回撥時可重新檢查，避免長時間卡住。離線、背景或等待更新時不記入新的嘗試時間。網路失敗會在下一個冷卻後的前景事件重試，吞接 rejection 以免中斷離線記錄；不顯示新的反覆錯誤通知。卸載時移除事件監聽，晚到的註冊 callback 不建立監聽。
+
+只檢查與下載程式介面資源，沒有 Google／健康 API 或資料寫入，也不自動呼叫啟用。新 worker 仍進入 waiting，由原本的提示按鈕明確套用；開著表單、讀取備份或同步時保留更新鎖。明確更新失敗可重試。需要先套用這一版，新監聽才會出現在已安裝 PWA；舊版頁面仍依原有的重新開啟與更新提示取得本版。
+
+官方 Vite PWA 文件提供 onRegisteredSW 與 registration.update()，並提醒離線與安裝中的邊界。本輪核對已安裝 0.21.2 的型別與註冊實作後使用此 callback，保留 prompt 模式。MDN 說明 update() 會比對 script 位元組、visibilitychange 可反映切換應用程式；本輪使用事件檢查而非文件範例的週期計時器。瀏覽器、作業系統及網路快取仍決定實際檢查時機，不能保證背景執行或立即發現每次發布。
+
+- https://vite-pwa-org.netlify.app/guide/periodic-sw-updates
+- https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration/update
+- https://developer.mozilla.org/en-US/docs/Web/API/Document/visibilitychange_event
+
+已用三種尺寸的真實 Chromium Service Worker 完成版本 1 → 等待中的版本 2 → 明確套用 → controller 版本 2 與重載的流程。測試 server 僅提供本機 dist，版本辨識只附加在測試 HTTP 回應，不修改 dist 或正式 worker，不使用真實帳號或健康資料。新版本提示出現時，草稿仍在、更新按鈕停用；關閉表單後按更新才切換，所有虛構運動與健康資料保持一致。完整本機 253 項 Vitest（37 檔）、8 項 Python、TypeScript／Vite／Service Worker 建置、Prettier 與 diff 檢查通過。新增單元測試覆蓋一分鐘節流、單一進行中請求、隱藏／離線／安裝／等待略過、錯誤後重試、卸載清理與晚到 callback、時鐘回撥及明確更新失敗可重試；既有表單／備份／同步保護測試保留。完整 27 個 Playwright 案例通過，包含三種尺寸各一個真實 worker 升級案例及既有 24 個介面／離線回歸，並確認 dist 的 JavaScript 不含測試 worker 辨識碼。CI／合併／Pages 結果追加於本次 PR。
+
+實機步驟：先在 iPhone Safari／主畫面 PWA 套用本版；未來新版發布後，切去其他 App，隔一段時間回來並確認有網路，應能出現更新提示。若開著運動表單，內容應保留且不能按更新；儲存或關閉後才能明確套用。離線時持續記錄，恢復連線並回前景後再驗證。此步驟需要前後兩次實際發布與 iPhone 操作，尚未完成 Safari／VoiceOver 驗收，也不是健康捷徑上傳驗收；本輪沒有新的 Google 授權步驟。
