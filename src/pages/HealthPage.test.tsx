@@ -34,6 +34,23 @@ const list = () => screen.getByRole("list", { name: "健康摘要紀錄" });
 const entries = () => within(list()).getAllByRole("listitem");
 
 describe("bounded health summary history", () => {
+  it("keeps local history readable while stale local data cannot be changed", () => {
+    const input = props();
+    render(<HealthPage {...input} canEdit={false} />);
+    const add = screen.getByRole("button", {
+      name: "新增健康數據",
+    }) as HTMLButtonElement;
+    expect(add.disabled).toBe(true);
+    const remove = within(history()).getAllByRole("button", {
+      name: /刪除/,
+    })[0] as HTMLButtonElement;
+    expect(remove.disabled).toBe(true);
+    fireEvent.click(add);
+    fireEvent.click(remove);
+    expect(input.onAdd).not.toHaveBeenCalled();
+    expect(input.onDelete).not.toHaveBeenCalled();
+    expect(entries()).toHaveLength(14);
+  });
   it("uses inclusive chart calendar dates, preserves zero/missing values and leaves input order unchanged", () => {
     const input = props();
     const data = [

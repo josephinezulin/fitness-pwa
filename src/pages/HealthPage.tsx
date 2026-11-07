@@ -6,6 +6,7 @@ import { HEALTH_SERIES, trendValue, type HealthField } from "../trends";
 export function HealthPage({
   metrics,
   cloud,
+  canEdit = !cloud,
   workspaceKey,
   viewToday,
   range,
@@ -15,6 +16,7 @@ export function HealthPage({
 }: {
   metrics: Metric[];
   cloud: boolean;
+  canEdit?: boolean;
   workspaceKey: string;
   viewToday: string;
   range: number;
@@ -24,7 +26,11 @@ export function HealthPage({
 }) {
   return (
     <>
-      <button className="secondary metric-add" disabled={cloud} onClick={onAdd}>
+      <button
+        className="secondary metric-add"
+        disabled={cloud || !canEdit}
+        onClick={onAdd}
+      >
         <Plus size={16} />
         新增健康數據
       </button>
@@ -33,6 +39,7 @@ export function HealthPage({
         key={`${workspaceKey}:${viewToday}:${range}`}
         metrics={metrics}
         cloud={cloud}
+        canEdit={canEdit}
         viewToday={viewToday}
         range={range}
         onDelete={onDelete}
@@ -46,12 +53,13 @@ const HISTORY_BATCH = 14;
 function HealthHistory({
   metrics,
   cloud,
+  canEdit,
   viewToday,
   range,
   onDelete,
 }: Pick<
   Parameters<typeof HealthPage>[0],
-  "metrics" | "cloud" | "viewToday" | "range" | "onDelete"
+  "metrics" | "cloud" | "canEdit" | "viewToday" | "range" | "onDelete"
 >) {
   const id = `health-history-${useId().replace(/:/g, "")}`;
   const [allDates, setAllDates] = useState(false);
@@ -117,6 +125,7 @@ function HealthHistory({
                 {!cloud && (
                   <button
                     className="icon-button"
+                    disabled={!canEdit}
                     aria-label={`刪除 ${m.date} 健康摘要`}
                     onClick={() => onDelete(m.id)}
                   >

@@ -13,6 +13,7 @@ import { App } from "./App";
 import { today, type Workout } from "./model";
 import { testInspection } from "./test-fixtures";
 import { readOutbox } from "./outbox";
+import { LOCAL_KEY } from "./workspace";
 const lifecycle = vi.hoisted(() => ({ mounts: 0, unmounts: 0 }));
 vi.mock("./pages/HealthChart", () => ({
   HealthChart: () => <div>健康圖表</div>,
@@ -92,6 +93,127 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+});
+it("offers a retry on an initially unreadable store without replacing its contents", () => {
+  localStorage.setItem(LOCAL_KEY, "{fictional-invalid");
+  render(<App />);
+  const refresh = screen.getByRole("button", { name: "重新讀取本機資料" });
+  expect(screen.getByText("本機資料需要重新讀取")).toBeTruthy();
+  expect(
+    (screen.getByRole("button", { name: "記錄運動" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  fireEvent.click(refresh);
+  expect(localStorage.getItem(LOCAL_KEY)).toBe("{fictional-invalid");
+  localStorage.setItem(
+    LOCAL_KEY,
+    JSON.stringify({ version: 1, workouts: [], metrics: [] }),
+  );
+  fireEvent.click(refresh);
+  expect(screen.queryByText("本機資料需要重新讀取")).toBeNull();
+  expect(
+    (screen.getByRole("button", { name: "記錄運動" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(false);
+});
+it("retains a local draft, blocks stale writes and explicitly refreshes another page's records before continuing", () => {
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "記錄運動" }));
+  const note = screen.getByRole("textbox", {
+    name: "備註",
+  }) as HTMLTextAreaElement;
+  fireEvent.change(note, { target: { value: "虛構未儲存草稿" } });
+  const latest = {
+    version: 1,
+    metrics: [],
+    workouts: [
+      {
+        id: "fictional-other-tab",
+        date: today(),
+        type: "home",
+        minutes: 20,
+        calories: 0,
+        note: "虛構其他分頁最新紀錄",
+      },
+    ],
+  };
+  localStorage.setItem(LOCAL_KEY, JSON.stringify(latest));
+  act(() =>
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: LOCAL_KEY,
+        storageArea: localStorage,
+      }),
+    ),
+  );
+  expect(note.value).toBe("虛構未儲存草稿");
+  expect(
+    (screen.getByRole("button", { name: /儲存紀錄/ }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  const refresh = screen.getByRole("button", {
+    name: "重新讀取本機資料",
+  }) as HTMLButtonElement;
+  expect(refresh.disabled).toBe(true);
+  expect(JSON.parse(localStorage.getItem(LOCAL_KEY)!)).toEqual(latest);
+  fireEvent.click(screen.getByRole("button", { name: "關閉" }));
+  expect(refresh.disabled).toBe(false);
+  fireEvent.click(refresh);
+  expect(screen.queryByText("本機資料已變更")).toBeNull();
+  expect(screen.getByText("虛構其他分頁最新紀錄")).toBeTruthy();
+  expect(
+    (screen.getByRole("button", { name: "記錄運動" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(false);
+});
+it("does not refresh local data while a backup is being read and preserves the newer storage", async () => {
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "設定與備份" }));
+  let finish!: (text: string) => void;
+  const file = new File(["fictional"], "fictional.json", {
+    type: "application/json",
+  });
+  Object.defineProperty(file, "text", {
+    value: () =>
+      new Promise<string>((resolve) => {
+        finish = resolve;
+      }),
+  });
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+  fireEvent.change(screen.getByLabelText("還原 JSON 備份"), {
+    target: { files: [file] },
+  });
+  const latest = {
+    version: 1,
+    workouts: [],
+    metrics: [{ id: "fictional-latest", date: today(), weight: 60 }],
+  };
+  localStorage.setItem(LOCAL_KEY, JSON.stringify(latest));
+  act(() =>
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: LOCAL_KEY,
+        storageArea: localStorage,
+      }),
+    ),
+  );
+  const refresh = screen.getByRole("button", {
+    name: "重新讀取本機資料",
+  }) as HTMLButtonElement;
+  expect(refresh.disabled).toBe(true);
+  await act(async () =>
+    finish(JSON.stringify({ version: 1, workouts: [], metrics: [] })),
+  );
+  expect(confirm).not.toHaveBeenCalled();
+  expect(refresh.disabled).toBe(false);
+  expect(JSON.parse(localStorage.getItem(LOCAL_KEY)!)).toEqual(latest);
+  expect(
+    (screen.getByLabelText("還原 JSON 備份") as HTMLInputElement).disabled,
+  ).toBe(true);
+  fireEvent.click(refresh);
+  expect(
+    (screen.getByLabelText("還原 JSON 備份") as HTMLInputElement).disabled,
+  ).toBe(false);
 });
 it("resets workout filters across cloud accounts without resetting the Google panel", async () => {
   render(<App />);

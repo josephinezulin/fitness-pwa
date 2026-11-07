@@ -6,6 +6,7 @@ import type { HealthSyncSummary } from "../health-sync-status";
 export function SettingsPage({
   visible,
   cloud,
+  localWritable,
   workoutCount,
   metricCount,
   children,
@@ -21,6 +22,7 @@ export function SettingsPage({
 }: {
   visible: boolean;
   cloud: boolean;
+  localWritable: boolean;
   workoutCount: number;
   metricCount: number;
   children: ReactNode;
@@ -59,13 +61,13 @@ export function SettingsPage({
         </button>
         <label
           className="secondary file-label"
-          aria-disabled={cloud || restoring}
+          aria-disabled={cloud || !localWritable || restoring}
         >
           <Upload size={18} />
           還原 JSON 備份
           <input
             type="file"
-            disabled={cloud || restoring}
+            disabled={cloud || !localWritable || restoring}
             accept="application/json,.json"
             onChange={(e) => {
               void onRestore(e.target.files?.[0]);
@@ -119,7 +121,7 @@ export function SettingsPage({
         </p>
         <button
           className="secondary"
-          disabled={cloud || restoring}
+          disabled={cloud || !localWritable || restoring}
           onClick={onDemo}
         >
           載入示範資料

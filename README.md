@@ -13,7 +13,7 @@ npm run build
 
 `dist/` 是部署產物。Vite 使用相對 base，可部署到 GitHub Pages 的 repo 子目錄。部署不需要私密 Token 或前端環境變數。
 
-瀏覽器回歸測試：`npx playwright install chromium`，完成 `npm run build` 後執行 `npm run test:e2e`。PR 與 Pages 建置都會自動檢查三種手機尺寸的 30 個 Chromium 案例，失敗會阻擋部署；只使用虛構資料。安裝方式、診斷報告與實機限制見 [瀏覽器測試](docs/browser-tests.md)。
+瀏覽器回歸測試：`npx playwright install chromium`，完成 `npm run build` 後執行 `npm run test:e2e`。PR 與 Pages 建置都會自動檢查三種手機尺寸的 33 個 Chromium 案例，失敗會阻擋部署；只使用虛構資料。安裝方式、診斷報告與實機限制見 [瀏覽器測試](docs/browser-tests.md)。
 
 ## 部署與手動授權
 
@@ -62,6 +62,8 @@ npm run build
 捷徑上傳端程式已備妥但預設關閉，需使用者部署後實機驗收：[Apps Script 上傳 API 設定](docs/health-ingest-setup.md)。同帳號選擇私人表後，下次登入會自動重新讀取；PWA 可同步運動與影片，健康原始資料不由畫面摘要覆蓋。
 
 PWA 回到前景或恢復連線時會適度檢查介面新版，有新版本就顯示更新提示，按下更新才套用；表單、備份讀取或同步進行時先保留目前工作。每個分頁先套用本版後，即使另一頁啟用新版，目前頁也會保留草稿，等你準備好再更新畫面。此功能需先套用本版更新，且不保證 iOS 背景執行。頭像提供手動更新，失敗狀態仍會提醒。測試包含 TypeScript / DOM 介面測試（`npm test`）及未授權端點檢查工具測試（`python3 -m unittest discover -s scripts -p 'test_*.py'`）。
+
+本機模式偵測到其他分頁變更紀錄時，會保留目前畫面與未儲存表單並暫停資料寫入。先複製需要的草稿內容、關閉表單，再按「重新讀取本機資料」繼續記錄；不會自動合併草稿。儲存前的內容比對可拒絕已過期畫面，但不提供跨分頁原子交易；詳見 [階段 E](docs/stage-e-progress.md)。
 
 右上角頭像可查看綁定的私人試算表、最後讀取時間及更新資料；「管理 Google 連線」進入設定。平常不顯示長帳號資訊列，待同步修改與失敗仍會提醒。
 

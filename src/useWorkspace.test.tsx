@@ -67,6 +67,157 @@ async function connect(
   });
   await waitFor(() => expect(result.current.canEditCloud).toBe(true));
 }
+describe("local storage version protection", () => {
+  const changedData = () => ({
+    version: 1 as const,
+    metrics: [],
+    workouts: [{ ...workout, id: "other-tab", note: "虛構其他分頁紀錄" }],
+  });
+  const storageEvent = (
+    key: string | null = LOCAL_KEY,
+    storageArea: Storage = localStorage,
+  ) => window.dispatchEvent(new StorageEvent("storage", { key, storageArea }));
+  it("rejects a stale save before any storage event and resumes only after an explicit refresh", () => {
+    const { result } = renderHook(() => useWorkspace());
+    const restore = result.current.prepareLocalRestore();
+    const latest = changedData();
+    localStorage.setItem(LOCAL_KEY, JSON.stringify(latest));
+    act(() => {
+      expect(() =>
+        result.current.save({ ...result.current.data, workouts: [workout] }),
+      ).toThrow(/其他分頁/);
+    });
+    expect(result.current.localChanged).toBe(true);
+    expect(result.current.canEditCloud).toBe(false);
+    expect(result.current.data.workouts).toEqual([]);
+    expect(JSON.parse(localStorage.getItem(LOCAL_KEY)!)).toEqual(latest);
+    act(() => result.current.refreshLocal());
+    expect(result.current.data.workouts).toEqual(latest.workouts);
+    expect(result.current.localChanged).toBe(false);
+    expect(result.current.canEditCloud).toBe(true);
+    expect(() => restore.check()).toThrow(/已變更/);
+    act(() =>
+      result.current.save({
+        ...result.current.data,
+        workouts: [...result.current.data.workouts, workout],
+      }),
+    );
+    expect(JSON.parse(localStorage.getItem(LOCAL_KEY)!).workouts).toHaveLength(
+      2,
+    );
+  });
+  it("ignores unrelated or session storage events and keeps the old view for an actual local change", () => {
+    const { result } = renderHook(() => useWorkspace());
+    localStorage.setItem(LOCAL_KEY, JSON.stringify(changedData()));
+    act(() => storageEvent("unrelated-device-preference"));
+    act(() => storageEvent(LOCAL_KEY, sessionStorage));
+    expect(result.current.localChanged).toBe(false);
+    act(() => storageEvent());
+    expect(result.current.localChanged).toBe(true);
+    expect(result.current.data.workouts).toEqual([]);
+    expect(() => result.current.prepareLocalRestore()).toThrow(/其他分頁/);
+  });
+  it("detects changes on a visible foreground event without background polling", () => {
+    const visibility = vi
+      .spyOn(document, "visibilityState", "get")
+      .mockReturnValue("hidden");
+    const { result } = renderHook(() => useWorkspace());
+    localStorage.setItem(LOCAL_KEY, JSON.stringify(changedData()));
+    act(() => window.dispatchEvent(new Event("focus")));
+    expect(result.current.localChanged).toBe(false);
+    visibility.mockReturnValue("visible");
+    act(() => document.dispatchEvent(new Event("visibilitychange")));
+    expect(result.current.localChanged).toBe(true);
+  });
+  it("preserves a cleared store until refreshing and never silently recreates removed records", () => {
+    const { result } = renderHook(() => useWorkspace());
+    act(() =>
+      result.current.save({ ...result.current.data, workouts: [workout] }),
+    );
+    localStorage.removeItem(LOCAL_KEY);
+    act(() => storageEvent(null));
+    expect(result.current.data.workouts).toHaveLength(1);
+    expect(result.current.canEditCloud).toBe(false);
+    expect(localStorage.getItem(LOCAL_KEY)).toBeNull();
+    act(() => result.current.refreshLocal());
+    expect(result.current.data.workouts).toEqual([]);
+    expect(localStorage.getItem(LOCAL_KEY)).toBeNull();
+    expect(result.current.canEditCloud).toBe(true);
+  });
+  it("does not clear the current view or overwrite malformed contents when refresh fails", () => {
+    const { result } = renderHook(() => useWorkspace());
+    act(() =>
+      result.current.save({ ...result.current.data, workouts: [workout] }),
+    );
+    localStorage.setItem(LOCAL_KEY, "{fictional-invalid");
+    act(() => storageEvent());
+    act(() => result.current.refreshLocal());
+    expect(result.current.data.workouts).toEqual([workout]);
+    expect(result.current.storageError).toContain("尚未覆蓋");
+    expect(result.current.localChanged).toBe(true);
+    expect(localStorage.getItem(LOCAL_KEY)).toBe("{fictional-invalid");
+    localStorage.setItem(LOCAL_KEY, JSON.stringify(changedData()));
+    act(() => result.current.refreshLocal());
+    expect(result.current.storageError).toBe("");
+    expect(result.current.canEditCloud).toBe(true);
+    expect(result.current.data.workouts[0].id).toBe("other-tab");
+  });
+  it("keeps the last valid view when storage access fails and removes observers on unmount", () => {
+    const { result, unmount } = renderHook(() => useWorkspace());
+    act(() =>
+      result.current.save({ ...result.current.data, workouts: [workout] }),
+    );
+    const getter = vi
+      .spyOn(Storage.prototype, "getItem")
+      .mockImplementation(() => {
+        throw Error("fictional blocked storage");
+      });
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    act(() => window.dispatchEvent(new Event("focus")));
+    expect(result.current.storageError).toContain("無法確認");
+    act(() => result.current.refreshLocal());
+    expect(result.current.data.workouts).toEqual([workout]);
+    expect(result.current.localChanged).toBe(true);
+    getter.mockRestore();
+    act(() => result.current.refreshLocal());
+    const remove = vi.spyOn(window, "removeEventListener");
+    unmount();
+    expect(remove).toHaveBeenCalledWith("storage", expect.any(Function));
+  });
+  it("does not change a cloud workspace and rereads the latest local content on disconnect", async () => {
+    const { result } = renderHook(() => useWorkspace());
+    await connect(result);
+    localStorage.setItem(LOCAL_KEY, JSON.stringify(changedData()));
+    act(() => storageEvent());
+    act(() => result.current.refreshLocal());
+    expect(result.current.localChanged).toBe(false);
+    expect(result.current.cloud?.subject).toBe(identity.subject);
+    expect(result.current.canEditCloud).toBe(true);
+    act(() => result.current.disconnectCloud());
+    expect(result.current.localChanged).toBe(false);
+    expect(result.current.data.workouts[0].id).toBe("other-tab");
+    act(() =>
+      result.current.save({
+        ...result.current.data,
+        workouts: [...result.current.data.workouts, workout],
+      }),
+    );
+    expect(JSON.parse(localStorage.getItem(LOCAL_KEY)!).workouts).toHaveLength(
+      2,
+    );
+    expect(readOutbox(localStorage, identity)).toEqual([]);
+    await connect(result);
+    localStorage.setItem(LOCAL_KEY, "{fictional-invalid");
+    act(() => result.current.disconnectCloud());
+    expect(result.current.localChanged).toBe(true);
+    expect(result.current.canEditCloud).toBe(false);
+    expect(result.current.storageError).toContain("尚未覆蓋");
+    localStorage.setItem(LOCAL_KEY, JSON.stringify(changedData()));
+    act(() => result.current.refreshLocal());
+    expect(result.current.canEditCloud).toBe(true);
+    expect(result.current.data.workouts[0].id).toBe("other-tab");
+  });
+});
 describe("cloud workspace lifecycle", () => {
   it("only applies a local restore to its original unchanged local snapshot", () => {
     const { result } = renderHook(() => useWorkspace());

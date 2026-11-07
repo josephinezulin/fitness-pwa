@@ -16,6 +16,31 @@ const identity = {
   checkedAt: "2026-11-06T00:00:00Z",
 };
 describe("account and file storage isolation", () => {
+  it("returns data and its exact storage version from one read, including unavailable or corrupt contents", () => {
+    const raw = JSON.stringify({ ...empty, workouts: [] });
+    let reads = 0;
+    const storage = {
+      getItem: () => {
+        reads++;
+        return reads === 1 ? raw : "a newer value";
+      },
+    };
+    const result = readLocal(storage);
+    expect(result.raw).toBe(raw);
+    expect(result.data).toEqual(empty);
+    expect(reads).toBe(1);
+    expect(readLocal({ getItem: () => "{broken" }).raw).toBe("{broken");
+    expect(
+      readLocal({
+        getItem: () => {
+          throw Error("fictional blocked storage");
+        },
+      }),
+    ).toMatchObject({
+      raw: undefined,
+      error: expect.stringContaining("尚未覆蓋"),
+    });
+  });
   it("partitions every account and file, including separator-like IDs", () => {
     expect(snapshotKey(identity)).not.toBe(
       snapshotKey({ ...identity, subject: "B" }),
