@@ -196,3 +196,24 @@ iPhone 手動驗收：設定與備份 → 匯出 JSON 至自己的檔案 App，�
 已用三種尺寸的真實 Chromium Service Worker 完成版本 1 → 等待中的版本 2 → 明確套用 → controller 版本 2 與重載的流程。測試 server 僅提供本機 dist，版本辨識只附加在測試 HTTP 回應，不修改 dist 或正式 worker，不使用真實帳號或健康資料。新版本提示出現時，草稿仍在、更新按鈕停用；關閉表單後按更新才切換，所有虛構運動與健康資料保持一致。完整本機 253 項 Vitest（37 檔）、8 項 Python、TypeScript／Vite／Service Worker 建置、Prettier 與 diff 檢查通過。新增單元測試覆蓋一分鐘節流、單一進行中請求、隱藏／離線／安裝／等待略過、錯誤後重試、卸載清理與晚到 callback、時鐘回撥及明確更新失敗可重試；既有表單／備份／同步保護測試保留。完整 27 個 Playwright 案例通過，包含三種尺寸各一個真實 worker 升級案例及既有 24 個介面／離線回歸，並確認 dist 的 JavaScript 不含測試 worker 辨識碼。CI／合併／Pages 結果追加於本次 PR。
 
 實機步驟：先在 iPhone Safari／主畫面 PWA 套用本版；未來新版發布後，切去其他 App，隔一段時間回來並確認有網路，應能出現更新提示。若開著運動表單，內容應保留且不能按更新；儲存或關閉後才能明確套用。離線時持續記錄，恢復連線並回前景後再驗證。此步驟需要前後兩次實際發布與 iPhone 操作，尚未完成 Safari／VoiceOver 驗收，也不是健康捷徑上傳驗收；本輪沒有新的 Google 授權步驟。
+
+
+## E15：跨分頁啟用新版時保留目前草稿
+
+新增真實雙分頁測試並在舊版重現失敗：A 頁開運動表單填入虛構備註，B 頁啟用新版 worker 後，A 頁的表單與備註消失。檢查已安裝的 Vite PWA 0.21.2 註冊實作，發現其更新提示會加入 controlling 後自動 reload 的處理；按鈕雖停用，其他分頁啟用仍可觸發此路徑。
+
+改由 `pwa-registration.ts` 使用瀏覽器原生 register、updatefound、worker statechange 與 controllerchange。維持相同的 sw.js 網址、repo 子路徑 scope 與 Vite／Workbox 產生的 worker／快取策略；沒有新增依賴、另寫快取實作、改成自動 skipWaiting、解除註冊或清除資料。應用不再載入 virtual:pwa-register 的自動重載處理，正式產物也不再有 workbox-window 網頁端 chunk；worker 內的 Workbox 仍保留。
+
+安裝新版只顯示就緒；目前頁明確按更新才傳 SKIP_WAITING。另一頁啟用造成 controller 改變時，只通知目前頁可更新，不自動重載。即使 waiting 已消失，之後按更新仍可直接重載到已啟用的介面。目前頁自己的啟用完成時，也重新檢查最新 blocked ref，避免按更新之後又開表單的競態；若鎖定便保留提示，準備好後再按一次。初次安裝的首次控制不當作更新，離線就緒在初次啟用後回報；註冊失敗、postMessage 失敗可正常提示／重試，卸載清理所有自訂監聽並忽略晚到的結果。
+
+官方資料說明 controllerchange 代表當頁 controller 改變，updatefound 可找到新安裝中的 worker，而 skipWaiting 會讓新 worker 開始控制先前頁面。因此把「啟用共用 worker」與「重載個別頁面」分開；只由目前頁明確要求並通過工作鎖才重載。E14 的可見／連線／60 秒冷卻檢查仍沿用。
+
+- https://web.dev/articles/service-worker-lifecycle
+- https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerContainer/controllerchange_event
+- https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration/updatefound_event
+
+完整本機 265 項 Vitest（38 檔）、8 項 Python、TypeScript／Vite／Service Worker 建置、Prettier 與 diff 檢查通過。新增單元測試涵蓋 Pages scope、既有 waiting、明確啟用後重載、外部分頁啟用只提示、初次離線就緒、updatefound、controller 先換而事件晚到的競態、不同 worker 不沿用舊啟用請求、postMessage／註冊失敗、卸載後晚到註冊及不支援 worker 的瀏覽器。完整 30 個 Playwright 案例通過：既有 27 個，加上三種尺寸各一個真實雙分頁重現／修正案例；原先備註消失的同一斷言現在通過，儲存後再次重載也能讀回紀錄。正式 JavaScript 沒有測試 worker 辨識碼，也沒有舊網頁端自動重載 bundle；worker 的 Workbox 與縮圖邊界測試保留。CI／合併／Pages 結果追加於 PR。所有資料均為虛構，沒有登入 Google 或更動私人試算表。
+
+限制：這個修正要先載入每個分頁才有效，無法改寫尚在記憶體中的舊版自動重載處理；第一次升級前先儲存或關閉表單。新 worker 可以控制仍在執行舊 JS 的頁面，未來若做不相容 schema 或拆分動態載入資產，必須另外驗證遷移。這不提供跨分頁 localStorage 交易，也不取代雲端 Web Locks／衝突處理。本輪測的是同瀏覽器同來源分頁，不把它當作 Safari／主畫面 PWA／VoiceOver 實機結果。
+
+手動驗收：先把兩個分頁都更新到本版；A 頁開運動表單填測試備註，下一次發布後 B 頁先按更新。A 頁應保持表單且更新按鈕停用；儲存後再按更新，新增紀錄應仍存在。同步或還原備份進行中的頁面同樣保留更新鎖；Safari 與 iPhone 主畫面需另外實測。本輪沒有新的 Google 授權步驟。

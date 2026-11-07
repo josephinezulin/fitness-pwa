@@ -9,13 +9,21 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { PwaUpdate } from "./PwaUpdate";
-const mock = vi.hoisted(() => ({ register: vi.fn(), apply: vi.fn() }));
-vi.mock("virtual:pwa-register", () => ({ registerSW: mock.register }));
+const mock = vi.hoisted(() => ({
+  register: vi.fn(),
+  apply: vi.fn(),
+  dispose: vi.fn(),
+  reload: vi.fn(),
+}));
+vi.mock("./pwa-registration", () => ({
+  registerPwa: mock.register,
+  reloadPwaPage: mock.reload,
+}));
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv("PROD", true);
   mock.apply.mockResolvedValue(undefined);
-  mock.register.mockReturnValue(mock.apply);
+  mock.register.mockReturnValue({ update: mock.apply, dispose: mock.dispose });
 });
 afterEach(() => {
   cleanup();
@@ -83,7 +91,25 @@ it("protects an open form from reload and updates only after an explicit click",
   await act(async () =>
     fireEvent.click(screen.getByRole("button", { name: "更新版本" })),
   );
-  expect(mock.apply).toHaveBeenCalledWith(true);
+  expect(mock.apply).toHaveBeenCalledOnce();
+});
+it("rechecks the current form lock when activation finishes and reloads only after a safe explicit retry", () => {
+  const view = render(<PwaUpdate blocked={false} />);
+  const options = mock.register.mock.calls[0][0];
+  view.rerender(<PwaUpdate blocked />);
+  act(() => options.onReloadReady());
+  expect(mock.reload).not.toHaveBeenCalled();
+  expect(
+    (screen.getByRole("button", { name: "更新版本" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  view.rerender(<PwaUpdate blocked={false} />);
+  act(() => options.onReloadReady());
+  expect(mock.reload).toHaveBeenCalledOnce();
+  view.unmount();
+  expect(mock.dispose).toHaveBeenCalledOnce();
+  act(() => options.onReloadReady());
+  expect(mock.reload).toHaveBeenCalledOnce();
 });
 it("reports offline interface readiness without promising health data synchronization", () => {
   render(<PwaUpdate blocked={false} />);
