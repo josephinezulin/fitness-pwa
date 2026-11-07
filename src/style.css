@@ -796,6 +796,84 @@ footer button {
 .metric-list {
   margin: 24px 0;
 }
+.health-history-head {
+  flex-wrap: wrap;
+}
+.health-history-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 14px;
+  color: #465a3f;
+  cursor: pointer;
+}
+.health-history-all input {
+  width: 18px;
+  height: 18px;
+  accent-color: #68856b;
+}
+.health-history-status,
+.health-history-empty {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #465a3f;
+}
+.metric-list > .tiny,
+.health-history-date .tiny {
+  color: #53654b;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.health-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.health-history-list > li {
+  padding: 14px 0;
+  border-bottom: 1px solid #e4e9de;
+}
+.health-history-date {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.health-history-date h3 {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.health-history-date h3:focus {
+  outline: 2px solid #536c47;
+  outline-offset: 3px;
+}
+.health-history-date .icon-button {
+  min-width: 44px;
+  min-height: 44px;
+}
+.health-history-values {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 10px 0 0;
+  overflow-wrap: anywhere;
+}
+.health-history-values dt {
+  font-size: 12px;
+  color: #53654b;
+}
+.health-history-values dd {
+  margin: 4px 0 0;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.health-history-more {
+  min-height: 44px;
+  margin: 16px 0 0;
+}
 .notice {
   background: #e9efe0;
   border: 1px solid #dfe8d4;

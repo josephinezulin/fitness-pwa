@@ -5,8 +5,9 @@
 ## 目前落點
 
 - 階段 0、C、D、E1–E7 程式已合併部署；本人 OAuth 寫入、YouTube、VoiceOver 與 iOS 健康捷徑仍保留實機待驗收，不把 HTTP／DOM／Chrome 測試當作 iPhone 結果。
-- 最新已驗證部署為 PR #12，main `354fa4f18c337fbe162c7e4b9f55207df0cb598c`，PR CI 42336635350、Pages 42336721999 成功。新版資產 HTTP 200，另以 320px Chromium 開啟正式站確認健康同步設定卡片與零未捕捉錯誤。E5 趨勢、E6 頭像及 E7 卡片已完成，不要重做。
+- 最新已驗證部署為 PR #13，main `94e4759eaec1edff4d549f8ebce2e19237d7e7d8`，PR CI 42338444918、Pages 42338501031 成功。新版資產 HTTP 200，正式站 320／390／844px Chromium 的 18 項平滑曲線檢查通過。E5 趨勢、E6 頭像及 E7 卡片已完成，不要重做。
 - 使用者回報偏好原本的曲線外觀，優先恢復健康圖的 monotone 平滑線與原本漸層；連續紀錄不顯示常駐圓點，孤立量測仍有圓點。保留缺值斷線、日曆日期、數值表與鍵盤 Tooltip。完整 208 項 Vitest、8 項 Python、建置及 diff 檢查通過；三種尺寸共 18 項曲線瀏覽器檢查及既有 45 項介面／離線檢查通過。詳見 docs/trend-accessibility.md；本次 PR／CI／Pages 結果以 GitHub 最新記錄為準。
+- E8 接續健康摘要長清單：跟隨圖表 7／30／90 天、全部日期、每批 14 筆、清楚標示四項數值與缺值。換帳號／副本、參考日及圖表範圍重設摘要視窗，圖表本身不重掛；只影響呈現，沒有刪減儲存或備份資料。完整檢查及實際瀏覽器結果見 docs/stage-e-progress.md。本次 PR／CI／Pages 尚須通過後才視為上線。
 - 本輪 E7 補健康同步結果與部署驗收準備，見 docs/health-sync-readiness.md。本環境尚未取得可驗證 /exec 網址或可代辦的 Apps Script 部署連線；只停止該部署步驟，不把 PWA 的 drive.file Token 當作 Script 授權。需要使用者完成 Google 首次授權／部署並只提供 /exec 網址，不提供裝置 Token。這輪沒有部署健康 API、沒有修改私人表。
 
 ## 先前檢查點（歷程）

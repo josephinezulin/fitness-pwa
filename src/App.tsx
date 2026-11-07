@@ -542,6 +542,9 @@ export function App() {
             <HealthPage
               metrics={data.metrics}
               cloud={!!workspace.cloud}
+              workspaceKey={preferenceKey(workspace.cloud)}
+              viewToday={viewToday}
+              range={range}
               chart={<HealthChart {...chartProps} />}
               onAdd={() => setModal("metric")}
               onDelete={(id) => {
