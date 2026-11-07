@@ -1694,6 +1694,76 @@ button.video-link {
 }
 
 /* Video library */
+.video-filters {
+  min-width: 0;
+  border: 1px solid #e3e9da;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 16px 0 4px;
+}
+.video-filters legend {
+  font-size: 14px;
+  color: #3f5736;
+  padding: 0 5px;
+}
+.video-filter-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 12px;
+}
+.video-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  font-size: 12px;
+  color: #46624c;
+}
+.video-filters input,
+.video-filters select {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #dfe5d6;
+  border-radius: 6px;
+  background: #fff;
+  color: #3f5736;
+}
+.video-filters .text-button {
+  min-height: 44px;
+  font-size: 14px;
+  margin-top: 4px;
+  color: #3f5736;
+}
+.video-results-status {
+  font-size: 12px;
+  color: #46624c;
+  line-height: 1.7;
+}
+.video-library .chips button {
+  min-height: 44px;
+  font-size: 12px;
+  color: #46624c;
+}
+.video-library .chips button small {
+  color: inherit;
+  font-size: 11px;
+}
+.video-library .chips button.selected small {
+  color: #fff;
+}
+.video-more {
+  min-height: 44px;
+  width: 100%;
+  justify-content: center;
+  font-size: 14px;
+  color: #3f5736;
+}
+@media (max-width: 540px) {
+  .video-filter-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .video-library .notice {
   margin: 12px 0;
 }

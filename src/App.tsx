@@ -73,7 +73,9 @@ export function App() {
       "weight",
     );
   const [planDraftOpen, setPlanDraftOpen] = useState(false);
+  const [videoDraftOpen, setVideoDraftOpen] = useState(false);
   const [workoutDraft, setWorkoutDraft] = useState<WorkoutDraft | null>(null);
+  const draftOpen = !!modal || planDraftOpen || videoDraftOpen;
   const preferences = usePreferences(
     preferenceKey(workspace.cloud),
     setMessage,
@@ -365,9 +367,9 @@ export function App() {
                 </p>
                 <button
                   className="secondary"
-                  disabled={!!modal || planDraftOpen || backupRestore.busy}
+                  disabled={draftOpen || backupRestore.busy}
                   onClick={() => {
-                    if (!modal && !planDraftOpen && !backupRestore.busy)
+                    if (!draftOpen && !backupRestore.busy)
                       workspace.refreshLocal();
                   }}
                 >
@@ -525,6 +527,7 @@ export function App() {
               key={`${videoVersion}:${workspace.cloud?.subject || "local"}:${workspace.cloud?.spreadsheetId || ""}`}
               online={online}
               initialCategory={videoCategory}
+              onDraftChange={setVideoDraftOpen}
               cloud={!!workspace.cloud}
               preferences={preferences.value}
               onToggleFavorite={(id) =>
@@ -592,7 +595,7 @@ export function App() {
             cloud={!!workspace.cloud}
             localWritable={!workspace.cloud && workspace.canEditCloud}
             localRecovery={workspace.localRecovery}
-            recoveryBlocked={!!modal || planDraftOpen}
+            recoveryBlocked={draftOpen}
             onExportOriginal={exportOriginal}
             onRepair={(file, source) =>
               backupRestore.restore(file, () =>
@@ -640,9 +643,7 @@ export function App() {
         </div>
       </main>
       <PwaUpdate
-        blocked={
-          !!modal || planDraftOpen || workspace.syncBusy || backupRestore.busy
-        }
+        blocked={draftOpen || workspace.syncBusy || backupRestore.busy}
         blockedReason={
           workspace.syncBusy
             ? "請稍候同步完成，再更新。"

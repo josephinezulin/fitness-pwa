@@ -96,6 +96,35 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
+it("protects a video draft from interface updates while searching and releases the lock on close or navigation", () => {
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "運動影片" }));
+  fireEvent.click(screen.getByRole("button", { name: "新增影片" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "名稱" }), {
+    target: { value: "虛構未儲存影片" },
+  });
+  expect(
+    (screen.getByRole("button", { name: "測試更新版本" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  fireEvent.change(screen.getByRole("searchbox", { name: "搜尋運動影片" }), {
+    target: { value: "瑜伽" },
+  });
+  expect(
+    (screen.getByRole("textbox", { name: "名稱" }) as HTMLInputElement).value,
+  ).toBe("虛構未儲存影片");
+  fireEvent.click(screen.getByRole("button", { name: "取消" }));
+  expect(
+    (screen.getByRole("button", { name: "測試更新版本" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "新增影片" }));
+  fireEvent.click(screen.getByRole("button", { name: "總覽" }));
+  expect(
+    (screen.getByRole("button", { name: "測試更新版本" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(false);
+});
 it("advances the displayed day, steps and training week when returning to the foreground", () => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-11-08T12:00:00Z"));
