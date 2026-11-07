@@ -88,12 +88,12 @@ describe("real trend charts and readable alternatives", () => {
     expect(gradientIds.every(Boolean)).toBe(true);
     expect(new Set(gradientIds).size).toBe(2);
   });
-  it("draws calendar gaps and individual observations, with the same zero/missing values in the table", async () => {
+  it("draws calendar gaps and isolated observations, with the same zero/missing values in the table", async () => {
     const { container } = render(<HealthChart {...props()} />);
     await screen.findByRole("application", { name: "步數近7天趨勢圖" });
     const curve = container.querySelector(".recharts-area-curve");
     expect(curve?.getAttribute("d")?.match(/M/g)).toHaveLength(2);
-    expect(container.querySelectorAll(".recharts-area-dot")).toHaveLength(3);
+    expect(container.querySelectorAll(".recharts-area-dot")).toHaveLength(1);
     expect(screen.getByText(/近 7 天有 3 天步數紀錄/).textContent).toContain(
       "1,400 步（2026-11-04）",
     );
@@ -116,6 +116,30 @@ describe("real trend charts and readable alternatives", () => {
         .getByRole("rowheader", { name: "2026-11-03" })
         .getAttribute("scope"),
     ).toBe("row");
+  });
+  it("draws a smooth curve for adjacent observations while retaining calendar gaps and isolated endpoints", async () => {
+    const { container } = render(
+      <HealthChart
+        {...props()}
+        metric="weight"
+        metrics={[
+          { id: "first", date: "2026-11-01", weight: 60 },
+          { id: "second", date: "2026-11-02", weight: 59.8 },
+          { id: "third", date: "2026-11-03", weight: 59.9 },
+          { id: "isolated", date: "2026-11-05", weight: 59.7 },
+          { id: "last", date: "2026-11-07", weight: 59.6 },
+        ]}
+      />,
+    );
+    await screen.findByRole("application", { name: "體重近7天趨勢圖" });
+    const path = container
+      .querySelector(".recharts-area-curve")
+      ?.getAttribute("d");
+    expect(path).toContain("C");
+    expect(path?.match(/M/g)).toHaveLength(3);
+    const dots = container.querySelectorAll(".recharts-area-dot");
+    expect(dots).toHaveLength(2);
+    expect([...dots].every((dot) => dot.getAttribute("r") === "3")).toBe(true);
   });
   it("moves the actual tooltip across a missing day using left/right arrows", async () => {
     render(<HealthChart {...props()} />);

@@ -47,3 +47,11 @@ PR CI 與部署須通過後才合併／視為上線；回來先確認最新 GitH
 
 - 收到真實 iPhone／VoiceOver 回報時先修正，再獨立評估 Recharts 3 與相容 react-is；目前沒有主要版本遷移的實機證據。
 - 可改善健康摘要清單的時間範圍與長清單閱讀，沿用已驗證的曆日／缺值邏輯；不增加健康寫入權限。
+
+## 外觀回饋：恢復原本平滑曲線
+
+使用者偏好 E5 之前的圖表外觀，健康 Area 恢復 `monotone` 平滑線，沿用原本綠色、線寬與透明漸層。相鄰量測不顯示常駐圓點，操作時仍有 Tooltip；前後都沒有相鄰資料的孤立量測保留小圓點，包含單筆紀錄。完整日曆及 `connectNulls={false}` 保留，缺日仍斷線，每日數值、真實零、摘要及鍵盤操作維持原語意。
+
+完整檢查通過：208 項 Vitest（32 檔）、8 項 Python、TypeScript／Vite／Service Worker 建置及 `git diff --check`。使用實際 Recharts SVG 驗證平滑路徑、三段缺日路徑及兩個孤立端點，既有單筆、真實零與缺值 Tooltip 測試持續通過。
+
+另以正式 dist 在 320×852、390×844、844×390 Chromium 執行 18 項曲線檢查（真實平滑 SVG、無常駐圓點、漸層、無水平溢位、鍵盤 Tooltip、無 pageerror），並檢視 390px 截圖；既有 45 項介面／表單／離線檢查也通過。僅使用虛構 localStorage，工具與報告位於 `/tmp/fitness-pwa-browser/`，沒有修改私人試算表或新增權限。這些是本機 Chrome 檢查，iPhone Safari／VoiceOver 仍待實機驗收。合併及正式站部署結果記錄於本次 PR。

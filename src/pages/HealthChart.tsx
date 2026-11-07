@@ -148,13 +148,42 @@ export function HealthChart({
                 )}
               />
               <Area
-                type="linear"
+                type="monotone"
                 dataKey="value"
                 connectNulls={false}
                 stroke="#68856b"
                 strokeWidth={2.5}
                 fill={`url(#${id}-fill)`}
-                dot={{ r: 3 }}
+                dot={({
+                  cx,
+                  cy,
+                  index,
+                }: {
+                  cx?: number;
+                  cy?: number;
+                  index?: number;
+                }) => {
+                  // Connected observations use the original uncluttered curve.
+                  // Keep a dot when an observation has no line to either side.
+                  const isolated =
+                    index !== undefined &&
+                    rows[index]?.value != null &&
+                    rows[index - 1]?.value == null &&
+                    rows[index + 1]?.value == null;
+                  return isolated ? (
+                    <circle
+                      key={`dot-${index}`}
+                      className="recharts-area-dot"
+                      cx={cx}
+                      cy={cy}
+                      r={3}
+                      fill="#68856b"
+                      stroke="#68856b"
+                    />
+                  ) : (
+                    <g key={`dot-${index}`} />
+                  );
+                }}
                 isAnimationActive={false}
               />
             </AreaChart>
