@@ -13,7 +13,7 @@ npm run build
 
 `dist/` 是部署產物。Vite 使用相對 base，可部署到 GitHub Pages 的 repo 子目錄。部署不需要私密 Token 或前端環境變數。
 
-瀏覽器回歸測試：`npx playwright install chromium`，完成 `npm run build` 後執行 `npm run test:e2e`。PR 與 Pages 建置都會自動檢查三種手機尺寸的 18 個 Chromium 案例，失敗會阻擋部署；只使用虛構資料。安裝方式、診斷報告與實機限制見 [瀏覽器測試](docs/browser-tests.md)。
+瀏覽器回歸測試：`npx playwright install chromium`，完成 `npm run build` 後執行 `npm run test:e2e`。PR 與 Pages 建置都會自動檢查三種手機尺寸的 21 個 Chromium 案例，失敗會阻擋部署；只使用虛構資料。安裝方式、診斷報告與實機限制見 [瀏覽器測試](docs/browser-tests.md)。
 
 ## 部署與手動授權
 

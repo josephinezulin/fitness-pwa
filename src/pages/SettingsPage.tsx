@@ -11,6 +11,8 @@ export function SettingsPage({
   children,
   onExport,
   onRestore,
+  restoring,
+  onCancelRestore,
   onDemo,
   healthSync,
   timezone,
@@ -24,6 +26,8 @@ export function SettingsPage({
   children: ReactNode;
   onExport: () => void;
   onRestore: (file?: File) => Promise<void>;
+  restoring: boolean;
+  onCancelRestore: () => void;
   onDemo: () => void;
   healthSync: HealthSyncSummary | null;
   timezone?: string;
@@ -53,12 +57,15 @@ export function SettingsPage({
           <Download size={18} />
           {cloud ? "匯出雲端每日摘要 JSON" : "匯出 JSON 備份"}
         </button>
-        <label className="secondary file-label">
+        <label
+          className="secondary file-label"
+          aria-disabled={cloud || restoring}
+        >
           <Upload size={18} />
           還原 JSON 備份
           <input
             type="file"
-            disabled={cloud}
+            disabled={cloud || restoring}
             accept="application/json,.json"
             onChange={(e) => {
               void onRestore(e.target.files?.[0]);
@@ -66,6 +73,18 @@ export function SettingsPage({
             }}
           />
         </label>
+        {restoring && (
+          <div className="notice" role="status">
+            <span>正在讀取並檢查備份…</span>
+            <button
+              type="button"
+              className="secondary"
+              onClick={onCancelRestore}
+            >
+              取消讀取
+            </button>
+          </div>
+        )}
         <p className="tiny muted">
           目前：{workoutCount} 筆運動，{metricCount} 筆健康摘要
         </p>
@@ -98,7 +117,11 @@ export function SettingsPage({
         <p className="guide">
           載入 14 天虛構健康摘要，預覽趨勢與課表。會取代目前資料，請先備份。
         </p>
-        <button className="secondary" disabled={cloud} onClick={onDemo}>
+        <button
+          className="secondary"
+          disabled={cloud || restoring}
+          onClick={onDemo}
+        >
           載入示範資料
         </button>
       </section>

@@ -11,6 +11,8 @@ import {
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { today, type Workout } from "./model";
+import { testInspection } from "./test-fixtures";
+import { readOutbox } from "./outbox";
 const lifecycle = vi.hoisted(() => ({ mounts: 0, unmounts: 0 }));
 vi.mock("./pages/HealthChart", () => ({
   HealthChart: () => <div>健康圖表</div>,
@@ -87,7 +89,90 @@ beforeEach(() => {
     },
   });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+it("does not apply a local backup after switching to a cloud account while its file is loading", async () => {
+  const backup = testInspection().data!;
+  backup.plans![0].title = "帳號A課表";
+  backup.workouts = [
+    {
+      id: "fictional-restore",
+      date: "2026-01-01",
+      type: "home",
+      minutes: 20,
+      calories: 0,
+      note: "虛構待還原資料",
+    },
+  ];
+  let finishRead!: (text: string) => void;
+  const file = new File(["fictional"], "fictional-backup.json", {
+    type: "application/json",
+  });
+  Object.defineProperty(file, "text", {
+    value: () =>
+      new Promise<string>((resolve) => {
+        finishRead = resolve;
+      }),
+  });
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "設定與備份" }));
+  fireEvent.change(screen.getByLabelText("還原 JSON 備份"), {
+    target: { files: [file] },
+  });
+  fireEvent.click(screen.getByText("連線測試帳號A"));
+  await waitFor(() =>
+    expect(
+      (screen.getByRole("button", { name: "記錄運動" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false),
+  );
+  await act(async () => {
+    finishRead(JSON.stringify(backup));
+  });
+  expect(
+    readOutbox(localStorage, {
+      subject: "A",
+      spreadsheetId: "sheet-private-1",
+    }),
+  ).toEqual([]);
+  expect(confirm).not.toHaveBeenCalled();
+  expect(screen.queryByText("已成功還原資料")).toBeNull();
+});
+it("blocks version updates during a backup read and lets the user cancel it", async () => {
+  let finishRead!: (text: string) => void;
+  const file = new File(["fictional"], "fictional-backup.json", {
+    type: "application/json",
+  });
+  Object.defineProperty(file, "text", {
+    value: () =>
+      new Promise<string>((resolve) => {
+        finishRead = resolve;
+      }),
+  });
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "設定與備份" }));
+  const input = screen.getByLabelText("還原 JSON 備份") as HTMLInputElement;
+  fireEvent.change(input, { target: { files: [file] } });
+  expect(input.disabled).toBe(true);
+  expect((screen.getByText("測試更新版本") as HTMLButtonElement).disabled).toBe(
+    true,
+  );
+  expect(screen.getByText("正在讀取並檢查備份…")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "取消讀取" }));
+  expect(input.disabled).toBe(false);
+  expect((screen.getByText("測試更新版本") as HTMLButtonElement).disabled).toBe(
+    false,
+  );
+  await act(async () => {
+    finishRead(JSON.stringify({ version: 1, workouts: [], metrics: [] }));
+  });
+  expect(confirm).not.toHaveBeenCalled();
+  expect(screen.getByText("已取消讀取備份，現有資料未變更。")).toBeTruthy();
+});
 it("repeats a workout only after save, preserving the source and cancelling without writes", () => {
   const original: Workout = {
     id: "source",

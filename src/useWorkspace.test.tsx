@@ -5,7 +5,7 @@ import { useWorkspace } from "./useWorkspace";
 import { testInspection, testSource, TEST_TIME } from "./test-fixtures";
 import { outboxKey, readOutbox } from "./outbox";
 import { SyncConflictError } from "./sheets-write";
-import { snapshotKey } from "./workspace";
+import { snapshotKey, LOCAL_KEY } from "./workspace";
 const mock = vi.hoisted(() => ({ write: vi.fn(), inspect: vi.fn() }));
 vi.mock("./sheets", async (original) => ({
   ...(await original<typeof import("./sheets")>()),
@@ -68,6 +68,51 @@ async function connect(
   await waitFor(() => expect(result.current.canEditCloud).toBe(true));
 }
 describe("cloud workspace lifecycle", () => {
+  it("only applies a local restore to its original unchanged local snapshot", () => {
+    const { result } = renderHook(() => useWorkspace());
+    const first = result.current.prepareLocalRestore();
+    act(() =>
+      result.current.save({ ...result.current.data, workouts: [workout] }),
+    );
+    expect(() =>
+      first.apply({ version: 1, workouts: [], metrics: [] }),
+    ).toThrow(/已變更/);
+    expect(result.current.data.workouts).toEqual([workout]);
+    const second = result.current.prepareLocalRestore();
+    const fromOtherTab = {
+      ...result.current.data,
+      workouts: [{ ...workout, id: "other-tab" }],
+    };
+    localStorage.setItem(LOCAL_KEY, JSON.stringify(fromOtherTab));
+    expect(() =>
+      second.apply({ version: 1, workouts: [], metrics: [] }),
+    ).toThrow(/已變更/);
+    expect(JSON.parse(localStorage.getItem(LOCAL_KEY)!)).toEqual(fromOtherTab);
+  });
+  it("invalidates local restore handles across cloud and back, and never queues them for the cloud", async () => {
+    const { result } = renderHook(() => useWorkspace());
+    const handle = result.current.prepareLocalRestore();
+    await connect(result);
+    expect(() => result.current.prepareLocalRestore()).toThrow(/本機模式/);
+    expect(() =>
+      handle.apply({ version: 1, workouts: [workout], metrics: [] }),
+    ).toThrow(/已變更/);
+    expect(readOutbox(localStorage, identity)).toEqual([]);
+    act(() => result.current.disconnectCloud());
+    expect(() => handle.check()).toThrow(/已變更/);
+  });
+  it("commits a valid current local restore and invalidates its handle on unmount", () => {
+    const { result, unmount } = renderHook(() => useWorkspace());
+    const handle = result.current.prepareLocalRestore();
+    act(() => handle.apply({ version: 1, workouts: [workout], metrics: [] }));
+    expect(result.current.data.workouts).toEqual([workout]);
+    expect(JSON.parse(localStorage.getItem(LOCAL_KEY)!).workouts).toEqual([
+      workout,
+    ]);
+    const pending = result.current.prepareLocalRestore();
+    unmount();
+    expect(() => pending.check()).toThrow(/已變更/);
+  });
   it("keeps health-sync metadata memory-only and clears it across account/cache/local transitions", async () => {
     const { result } = renderHook(() => useWorkspace());
     const source = testSource();

@@ -4,14 +4,15 @@
 
 ## 目前落點
 
-- 階段 0、C、D、E1–E10 程式已合併部署；本人 OAuth 寫入、YouTube、VoiceOver 與 iOS 健康捷徑仍保留實機待驗收，不把 HTTP／DOM／Chrome 測試當作 iPhone 結果。
-- 最新已驗證部署為 PR #17，main `42e6590391f69db58f5aeb25f57ad69f09521953`，PR CI 42356448650、Pages 42356503871 成功。新版資產 HTTP 200，正式站 320／390／844px Chromium 的 63 項長表單檢查通過。E5 趨勢、E6 頭像、E7 卡片、E8 摘要、數值最大高度、E9 再記一次及 E10 表單標題已完成，不要重做。
+- 階段 0、C、D、E1–E11 程式已合併部署；本人 OAuth 寫入、YouTube、VoiceOver 與 iOS 健康捷徑仍保留實機待驗收，不把 HTTP／DOM／Chrome 測試當作 iPhone 結果。
+- 最新已驗證部署為 PR #18，main `23cbe4f33c6b503771a1c6055fd3063f4f1ae7c8`，PR CI 42361038412、Pages 42361180538 成功，兩者均通過 219 項 Vitest、8 項 Python 及 18 個 Playwright 案例。正式首頁、新版 JS／CSS／Service Worker HTTP 200。E5 趨勢、E6 頭像、E7 卡片、E8 摘要、數值最大高度、E9 再記一次及 E10 表單標題已完成，不要重做。
 - 使用者回報偏好原本的曲線外觀，優先恢復健康圖的 monotone 平滑線與原本漸層；連續紀錄不顯示常駐圓點，孤立量測仍有圓點。保留缺值斷線、日曆日期、數值表與鍵盤 Tooltip。完整 208 項 Vitest、8 項 Python、建置及 diff 檢查通過；三種尺寸共 18 項曲線瀏覽器檢查及既有 45 項介面／離線檢查通過。詳見 docs/trend-accessibility.md；本次 PR／CI／Pages 結果以 GitHub 最新記錄為準。
 - E8 接續健康摘要長清單：跟隨圖表 7／30／90 天、全部日期、每批 14 筆、清楚標示四項數值與缺值。換帳號／副本、參考日及圖表範圍重設摘要視窗，圖表本身不重掛；只影響呈現，沒有刪減儲存或備份資料。完整檢查及實際瀏覽器結果見 docs/stage-e-progress.md；PR #14 已完成上述部署。
 - 使用者回報每日數值展開太長、不易收合：本次將每日／每週數值表格限制為最多 320px 或半個小視窗高度，內部捲動、固定欄名，收合開關留在捲動區外。完整 213 項 Vitest、8 項 Python、建置與 diff 檢查通過；三種尺寸的 66 項捲動／收合檢查與既有 45 項介面／離線檢查通過，詳見 docs/trend-accessibility.md。合併與部署結果追加於本次 PR。
 - E9 新增「再記一次」：從目前工作區的運動紀錄帶入類型、分鐘、備註及獨立跑步機分段，開啟今天的新表單；不帶舊 ID、熱量或影片觀看計數，確認儲存後才新增。沿用既有權限、outbox、帳號切換清草稿與課表計算，沒有新增 Sheet 或授權。219 項 Vitest、8 項 Python、建置與 diff 檢查通過，另有 57 項再記錄、66 項清單內捲動及 45 項介面／離線 Chromium 檢查。詳見 docs/stage-e-progress.md，合併與部署結果追加於本次 PR。
 - E10 修正長表單關閉按鈕捲走：標題與 44px 關閉按鈕留在表單捲動區外，只有內容在既有 90dvh 上限內捲動。保留原本焦點循環、Escape、取消與儲存。219 項 Vitest、8 項 Python、建置／diff 檢查及三種尺寸 63 項長表單、57 項再記錄、45 項介面／離線 Chromium 檢查通過，詳見 docs/stage-e-progress.md；本次合併及部署結果追加於 PR。
-- E11 將核心瀏覽器回歸納入 repo 與 PR／Pages build：三種尺寸共 18 案例，測試正式 dist 的 Pages 子路徑、曲線／缺值、清單、50 段表單、再記一次與離線儲存。僅用虛構資料與新 context，固定測試日期，不登入 Google；瀏覽器失敗阻擋部署，失敗診斷保留七天。219 項 Vitest、8 項 Python、正式建置及本機 18 個 Playwright 案例通過，詳見 docs/browser-tests.md；仍須本次實際 GitHub CI／Pages 通過後才視為完成整合。
+- E11 將核心瀏覽器回歸納入 repo 與 PR／Pages build：三種尺寸共 18 案例，測試正式 dist 的 Pages 子路徑、曲線／缺值、清單、50 段表單、再記一次與離線儲存。僅用虛構資料與新 context，固定測試日期，不登入 Google；瀏覽器失敗阻擋部署，失敗診斷保留七天。219 項 Vitest、8 項 Python、正式建置及本機 18 個 Playwright 案例通過，詳見 docs/browser-tests.md；PR #18 的 GitHub CI／Pages 已實際通過，瀏覽器檢查已成為部署門檻。
+- E12 修正非同步 JSON 還原跨工作區的競態：讀檔綁定開始時的本機資料、工作區與影片／偏好；換帳號／副本、資料變更、取消或卸載後忽略舊結果，提交前重查。讀取時有取消按鈕並暫緩 PWA 更新，另修復橫向矮視窗側欄無法捲到設定入口。保留原有一次取代確認，分項儲存失敗會明確回報部分完成；不宣稱跨分頁原子交易。驗證與實機步驟見 docs/stage-e-progress.md；本輪 PR／部署結果追加於 PR。
 - 本輪 E7 補健康同步結果與部署驗收準備，見 docs/health-sync-readiness.md。本環境尚未取得可驗證 /exec 網址或可代辦的 Apps Script 部署連線；只停止該部署步驟，不把 PWA 的 drive.file Token 當作 Script 授權。需要使用者完成 Google 首次授權／部署並只提供 /exec 網址，不提供裝置 Token。這輪沒有部署健康 API、沒有修改私人表。
 
 ## 先前檢查點（歷程）

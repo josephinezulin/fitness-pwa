@@ -307,6 +307,30 @@ export function useWorkspace() {
     [],
   );
 
+  /** A file read must not later replace another workspace or newer local records. */
+  function prepareLocalRestore() {
+    if (current.current)
+      throw Error("還原備份只適用於本機模式，請先切回本機。");
+    const version = epoch.current,
+      base = display.current,
+      raw = localStorage.getItem(LOCAL_KEY);
+    const check = () => {
+      if (
+        version !== epoch.current ||
+        current.current ||
+        display.current !== base ||
+        localStorage.getItem(LOCAL_KEY) !== raw
+      )
+        throw Error("讀取期間工作區或資料已變更，請重新選擇備份。");
+    };
+    return {
+      check,
+      apply(next: Data) {
+        check();
+        save(next);
+      },
+    };
+  }
   function save(next: Data) {
     if (storageError)
       throw Error("裝置儲存發生錯誤，請先匯出備份並處理後重試。");
@@ -513,6 +537,7 @@ export function useWorkspace() {
     cloud,
     storageError,
     save,
+    prepareLocalRestore,
     activateCloud,
     disconnectCloud,
     setGoogleSession,

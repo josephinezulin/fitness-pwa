@@ -84,6 +84,11 @@ aside {
   padding: 35px 24px;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+aside > * {
+  flex-shrink: 0;
 }
 .brand {
   display: flex;
@@ -783,6 +788,10 @@ footer button {
 }
 .file-label input {
   display: none;
+}
+.file-label[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: default;
 }
 .settings-grid {
   display: grid;
