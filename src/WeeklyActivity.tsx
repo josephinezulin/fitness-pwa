@@ -10,6 +10,15 @@ import {
 } from "recharts";
 import { weeklyActivity } from "./exercise";
 import type { Workout } from "./model";
+import {
+  WEEKLY_SERIES as SERIES,
+  weeklyValue,
+  weeklyMissing,
+  trendNumber,
+  trendValue,
+  type WeeklyRow,
+} from "./trends";
+import { TrendData, TrendTooltip } from "./TrendData";
 export function WeeklyGoal({
   minutes,
   goal,
@@ -90,11 +99,6 @@ export function WeeklyGoal({
     </section>
   );
 }
-const SERIES = {
-  minutes: { label: "運動分鐘", unit: "分" },
-  distance: { label: "跑步機距離", unit: "km" },
-  incline: { label: "平均坡度", unit: "%" },
-} as const;
 export function WeeklyActivity({
   workouts,
   reference,
@@ -103,32 +107,53 @@ export function WeeklyActivity({
   reference: string;
 }) {
   const [metric, setMetric] = useState<keyof typeof SERIES>("minutes");
-  const rows = weeklyActivity(workouts, reference),
+  const id = `weekly-${useId().replace(/:/g, "")}`;
+  const rows = weeklyActivity(workouts, reference).map((row) => ({
+      ...row,
+      value: weeklyValue(row, metric),
+    })),
     chosen = SERIES[metric];
+  const current = rows.at(-1)!;
   return (
-    <section className="card weekly-activity">
+    <section className="card weekly-activity" aria-labelledby={`${id}-heading`}>
       <div className="section-head">
         <div>
           <span className="eyebrow">最近 8 週</span>
-          <h2>看見每週的小進步</h2>
+          <h2 id={`${id}-heading`}>看見每週的小進步</h2>
         </div>
       </div>
-      <div className="chips" role="tablist" aria-label="每週運動趨勢">
+      <div className="chips" role="group" aria-label="每週運動趨勢指標">
         {Object.entries(SERIES).map(([key, s]) => (
           <button
             key={key}
-            role="tab"
-            aria-selected={metric === key}
+            className={metric === key ? "selected" : ""}
+            aria-pressed={metric === key}
             onClick={() => setMetric(key as keyof typeof SERIES)}
           >
             {s.label}
           </button>
         ))}
       </div>
+      <p className="trend-summary" id={`${id}-summary`} aria-live="polite">
+        最近 8 週有 {rows.filter((r) => r.value !== null).length} 週
+        {chosen.label}紀錄；本週{" "}
+        <span className="trend-measurement">
+          {trendValue(
+            current.value,
+            chosen.unit,
+            weeklyMissing(current, metric),
+          )}
+        </span>
+        。
+      </p>
       <div className="weekly-chart">
         <ResponsiveContainer width="100%" height={210}>
           <BarChart
+            key={`${metric}:${reference}`}
             data={rows}
+            accessibilityLayer
+            aria-label={`最近8週${chosen.label}趨勢圖`}
+            aria-describedby={`${id}-summary ${id}-help`}
             margin={{ top: 10, right: 5, left: -20, bottom: 0 }}
           >
             <CartesianGrid
@@ -144,19 +169,57 @@ export function WeeklyActivity({
             />
             <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
             <Tooltip
-              labelFormatter={(_, items) =>
-                `週一 ${items[0]?.payload.week || ""}`
-              }
-              formatter={(value) => [`${value} ${chosen.unit}`, chosen.label]}
+              isAnimationActive={false}
+              filterNull={false}
+              content={({ active, payload }) => {
+                const row = payload?.[0]?.payload as
+                  | (WeeklyRow & { value: number | null })
+                  | undefined;
+                return (
+                  <TrendTooltip
+                    active={active}
+                    date={row ? `週一 ${row.week}` : ""}
+                    label={chosen.label}
+                    value={
+                      row
+                        ? trendValue(
+                            row.value,
+                            chosen.unit,
+                            weeklyMissing(row, metric),
+                          )
+                        : "未記錄"
+                    }
+                  />
+                );
+              }}
             />
-            <Bar dataKey={metric} fill="#718d65" radius={[5, 5, 0, 0]} />
+            <Bar
+              dataKey="value"
+              fill="#718d65"
+              radius={[5, 5, 0, 0]}
+              isAnimationActive={false}
+            />
           </BarChart>
         </ResponsiveContainer>
       </div>
-      <p className="tiny muted">
-        以週一分週；距離只統計有分段的跑步機紀錄，平均坡度按時間加權，無分段的週次不補
-        0。
+      <p className="tiny muted" id={`${id}-help`}>
+        以週一分週，僅統計截至 {reference}{" "}
+        的紀錄。未記錄運動的週次留空；距離只計跑步機分段，坡度按時間加權，無分段不補
+        0。 圖表可用左右方向鍵查看，亦可展開每週數值。
       </p>
+      <TrendData
+        summary="查看每週數值"
+        caption={`最近 8 週${chosen.label}（截至 ${reference}）`}
+        dateHeading="週一日期"
+        valueHeading={`${chosen.label}（${chosen.unit}）`}
+        rows={rows.map((row) => ({
+          date: row.week,
+          value:
+            row.value === null
+              ? weeklyMissing(row, metric)
+              : trendNumber(row.value),
+        }))}
+      />
     </section>
   );
 }

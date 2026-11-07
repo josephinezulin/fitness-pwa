@@ -28,6 +28,8 @@ JavaScript actions 使用 node24；上傳 Pages 的 composite action 內部已�
 
 驗收須包括 PR 的完整測試／建置、新 workflow 的 Pages build／deploy 成功，以及正式首頁、JS／CSS／Service Worker HTTP 讀回；本機測試不能證明 GitHub Action runtime 可用。部署後可另讀 annotations 確認舊 Node 20 提示已消失。
 
+已驗證結果：PR #9 合併提交 `ce28d33564cca7460d21b88ba3e6784c97f1742b`，PR CI run 42313922331 與 Pages run 42314061084 成功，包含 186 項 Vitest、6 項 Python 及建置；正式首頁、JS／CSS／SW 讀回 HTTP 200。新工作流程的 annotations 沒有舊 Node 20 runtime 提示，保留 GitHub 的 ubuntu-latest image 遷移資訊。
+
 ## Recharts 升級調研（尚未升級）
 
 本次 npm 官方發布資訊顯示 latest=3.10.1，要求 Node≥18，peer React／React DOM 包含 19，另有 react-is peer。官方 3.0 migration guide 要求 TypeScript 5.x、React≥16.8，並調整內部 state、Tooltip 型別、元素順序及預設開啟 accessibilityLayer。
@@ -41,3 +43,5 @@ JavaScript actions 使用 node24；上傳 Pages 的 composite action 內部已�
 3. 加入實際圖表 DOM／鍵盤測試、健康缺值及八週資料回歸，確認正式建置與 PWA precache，再於 iPhone 檢查觸控 Tooltip、縮放、橫向與 VoiceOver。無實機結果時明確保留待驗收。
 
 來源：https://github.com/recharts/recharts/wiki/3.0-migration-guide 。另執行 `npm view recharts@latest version engines peerDependencies --json` 查發布資訊，未修改 package.json／lockfile。
+
+E5 已先在現有 Recharts 2.15.4 補上文字／表格替代、缺值及實際 SVG／鍵盤 DOM 回歸，見 [趨勢閱讀與可及性](trend-accessibility.md)。主要版本升級仍應獨立處理，避免把套件更新與數值語意修正混在一起。

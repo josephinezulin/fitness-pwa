@@ -198,6 +198,8 @@ export function weeklyActivity(
     return {
       week: days[0],
       label: days[0].slice(5).replace("-", "/"),
+      workoutCount: rows.length,
+      treadmillCount: rows.filter((w) => w.segments?.length).length,
       minutes: Math.round(rows.reduce((n, w) => n + w.minutes, 0) * 10) / 10,
       distance: treadmill.distanceKm,
       incline: segments.length ? treadmill.avgIncline : null,

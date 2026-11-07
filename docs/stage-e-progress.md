@@ -51,11 +51,16 @@ E2／E3 的 PR #8 已合併為 `ddd1f6c9b00fe20bd061183cc47adb2ec2ed56c5`；PR C
 4. 課表表單未儲存時切到總覽再返回，保留內容；切另一帳號或副本則不帶入舊草稿。開啟表單時更新版本應被保護。
 5. iPhone Safari／主畫面 PWA 檢查 320–390px、橫向、鍵盤與文字縮放；試播課表 YouTube、測試失敗外連備援。尚未實機執行，不能稱為通過。
 
+## E4／E5：維護與趨勢閱讀
+
+E4 的 PR #9 已合併並部署為 `ce28d33564cca7460d21b88ba3e6784c97f1742b`，PR CI 42313922331、Pages 42314061084 成功；正式資產讀回 HTTP 200，舊 Actions Node 20 runtime 提示已消失。詳見 maintenance.md，不需重做此更新。
+
+E5 接續提供完整健康曆日、缺值斷線、單筆資料點、每日／每週數值表與鍵盤 Tooltip。保留 Recharts 2.15.4、既有健康唯讀及同步架構。本機完整 196 項 Vitest、6 項 Python、TypeScript／Vite／Service Worker 與 diff 檢查通過；實作、官方依據及實機待驗收見 [趨勢閱讀與可及性](trend-accessibility.md)。PR／上線結果接續查 GitHub，不把 DOM 測試當作 iPhone 結果。
+
 ## 下一個可交付部分
 
 - 若有使用者實機回報，先修正再擴充；Apps Script 部署與 iOS 健康捷徑尚待本人授權與手機操作，不假造 Mac 或捷徑控制能力。
-- 已完成 Recharts 官方升級與可及性初步調研，見 docs/maintenance.md；尚未改圖表套件。可接續以獨立 PR 改善趨勢的文字／表格替代與缺值語意，再評估主要版本更新。
-- 實際 CI 出現的舊 Actions runtime 提示已另行更新工作流程，版本、SHA 與驗收要求亦見 maintenance.md；接續先確認其 PR／Pages 結果。
+- 已完成趨勢文字／表格替代與缺值語意，接續先確認本輪 PR／Pages 結果，再改善健康摘要長清單閱讀。Recharts 主要版本遷移仍待獨立評估及實機證據。
 - 保留「逐筆」課表同步的限制：跨裝置同時修改，或複雜離線時段對調，可能需要處理衝突；未實作多筆課表的條件交易。
 
 回來先檢查 PR／部署與使用者回報，保護其他工作階段的修改。

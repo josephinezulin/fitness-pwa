@@ -2,7 +2,13 @@
 
 使用者授權持續開發、測試、修正與依交接文件部署；只有真正需要本人登入、帳號設定或 iPhone 實機操作時才回報待辦。不要繞過平台核准、用量限制或降低健康資料安全要求。
 
-## 最新檢查點
+## 目前落點
+
+- 階段 0、C、D、E1–E4 程式已合併部署；本人 OAuth 寫入、YouTube、VoiceOver 與 iOS 健康捷徑仍保留實機待驗收，不把 HTTP／DOM 測試當作實機結果。
+- 最新已驗證部署為 PR #9，main `ce28d33564cca7460d21b88ba3e6784c97f1742b`，Pages run 42314061084 成功。Actions 原生 Node 24、固定 SHA 及既有檢查已實際運作，舊 Node 20 runtime 提示已消失；不用再重做這項更新。
+- 本輪接續 E5：健康日曆缺值斷線、數值清單及圖表鍵盤操作；詳見 `docs/trend-accessibility.md`。接續前先查本輪 PR／部署結果，不重做自訂課表或重建 Google 授權。
+
+## 先前檢查點（歷程）
 
 - 已讀 `docs/handoff-codex.md`，從階段 0 開始。
 - 基準：98 項 Vitest、6 項 Python 測試通過，正式建置成功。
@@ -57,4 +63,5 @@
 - E1 的 PR #7 已合併與部署，main `3542d7adbcf90ce73f0407550e0b3b11405d8c31`，Pages run 42306449542 成功；已 HTTP 讀回新版資產及縮圖 Service Worker。
 - E2／E3 已完成頁面拆分、自訂課表投影及新增／編輯／停用、私人雲端 outbox／衝突、空課表與舊備份相容，以及帳號切換草稿保護。186 項 Vitest、6 項 Python、正式建置與 diff 檢查通過；詳見 docs/stage-e-progress.md。未修改使用者健康資料或實際課表，沒有新增 Google 授權或欄位。
 - PR #8 已合併為 `ddd1f6c9b00fe20bd061183cc47adb2ec2ed56c5`。PR CI run 42313396460、Pages run 42313475934 成功；正式首頁、新 JS／CSS／Service Worker HTTP 200，JS 含課表管理及衝突規則，SW 已預快取新資產並保留縮圖邊界。
-- 接續維護：依實際部署的 Node 20 runtime 提示，已更新五個官方 Actions 至 Node 24 相容版本並固定 SHA，保留應用 Node 22、權限及檢查流程；以該修改的 PR CI 與 main Pages 最新 run 驗證後再視為完成。官方 release／相容性與 Recharts 3 調研見 docs/maintenance.md，圖表套件尚未升級。回來先查最新 PR／部署，避免重複已完成的自訂課表。
+- E4 的 PR #9 已合併並部署：main `ce28d33564cca7460d21b88ba3e6784c97f1742b`，PR CI run 42313922331、Pages run 42314061084 成功，正式首頁／JS／CSS／SW HTTP 200，新 annotations 已無舊 Node 20 runtime 提示。官方版本與 Recharts 3 調研見 docs/maintenance.md，圖表套件尚未升級。
+- E5 已補健康完整日曆與缺值斷線、單筆資料點、每日／每週數值表、紀錄摘要、鍵盤 Tooltip、篩選狀態及觸控目標。196 項 Vitest、6 項 Python、正式建置與 diff 檢查通過；另以實際 Chromium／Playwright 在 320、390px 直向及 844px 橫向做 45 項檢查通過，含無溢位與離線重載。這不是 Safari／VoiceOver 或 OAuth 實機驗收，也尚未加入瀏覽器 CI。完整結果與待辦見 docs/trend-accessibility.md，PR／部署依 GitHub 最新結果確認。
