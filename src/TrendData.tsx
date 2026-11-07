@@ -15,25 +15,32 @@ export function TrendData({
   return (
     <details className="trend-data">
       <summary>{summary}</summary>
-      <table>
-        <caption>{caption}</caption>
-        <thead>
-          <tr>
-            <th scope="col">{dateHeading}</th>
-            <th scope="col">{valueHeading}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {[...rows].reverse().map((row) => (
-            <tr key={row.date}>
-              <th scope="row">
-                <time dateTime={row.date}>{row.date}</time>
-              </th>
-              <td>{row.value}</td>
+      <div
+        className="trend-data-scroll"
+        role="region"
+        aria-label={`${caption}，可捲動數值清單`}
+        tabIndex={0}
+      >
+        <table>
+          <caption>{caption}</caption>
+          <thead>
+            <tr>
+              <th scope="col">{dateHeading}</th>
+              <th scope="col">{valueHeading}</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {[...rows].reverse().map((row) => (
+              <tr key={row.date}>
+                <th scope="row">
+                  <time dateTime={row.date}>{row.date}</time>
+                </th>
+                <td>{row.value}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </details>
   );
 }
