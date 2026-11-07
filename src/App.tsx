@@ -50,6 +50,7 @@ import { CloudPanel, type CloudReadState } from "./CloudPanel";
 import { PwaUpdate } from "./PwaUpdate";
 import { calendarDateInZone } from "./calendar";
 import { useWorkspace } from "./useWorkspace";
+import { AccountMenu } from "./AccountMenu";
 export function App() {
   const workspace = useWorkspace();
   const data = workspace.data;
@@ -293,10 +294,20 @@ export function App() {
             我的健康日誌 <ChevronRight size={13} /> {page}
           </div>
           <div className="header-right">
-            <span className="device-status">
-              {workspace.cloud ? "私人雲端" : online ? "本機模式" : "離線模式"}
-            </span>
-            <div className="avatar">我</div>
+            <AccountMenu
+              cloud={workspace.cloud}
+              online={online}
+              readBusy={cloudReadState.busy}
+              syncBusy={workspace.syncBusy}
+              pendingCount={workspace.pending.length}
+              issue={!!workspace.syncError || !!cloudReadState.error}
+              contextKey={`${preferenceKey(workspace.cloud)}:${page}:${modal || ""}`}
+              onRefresh={() =>
+                window.dispatchEvent(new Event("daily-movement-refresh"))
+              }
+              onSettings={() => setPage("設定與備份")}
+              onLocal={workspace.disconnectCloud}
+            />
           </div>
         </header>
         <div className="content">
@@ -330,31 +341,6 @@ export function App() {
           {workspace.storageError && (
             <div className="notice" role="status">
               {workspace.storageError}
-            </div>
-          )}
-          {workspace.cloud && (
-            <div className="notice">
-              <span>
-                私人雲端：{workspace.cloud.title} · {workspace.cloud.timezone}
-                。健康摘要由 Apple
-                健康同步；運動、課表與影片可在這裡記錄。讀取時間：
-                {new Date(workspace.cloud.checkedAt).toLocaleString("zh-TW", {
-                  timeZone: "Asia/Taipei",
-                })}
-              </span>
-              <div className="cloud-toolbar">
-                <button
-                  disabled={
-                    cloudReadState.busy || workspace.syncBusy || !online
-                  }
-                  onClick={() =>
-                    window.dispatchEvent(new Event("daily-movement-refresh"))
-                  }
-                >
-                  {cloudReadState.busy ? "更新中…" : "更新資料"}
-                </button>
-                <button onClick={workspace.disconnectCloud}>切回本機</button>
-              </div>
             </div>
           )}
           {workspace.cloud &&

@@ -98,6 +98,18 @@ it("keeps Google mounted across pages, preserves a navigation draft, and clears 
         .disabled,
     ).toBe(false),
   );
+  fireEvent.click(screen.getByRole("button", { name: "總覽" }));
+  expect(screen.queryByText(/私人雲端：/)).toBeNull();
+  expect(screen.queryByText("虛構表A")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "帳號與同步設定" }));
+  expect(screen.getByText("虛構表A")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "管理 Google 連線" }));
+  expect(screen.getByRole("heading", { name: "設定與備份" })).toBeTruthy();
+  expect(lifecycle.mounts).toBe(1);
+  fireEvent.click(screen.getByRole("button", { name: "記錄運動" }));
+  fireEvent.click(screen.getByRole("button", { name: "儲存紀錄" }));
+  expect(screen.getByText("1 筆修改保留在此裝置")).toBeTruthy();
+  expect(screen.queryByRole("region", { name: "帳號與同步" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "本週課表" }));
   fireEvent.click(screen.getByLabelText("編輯帳號A課表"));
   fireEvent.change(screen.getByLabelText("課表名稱"), {
