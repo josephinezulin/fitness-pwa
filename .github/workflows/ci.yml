@@ -10,6 +10,7 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -22,3 +23,18 @@ jobs:
       - run: npm test
       - run: python3 -m unittest discover -s scripts -p 'test_*.py'
       - run: npm run build
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Test mobile browser flows
+        id: browser_tests
+        run: npm run test:e2e
+      - name: Keep failed browser diagnostics
+        if: ${{ failure() && steps.browser_tests.outcome == 'failure' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7, Node 24
+        with:
+          name: browser-failure-pr-${{ github.run_attempt }}
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7

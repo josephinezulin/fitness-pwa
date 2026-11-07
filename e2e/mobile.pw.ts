@@ -1,0 +1,248 @@
+import {
+  test,
+  expect,
+  TODAY,
+  fixtureData,
+  sourceWorkout,
+  longWorkout,
+  workoutRow,
+  readData,
+  expectNoOverflow,
+  reloadOffline,
+} from "./fixtures";
+
+test("平滑曲線、缺值及數值清單保留真實零", async ({ page }) => {
+  await page.goto("./");
+  await page.getByRole("button", { name: "健康趨勢", exact: true }).click();
+  await page.getByRole("combobox", { name: "趨勢時間範圍" }).selectOption("7");
+  const chart = page.getByRole("application");
+  await expect(chart.locator(".recharts-area-curve")).toHaveAttribute("d", /C/);
+  await expect(chart.locator(".recharts-area-dot")).toHaveCount(0);
+  await page.getByRole("button", { name: "步數", exact: true }).click();
+  await expect
+    .poll(
+      async () =>
+        (await chart.locator(".recharts-area-curve").getAttribute("d"))?.match(
+          /M/g,
+        )?.length,
+    )
+    .toBe(2);
+  await expect(chart.locator(".recharts-area-dot")).toHaveCount(1);
+  await page.mouse.move(2, 2);
+  await chart.focus();
+  await expect(page.locator(".chart .trend-tooltip")).toContainText("0 步");
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator(".chart .trend-tooltip")).toContainText("未記錄");
+  await page.getByText("查看每日數值", { exact: true }).click();
+  const table = page.getByRole("table");
+  await expect(table.getByRole("row")).toHaveCount(8);
+  await expect(
+    table.getByRole("row", { name: "2026-11-01 0", exact: true }),
+  ).toBeAttached();
+  await expect(
+    table.getByRole("row", { name: "2026-11-02 未記錄", exact: true }),
+  ).toBeAttached();
+  await expectNoOverflow(page);
+});
+
+test("每日與每週數值限制高度，捲到底仍可直接收合", async ({ page }) => {
+  await page.goto("./");
+  await page.getByRole("button", { name: "健康趨勢", exact: true }).click();
+  await page.getByRole("combobox", { name: "趨勢時間範圍" }).selectOption("90");
+  const verify = async (label: string, rowCount: number) => {
+    const summary = page.getByText(label, { exact: true });
+    const details = summary.locator("..");
+    await summary.click();
+    const region = details.getByRole("region", { name: /可捲動數值清單/ });
+    await region.scrollIntoViewIfNeeded();
+    const size = await region.evaluate((el) => ({
+      height: el.clientHeight,
+      total: el.scrollHeight,
+    }));
+    expect(size.height).toBeLessThanOrEqual(
+      Math.min(320, page.viewportSize()!.height / 2) + 1,
+    );
+    expect(size.total).toBeGreaterThan(size.height);
+    await expect(details.getByRole("row")).toHaveCount(rowCount);
+    const top = (await summary.boundingBox())!.y;
+    const documentY = await page.evaluate(() => scrollY);
+    await region.focus();
+    await page.keyboard.press("End");
+    await expect
+      .poll(() =>
+        region.evaluate(
+          (el) => el.scrollHeight - el.scrollTop - el.clientHeight,
+        ),
+      )
+      .toBeLessThanOrEqual(2);
+    expect(await page.evaluate(() => scrollY)).toBe(documentY);
+    const after = (await summary.boundingBox())!;
+    expect(Math.abs(after.y - top)).toBeLessThan(1);
+    expect(after.y).toBeGreaterThanOrEqual(0);
+    expect(after.y + after.height).toBeLessThanOrEqual(
+      page.viewportSize()!.height,
+    );
+    expect(
+      Math.abs(
+        (await details.locator("thead").boundingBox())!.y -
+          (await region.boundingBox())!.y,
+      ),
+    ).toBeLessThanOrEqual(2);
+    await summary.click();
+    await expect(details).not.toHaveAttribute("open");
+    expect((await details.boundingBox())!.height).toBeLessThanOrEqual(50);
+  };
+  await verify("查看每日數值", 91);
+  await page.getByRole("button", { name: "運動紀錄", exact: true }).click();
+  await verify("查看每週數值", 9);
+  await expectNoOverflow(page);
+});
+
+test("健康摘要分批閱讀，切換範圍後重設視窗", async ({ page }) => {
+  await page.goto("./");
+  await page.getByRole("button", { name: "健康趨勢", exact: true }).click();
+  const history = page.getByRole("region", { name: "健康摘要", exact: true });
+  const entries = history.getByRole("listitem");
+  await expect(entries).toHaveCount(14);
+  await expect(history.getByRole("status")).toContainText("14 / 30 筆");
+  await history.getByRole("checkbox", { name: "全部日期" }).check();
+  await expect(history.getByRole("status")).toContainText("14 / 90 筆");
+  await history.getByRole("button", { name: "再顯示 14 筆" }).click();
+  await expect(entries).toHaveCount(28);
+  await expect(entries.nth(14).getByRole("heading")).toBeFocused();
+  await page.getByRole("combobox", { name: "趨勢時間範圍" }).selectOption("7");
+  await expect(entries).toHaveCount(7);
+  await expect(history.getByRole("checkbox")).not.toBeChecked();
+  expect((await readData(page)).metrics).toHaveLength(90);
+  await expectNoOverflow(page);
+});
+
+test("50 段長表單關閉按鈕可見，焦點與取消正常", async ({ page }) => {
+  await page.goto("./");
+  const opener = workoutRow(page, longWorkout.note).getByRole("button", {
+    name: "編輯運動",
+    exact: true,
+  });
+  await opener.click();
+  const dialog = page.getByRole("dialog");
+  const close = dialog.getByRole("button", { name: "關閉", exact: true });
+  const form = dialog.locator("form");
+  await expect(close).toBeFocused();
+  await expect(dialog.getByLabel(/^第 \d+ 段速度$/)).toHaveCount(50);
+  const headerTop = (await dialog.locator(".dialog-head").boundingBox())!.y;
+  await form.evaluate((el) => {
+    el.scrollTop = el.scrollHeight;
+  });
+  expect(await form.evaluate((el) => el.scrollTop)).toBeGreaterThan(1000);
+  expect((await dialog.locator(".dialog-head").boundingBox())!.y).toBe(
+    headerTop,
+  );
+  const bounds = (await close.boundingBox())!;
+  expect(bounds.width).toBeGreaterThanOrEqual(44);
+  expect(bounds.height).toBeGreaterThanOrEqual(44);
+  await expect(close).toBeInViewport({ ratio: 1 });
+  expect(
+    await close.evaluate((el) => {
+      const b = el.getBoundingClientRect();
+      return el.contains(
+        document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2),
+      );
+    }),
+  ).toBe(true);
+  await dialog
+    .getByRole("textbox", { name: "備註", exact: true })
+    .fill("虛構待取消的備註");
+  await close.click();
+  await expect(opener).toBeFocused();
+  expect((await readData(page)).workouts).toEqual(fixtureData.workouts);
+  await opener.click();
+  await page.keyboard.press("Shift+Tab");
+  await expect(dialog.getByRole("button", { name: /儲存紀錄/ })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(close).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  expect((await readData(page)).workouts).toEqual(fixtureData.workouts);
+  await expectNoOverflow(page);
+});
+
+test("再記一次保留原紀錄，離線重載仍可新增", async ({ page }) => {
+  await page.goto("./");
+  const source = workoutRow(page, sourceWorkout.note);
+  await source.getByRole("button", { name: /再記一次/ }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByLabel("日期", { exact: true })).toHaveValue(TODAY);
+  await expect(dialog.getByLabel("消耗熱量（kcal）")).toHaveValue("0");
+  await expect(dialog.getByLabel("第 2 段坡度", { exact: true })).toHaveValue(
+    "3",
+  );
+  await dialog.getByLabel("第 1 段速度", { exact: true }).fill("4.5");
+  await dialog.getByRole("button", { name: "關閉", exact: true }).click();
+  expect((await readData(page)).workouts).toEqual(fixtureData.workouts);
+  await source.getByRole("button", { name: /再記一次/ }).click();
+  await expect(dialog.getByLabel("第 1 段速度", { exact: true })).toHaveValue(
+    "4",
+  );
+  await dialog.getByLabel("第 1 段速度", { exact: true }).fill("4.5");
+  await dialog.getByLabel("消耗熱量（kcal）").fill("150");
+  await dialog.getByRole("button", { name: /儲存紀錄/ }).click();
+  await expect(dialog).toHaveCount(0);
+  let saved = await readData(page);
+  const fresh = saved.workouts.find(
+    (w) => !fixtureData.workouts.some((source) => source.id === w.id),
+  )!;
+  expect(saved.workouts).toHaveLength(5);
+  expect(fresh).toMatchObject({
+    date: TODAY,
+    calories: 150,
+    segments: [
+      { minutes: 10, speed: 4.5, incline: 0 },
+      { minutes: 20, speed: 5, incline: 3 },
+    ],
+  });
+  expect(saved.workouts.find((w) => w.id === sourceWorkout.id)).toEqual(
+    sourceWorkout,
+  );
+  await reloadOffline(page);
+  await page.getByRole("button", { name: "運動紀錄", exact: true }).click();
+  await workoutRow(page, "虛構戶外健走")
+    .getByRole("button", { name: /再記一次/ })
+    .click();
+  await expect(dialog.getByRole("checkbox")).not.toBeChecked();
+  await expect(dialog.getByLabel("分鐘數", { exact: true })).toHaveValue("25");
+  await dialog.getByRole("button", { name: /儲存紀錄/ }).click();
+  saved = await readData(page);
+  expect(saved.workouts).toHaveLength(6);
+  for (const original of fixtureData.workouts)
+    expect(saved.workouts.find((w) => w.id === original.id)).toEqual(original);
+  expect(new Set(saved.workouts.map((w) => w.id)).size).toBe(6);
+  await expectNoOverflow(page);
+});
+
+test("健康表單欄位字級與寬度適合手機，零步可儲存", async ({ page }) => {
+  await page.goto("./");
+  await page.getByRole("button", { name: "健康趨勢", exact: true }).click();
+  await page.getByRole("button", { name: "新增健康數據", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "記錄健康數據" });
+  const date = dialog.getByLabel("日期", { exact: true });
+  await expect(date).toHaveValue(TODAY);
+  expect(
+    await date.evaluate((el) => parseFloat(getComputedStyle(el).fontSize)),
+  ).toBeGreaterThanOrEqual(16);
+  const bounds = (await date.boundingBox())!;
+  expect(bounds.x).toBeGreaterThanOrEqual(0);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(
+    page.viewportSize()!.width + 1,
+  );
+  await dialog.getByLabel("體重（kg）", { exact: true }).fill("62");
+  await dialog.getByLabel("每日步數", { exact: true }).fill("0");
+  await dialog.getByRole("button", { name: /儲存紀錄/ }).click();
+  await expect(dialog).toHaveCount(0);
+  const data = await readData(page);
+  expect(data.metrics).toHaveLength(90);
+  expect(data.metrics.find((metric) => metric.date === TODAY)).toMatchObject({
+    weight: 62,
+    steps: 0,
+  });
+  await expectNoOverflow(page);
+});
