@@ -57,6 +57,16 @@ E4 的 PR #9 已合併並部署為 `ce28d33564cca7460d21b88ba3e6784c97f1742b`，
 
 E5 接續提供完整健康曆日、缺值斷線、單筆資料點、每日／每週數值表與鍵盤 Tooltip。保留 Recharts 2.15.4、既有健康唯讀及同步架構。本機完整 196 項 Vitest、6 項 Python、TypeScript／Vite／Service Worker 與 diff 檢查通過；實作、官方依據及實機待驗收見 [趨勢閱讀與可及性](trend-accessibility.md)。PR／上線結果接續查 GitHub，不把 DOM 測試當作 iPhone 結果。
 
+## E6：帳號資訊收進頭像
+
+依使用者要求移除頁面上方的私人雲端長資訊列與重複模式文字。右上「我」改為 44px 頭像按鈕，展開後才顯示私人試算表名稱、時區、最後讀取時間、更新資料、管理 Google 連線及切回本機。切回本機保留原本的語意，不是 Google 登出；登入／選檔／登出仍由持續掛載的 CloudPanel 處理。
+
+面板採原生按鈕 disclosure（aria-expanded／controls），不套用需要完整方向鍵選單模式的 menu role。Escape 關閉並回到頭像、點外部／Tab 離開／換頁／開表單／換帳號或檔案即收起，舊頁返回也不重開私人資訊。更新資料於離線／讀取／寫入中停用；待同步與同步／讀取失敗提示仍顯示在內容區，不藏掉需要處理的狀態。未移動 Token、登入生命週期、API 或 outbox。
+
+完整 199 項 Vitest（30 檔）、6 項 Python、TypeScript／Vite／Service Worker 建置及 diff 檢查通過。新增測試覆蓋私人資訊預設收合、更新限制、切回本機、Escape／外部／Tab／換帳號與頁面，並在 App 整合測試確認 CloudPanel 不卸載及待同步提醒不需打開頭像就看得到。
+
+另以 Chromium 156／Playwright 在 320×852、390×844、844×390 做 33 項頭像檢查：正式 dist 的本機面板、連線設定導覽，及只使用虛構 CloudIdentity 的獨立元件 fixture（長標題／時區／窄螢幕與橫向／焦點離開／外點）。沒有真實 Google 授權或 Sheets 呼叫。查看 320px 面板截圖，無水平溢位；既有 45 項趨勢／表單／離線 smoke check 也通過。工具、fixture、報告與截圖在 /tmp/fitness-avatar-qa，沒有放進 repo，且未加入瀏覽器 CI。仍需 iPhone Safari／VoiceOver 實機檢查。
+
 ## 下一個可交付部分
 
 - 若有使用者實機回報，先修正再擴充；Apps Script 部署與 iOS 健康捷徑尚待本人授權與手機操作，不假造 Mac 或捷徑控制能力。

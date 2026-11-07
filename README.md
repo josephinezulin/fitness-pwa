@@ -58,7 +58,9 @@ npm run build
 
 捷徑上傳端程式已備妥但預設關閉，需使用者部署後實機驗收：[Apps Script 上傳 API 設定](docs/health-ingest-setup.md)。同帳號選擇私人表後，下次登入會自動重新讀取；PWA 可同步運動與影片，健康原始資料不由畫面摘要覆蓋。
 
-PWA 新版會顯示更新提示，表單開啟時先保留草稿；雲端摘要列提供手動更新與失敗狀態。測試包含 TypeScript / DOM 介面測試（`npm test`）及未授權端點檢查工具測試（`python3 -m unittest discover -s scripts -p 'test_*.py'`）。
+PWA 新版會顯示更新提示，表單開啟時先保留草稿；頭像提供手動更新，失敗狀態仍會提醒。測試包含 TypeScript / DOM 介面測試（`npm test`）及未授權端點檢查工具測試（`python3 -m unittest discover -s scripts -p 'test_*.py'`）。
+
+右上角頭像可查看綁定的私人試算表、最後讀取時間及更新資料；「管理 Google 連線」進入設定。平常不顯示長帳號資訊列，待同步修改與失敗仍會提醒。
 
 ## 運動紀錄與影片庫
 
