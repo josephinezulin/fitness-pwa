@@ -57,6 +57,32 @@ afterEach(() => {
 });
 
 describe("backup file lifecycle", () => {
+  it("uses a bound recovery target with its warning and the existing single confirmation", async () => {
+    const { result, options, target } = setup();
+    const recovery = {
+      check: vi.fn(),
+      apply: vi.fn(),
+      warning: "虛構修復警語：原始檔案已另存",
+    };
+    const prepare = vi.fn(() => recovery);
+    const file = pendingFile();
+    let operation!: Promise<void>;
+    act(() => {
+      operation = result.current.restore(file.file, prepare);
+    });
+    await act(async () => {
+      file.resolve(JSON.stringify(backup()));
+      await operation;
+    });
+    expect(prepare).toHaveBeenCalledOnce();
+    expect(options.prepare).not.toHaveBeenCalled();
+    expect(target.apply).not.toHaveBeenCalled();
+    expect(recovery.apply).toHaveBeenCalledOnce();
+    expect(window.confirm).toHaveBeenCalledOnce();
+    expect(window.confirm).toHaveBeenCalledWith(
+      expect.stringContaining(recovery.warning),
+    );
+  });
   it("checks a valid backup, confirms once and restores data, library and preferences", async () => {
     const { result, target, options } = setup();
     const file = pendingFile();

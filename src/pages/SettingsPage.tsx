@@ -1,12 +1,17 @@
-import type { ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Download, Upload } from "lucide-react";
 import { HealthSyncCard } from "../HealthSyncCard";
 import type { HealthSyncSummary } from "../health-sync-status";
+import type { LocalRecovery } from "../workspace";
 /** Always mounted: hiding this page must not reset the Google session. */
 export function SettingsPage({
   visible,
   cloud,
   localWritable,
+  localRecovery,
+  recoveryBlocked,
+  onExportOriginal,
+  onRepair,
   workoutCount,
   metricCount,
   children,
@@ -23,6 +28,10 @@ export function SettingsPage({
   visible: boolean;
   cloud: boolean;
   localWritable: boolean;
+  localRecovery: LocalRecovery | null;
+  recoveryBlocked: boolean;
+  onExportOriginal: (source: LocalRecovery) => boolean;
+  onRepair: (file: File | undefined, source: LocalRecovery) => Promise<void>;
   workoutCount: number;
   metricCount: number;
   children: ReactNode;
@@ -90,6 +99,14 @@ export function SettingsPage({
         <p className="tiny muted">
           目前：{workoutCount} 筆運動，{metricCount} 筆健康摘要
         </p>
+        {!cloud && localRecovery && (
+          <LocalRecoveryPanel
+            source={localRecovery}
+            blocked={recoveryBlocked || restoring}
+            onExport={onExportOriginal}
+            onRestore={onRepair}
+          />
+        )}
       </section>
       <section className="card">
         <h2>加入 iPhone 主畫面</h2>
@@ -127,6 +144,83 @@ export function SettingsPage({
           載入示範資料
         </button>
       </section>
+    </div>
+  );
+}
+
+function LocalRecoveryPanel({
+  source,
+  blocked,
+  onExport,
+  onRestore,
+}: {
+  source: LocalRecovery;
+  blocked: boolean;
+  onExport: (source: LocalRecovery) => boolean;
+  onRestore: (file: File | undefined, source: LocalRecovery) => Promise<void>;
+}) {
+  const [downloadedFor, setDownloadedFor] = useState<LocalRecovery | null>(
+    null,
+  );
+  const [acknowledgedFor, setAcknowledgedFor] = useState<LocalRecovery | null>(
+    null,
+  );
+  const downloaded = downloadedFor === source;
+  const ready = downloaded && acknowledgedFor === source && !blocked;
+  const fileInput = useRef<HTMLInputElement>(null);
+  return (
+    <div className="notice local-recovery">
+      <h3>以備份修復本機資料</h3>
+      <p>
+        先另存目前無法讀取的原始內容，再選擇之前有效的 JSON
+        備份。選檔後會請你確認取代。
+      </p>
+      <button
+        className="secondary"
+        disabled={blocked}
+        onClick={() => {
+          if (!blocked && onExport(source)) setDownloadedFor(source);
+        }}
+      >
+        <Download size={18} />
+        下載待修復原始檔案
+      </button>
+      <p className="tiny">
+        下載按鈕只會提出下載要求，請至「檔案」確認已保存。原始檔案含完整儲存內容，請私下保管；它不是可直接還原的備份。
+      </p>
+      <label className="recovery-confirm">
+        <input
+          type="checkbox"
+          disabled={!downloaded || blocked}
+          checked={acknowledgedFor === source}
+          onChange={(event) =>
+            setAcknowledgedFor(event.target.checked ? source : null)
+          }
+        />
+        我已確認原始檔案保存在自己的裝置
+      </label>
+      <button
+        type="button"
+        className="secondary"
+        disabled={!ready}
+        onClick={() => fileInput.current?.click()}
+      >
+        <Upload size={18} />
+        選擇有效備份來修復
+      </button>
+      <input
+        ref={fileInput}
+        hidden
+        aria-label="選擇有效備份來修復"
+        type="file"
+        accept="application/json,.json"
+        disabled={!ready}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (ready) void onRestore(file, source);
+        }}
+      />
     </div>
   );
 }

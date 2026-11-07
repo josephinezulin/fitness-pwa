@@ -1,5 +1,7 @@
 import { empty, validate, type Data } from "./model";
 export const LOCAL_KEY = "daily-movement-v1";
+/** Memory-only identity for a specific unreadable local payload. */
+export type LocalRecovery = { readonly raw: string };
 export type CloudIdentity = {
   subject: string;
   spreadsheetId: string;

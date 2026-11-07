@@ -299,6 +299,104 @@ test("JSON 備份可下載及還原，取消與壞檔保留原資料", async ({ 
   await expectNoOverflow(page);
 });
 
+test("本機內容損壞可先另存原始檔案，再用有效備份修復並繼續記錄", async ({
+  page,
+}) => {
+  await page.goto("./");
+  const raw = "{虛構不可解讀內容 \ud800";
+  await page.evaluate(({ key, raw }) => localStorage.setItem(key, raw), {
+    key: STORAGE_KEY,
+    raw,
+  });
+  await page.reload();
+  await page.getByRole("button", { name: "設定與備份", exact: true }).click();
+  const input = page.getByLabel("選擇有效備份來修復", { exact: true });
+  const choose = page.getByRole("button", {
+    name: "選擇有效備份來修復",
+    exact: true,
+  });
+  const acknowledgement = page.getByRole("checkbox", {
+    name: "我已確認原始檔案保存在自己的裝置",
+  });
+  await expect(input).toBeDisabled();
+  await expect(choose).toBeDisabled();
+  await expect(acknowledgement).toBeDisabled();
+  const downloadReady = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "下載待修復原始檔案", exact: true })
+    .click();
+  const download = await downloadReady;
+  expect(download.suggestedFilename()).toBe(
+    `日常動作-待修復原始內容-${TODAY}.json`,
+  );
+  const path = (await download.path())!;
+  expect(JSON.parse(await readFile(path, "utf8"))).toEqual({
+    format: "daily-movement-unreadable-local-v1",
+    raw,
+  });
+  await acknowledgement.check();
+  await expect(choose).toBeEnabled();
+  expect((await choose.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  expect(
+    (await acknowledgement.locator("..").boundingBox())!.height,
+  ).toBeGreaterThanOrEqual(44);
+  await expectNoOverflow(page);
+  let accept = false,
+    confirmations = 0;
+  page.on("dialog", async (dialog) => {
+    confirmations++;
+    expect(dialog.message()).toContain("無法解讀的本機原始內容");
+    if (accept) await dialog.accept();
+    else await dialog.dismiss();
+  });
+  const pickerReady = page.waitForEvent("filechooser");
+  await choose.focus();
+  await page.keyboard.press("Enter");
+  await (await pickerReady).setFiles(path);
+  await expect(page.getByText(/無法還原：/)).toBeVisible();
+  expect(confirmations).toBe(0);
+  expect(
+    await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY),
+  ).toBe(raw);
+  const backup = {
+    name: "fictional-valid-backup.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(fixtureData)),
+  };
+  await input.setInputFiles(backup);
+  await expect.poll(() => confirmations).toBe(1);
+  await expect(input).toBeEnabled();
+  expect(
+    await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY),
+  ).toBe(raw);
+  accept = true;
+  await input.setInputFiles(backup);
+  await expect(page.getByText("已成功還原資料", { exact: true })).toBeVisible();
+  expect(confirmations).toBe(2);
+  expect(await readData(page)).toEqual(fixtureData);
+  await expect(
+    page.getByText("以備份修復本機資料", { exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "記錄運動", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByLabel("備註", { exact: true })
+    .fill("虛構修復後新增");
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: /儲存紀錄/ })
+    .click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await reloadOffline(page);
+  const restored = await readData(page);
+  expect(restored.workouts).toHaveLength(5);
+  expect(
+    restored.workouts.some((workout) => workout.note === "虛構修復後新增"),
+  ).toBe(true);
+  expect(restored.metrics).toEqual(fixtureData.metrics);
+  await expectNoOverflow(page);
+});
+
 test("運動歷史可篩選與分批，保留全部資料並可再記一次", async ({ page }) => {
   await page.goto("./");
   const stored = {
