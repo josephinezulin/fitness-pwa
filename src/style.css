@@ -907,13 +907,33 @@ footer button {
   width: 100%;
   min-width: 0;
   max-height: 90dvh;
-  overflow: auto;
-  padding: 26px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border-radius: 16px;
   box-shadow: 0 20px 100px #10271830;
 }
-.dialog form {
-  margin-top: 20px;
+.dialog-head {
+  flex-shrink: 0;
+  padding: 18px 26px;
+  border-bottom: 1px solid #e4e9de;
+}
+.dialog-head h2 {
+  margin: 0;
+  min-width: 0;
+  line-height: 1.5;
+}
+.dialog-head .icon-button {
+  flex-shrink: 0;
+  min-width: 44px;
+  min-height: 44px;
+}
+.dialog > form {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  margin: 0;
+  padding: 6px 26px 26px;
 }
 .dialog label {
   display: flex;
@@ -1215,8 +1235,13 @@ footer button {
   .overlay {
     padding: 12px;
   }
-  .dialog {
-    padding: 22px;
+  .dialog-head {
+    padding: 14px 22px;
+  }
+  .dialog > form {
+    padding-right: 22px;
+    padding-left: 22px;
+    padding-bottom: 22px;
   }
   .notice {
     font-size: 11px;
