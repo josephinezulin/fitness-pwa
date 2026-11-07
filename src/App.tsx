@@ -5,7 +5,11 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { HealthChart } from "./pages/HealthChart";
 import { WorkoutLogs, WorkoutWeekSummary } from "./pages/WorkoutLogs";
 import { WeeklySchedule, PlanManager } from "./pages/WeeklySchedule";
-import { CATEGORY_WORKOUT, type WorkoutDraft } from "./exercise";
+import {
+  CATEGORY_WORKOUT,
+  repeatWorkoutDraft,
+  type WorkoutDraft,
+} from "./exercise";
 import { preferenceKey, markSeen } from "./preferences";
 import { usePreferences } from "./usePreferences";
 import { WeeklyActivity } from "./WeeklyActivity";
@@ -148,13 +152,13 @@ export function App() {
     Math.round(
       weekWorkouts.reduce((total, workout) => total + workout.minutes, 0) * 10,
     ) / 10;
-  const begin = (workout?: Workout) => {
+  const begin = (workout?: Workout, draft: WorkoutDraft | null = null) => {
     if (!workspace.canEditCloud) {
       setMessage("請先完成同步或處理連線狀態，再編輯運動。");
       return;
     }
     setEditing(workout || null);
-    setWorkoutDraft(null);
+    setWorkoutDraft(draft);
     setModal("workout");
   };
   const deleteWorkout = (id: string) => {
@@ -236,6 +240,8 @@ export function App() {
     workouts: data.workouts,
     canEdit: workspace.canEditCloud,
     onBegin: begin,
+    onRepeat: (workout: Workout) =>
+      begin(undefined, repeatWorkoutDraft(workout)),
     onDelete: deleteWorkout,
     expanded,
     setExpanded,
@@ -480,14 +486,7 @@ export function App() {
                 weekMinutes={weekMinutes}
               />
               <WeeklyActivity workouts={data.workouts} reference={viewToday} />
-              <WorkoutLogs
-                workouts={data.workouts}
-                canEdit={workspace.canEditCloud}
-                onBegin={begin}
-                onDelete={deleteWorkout}
-                expanded={expanded}
-                setExpanded={setExpanded}
-              />
+              <WorkoutLogs {...logsProps} />
             </>
           )}
           {page === "運動影片" && (

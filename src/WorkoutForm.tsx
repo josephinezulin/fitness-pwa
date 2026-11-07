@@ -115,8 +115,9 @@ export function WorkoutForm({
   const [weightOverride, setWeightOverride] = useState("");
   const [appliedEstimate, setAppliedEstimate] = useState<string | null>(null);
   const errorsId = useId();
+  const initialSegments = editing ? editing.segments : initialDraft?.segments;
   const [segments, setSegments] = useState<Draft[]>(
-    editing?.segments?.map(toDraft) || [
+    initialSegments?.map(toDraft) || [
       defaultSegment(editing?.type || initialDraft?.type || "walk"),
     ],
   );
@@ -181,6 +182,12 @@ export function WorkoutForm({
         onSave(record);
       }}
     >
+      {!editing && initialDraft?.fromDate && (
+        <p className="workout-draft-note">
+          已帶入 {initialDraft.fromDate} 的運動設定，請確認這次日期與時長。
+          本次熱量請重新填寫或估算。
+        </p>
+      )}
       <label>
         日期
         <input

@@ -3,6 +3,7 @@ import {
   CATEGORY_WORKOUT,
   estimateEnergy,
   pace,
+  repeatWorkoutDraft,
   segmentErrors,
   TREADMILL_PRESETS,
   weeklyActivity,
@@ -19,6 +20,40 @@ const record = (date: string, minutes = 30): Workout => ({
   note: "",
 });
 describe("recording calculations", () => {
+  it("reuses independent segment settings without identity, calories or watch metadata", () => {
+    const original: Workout = {
+      ...record("2026-11-01"),
+      id: "old-id",
+      type: "walk",
+      calories: 250,
+      note: "保留的備註",
+      segments: [
+        { minutes: 10, speed: 4, incline: 0 },
+        { minutes: 20, speed: 5, incline: 3 },
+      ],
+    };
+    const draft = repeatWorkoutDraft(original);
+    expect(draft).toEqual({
+      type: "walk",
+      minutes: 30,
+      note: "保留的備註",
+      treadmill: true,
+      fromDate: "2026-11-01",
+      segments: original.segments,
+    });
+    for (const key of ["id", "date", "calories", "videoId", "countWatch"])
+      expect(draft).not.toHaveProperty(key);
+    draft.segments![0].speed = 9;
+    expect(original.segments![0].speed).toBe(4);
+  });
+  it("keeps outdoor walking and ordinary exercise out of treadmill mode", () => {
+    for (const type of ["walk", "run", "yoga"] as const) {
+      const draft = repeatWorkoutDraft({ ...record("2026-11-01", 25), type });
+      expect(draft.treadmill).toBe(false);
+      expect(draft).not.toHaveProperty("segments");
+      expect(draft.minutes).toBe(25);
+    }
+  });
   it("uses grade as a fraction and converts km/h to m/min for walking", () => {
     expect(
       estimateEnergy("walk", 30, 60, [{ minutes: 30, speed: 5, incline: 3 }])
