@@ -611,7 +611,7 @@ export function App() {
             aria-labelledby="dialog-title"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="section-head">
+            <div className="section-head dialog-head">
               <h2 id="dialog-title">
                 {modal === "metric"
                   ? "記錄健康數據"
