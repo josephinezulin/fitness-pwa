@@ -4,9 +4,9 @@
 
 ## 目前落點
 
-- 階段 0、C、D、E1–E5 程式已合併部署；本人 OAuth 寫入、YouTube、VoiceOver 與 iOS 健康捷徑仍保留實機待驗收，不把 HTTP／DOM／Chrome 測試當作 iPhone 結果。
-- 最新已驗證部署為 PR #10，main `6116d0f707c1f9fe171a8049fe1774a05a0fd5c4`，PR CI 42329220864、Pages 42329299794 成功。新版資產 HTTP 200，另以 390px Chromium 開啟正式站確認每日表格、無溢位及零未捕捉錯誤。Actions Node 24 的 PR #9 亦已完成，不用重做。
-- 本輪優先使用者回報：把綁定試算表的常駐長資訊列收進右上角頭像，保留待同步／失敗提醒；見 stage-e-progress.md 的 E6。這輪沒有開始部署健康上傳 API 或修改使用者試算表。主要功能缺口仍是安全 Apps Script 部署＋iOS 捷徑同步與 iPhone 端到端驗收。
+- 階段 0、C、D、E1–E6 程式已合併部署；本人 OAuth 寫入、YouTube、VoiceOver 與 iOS 健康捷徑仍保留實機待驗收，不把 HTTP／DOM／Chrome 測試當作 iPhone 結果。
+- 最新已驗證部署為 PR #11，main `714f888d6959cb9b57e4f532aa2ab2baa2607268`，PR CI 42331452612、Pages 42331511274 成功。新版資產 HTTP 200，另以 320px Chromium 開啟正式站確認頭像邊界、設定導覽及零未捕捉錯誤。E5 趨勢與 E6 頭像已完成，不要重做。
+- 本輪 E7 補健康同步結果與部署驗收準備，見 docs/health-sync-readiness.md。本環境尚未取得可驗證 /exec 網址或可代辦的 Apps Script 部署連線；只停止該部署步驟，不把 PWA 的 drive.file Token 當作 Script 授權。需要使用者完成 Google 首次授權／部署並只提供 /exec 網址，不提供裝置 Token。這輪沒有部署健康 API、沒有修改私人表。
 
 ## 先前檢查點（歷程）
 
@@ -66,3 +66,4 @@
 - E4 的 PR #9 已合併並部署：main `ce28d33564cca7460d21b88ba3e6784c97f1742b`，PR CI run 42313922331、Pages run 42314061084 成功，正式首頁／JS／CSS／SW HTTP 200，新 annotations 已無舊 Node 20 runtime 提示。官方版本與 Recharts 3 調研見 docs/maintenance.md，圖表套件尚未升級。
 - E5 已補健康完整日曆與缺值斷線、單筆資料點、每日／每週數值表、紀錄摘要、鍵盤 Tooltip、篩選狀態及觸控目標。196 項 Vitest、6 項 Python、正式建置與 diff 檢查通過；另以實際 Chromium／Playwright 在 320、390px 直向及 844px 橫向做 45 項檢查通過，含無溢位與離線重載。這不是 Safari／VoiceOver 或 OAuth 實機驗收，也尚未加入瀏覽器 CI。完整結果與待辦見 docs/trend-accessibility.md，PR／部署依 GitHub 最新結果確認。
 - E5 的 PR #10 已完成上述部署，後續不要重做趨勢數值清單。本輪 E6 頭像面板完成本機 199 項 Vitest、6 項 Python、建置及 diff 檢查；Chromium 的三種尺寸各 11 項頭像檢查（含虛構雲端元件 fixture）及既有 45 項介面／離線回歸通過。待本輪 PR／Pages 檢查完成再視為上線。
+- E6 的 PR #11 已完成目前落點所列部署。E7 實作設定頁健康同步卡片、記憶體限定的 SyncLogs 中繼資料、驗收工具區分服務關閉與認證拒絕；完整 207 項 Vitest、8 項 Python、正式建置與 diff 檢查通過。待本輪 PR／CI／Pages 結果確認後再視為上線；仍沒有真實捷徑上傳驗收。

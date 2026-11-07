@@ -306,6 +306,51 @@ header {
   border-radius: 0;
   color: #67725e;
 }
+.health-sync-card h2 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.health-sync-state {
+  font-size: 15px;
+  color: #53654b;
+  font-weight: 600;
+  line-height: 1.7;
+}
+.health-sync-state[data-status="committed"] {
+  color: #42694b;
+}
+.health-sync-state[data-status="partial"],
+.health-sync-state[data-status="failed"] {
+  color: #945b30;
+}
+.health-sync-card dl {
+  font-size: 13px;
+  line-height: 1.8;
+}
+.health-sync-card dt {
+  color: #53654b;
+  margin-top: 10px;
+}
+.health-sync-card dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.health-sync-card .muted {
+  color: #65725b;
+}
+.health-sync-card .guide {
+  color: #53654b;
+  font-size: 13px;
+  line-height: 1.9;
+}
+.health-sync-card a {
+  min-height: 44px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  color: #42694b;
+}
 .avatar:focus-visible,
 .account-panel button:focus-visible {
   outline: 2px solid #536c47;

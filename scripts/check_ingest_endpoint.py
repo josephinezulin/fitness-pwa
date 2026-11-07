@@ -28,7 +28,8 @@ def validate_url(url):
 class GoogleRedirects(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         target = urlparse(newurl)
-        if target.scheme != 'https' or target.hostname not in ('script.google.com', 'script.googleusercontent.com'):
+        if (target.scheme != 'https' or target.hostname not in ('script.google.com', 'script.googleusercontent.com')
+                or target.username or target.password or target.port not in (None, 443)):
             raise VerificationError('端點重新導向登入頁或其他網站；請確認部署存取設定。')
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
@@ -73,8 +74,15 @@ def check_endpoint(url, opener=None):
         if code not in expected:
             raise VerificationError(name + ' 未回傳預期的未授權錯誤。')
         report.append({'probe': name, 'result': code})
-    return {'unauthenticated_probes': report, 'authorized_write_test': 'not_performed',
-            'note': '只確認未授權拒絕路徑，不能據此宣告健康資料寫入已通過。'}
+    post_codes = {item['result'] for item in report[1:]}
+    if len(post_codes) != 1:
+        raise VerificationError('檢查期間服務狀態改變或回應不一致；請固定設定後重新驗證。')
+    disabled = post_codes == {'SERVICE_DISABLED'}
+    return {'unauthenticated_probes': report,
+            'unauthenticated_mode': 'service_disabled' if disabled else 'auth_rejected',
+            'authorized_write_test': 'not_performed',
+            'note': ('目前只驗證服務關閉回應；啟用後仍需重新檢查錯誤憑證拒絕。' if disabled
+                     else '已觀察到未授權認證拒絕；仍需本人用私人捷徑驗證寫入。')}
 
 
 def main():

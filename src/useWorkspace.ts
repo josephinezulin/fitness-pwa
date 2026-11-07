@@ -9,6 +9,7 @@ import {
   type CloudIdentity,
 } from "./workspace";
 import { samePlan } from "./plans";
+import { summarizeHealthSync } from "./health-sync-status";
 import type { GoogleSession } from "./google";
 import {
   GoogleAccessError,
@@ -519,6 +520,12 @@ export function useWorkspace() {
     syncBusy,
     syncError,
     canEditCloud,
+    healthSync:
+      cloud &&
+      current.current?.source &&
+      snapshotKey(current.current.identity) === snapshotKey(cloud)
+        ? summarizeHealthSync(current.current.source.grids)
+        : null,
     retrySync: flush,
     discardPending,
   };
