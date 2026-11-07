@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { registerSW } from "virtual:pwa-register";
 import { Download, X } from "lucide-react";
+import { watchPwaUpdates } from "./pwa-updates";
 export function PwaUpdate({
   blocked,
   blockedReason = "請先儲存或關閉目前表單，再更新。",
@@ -16,8 +17,14 @@ export function PwaUpdate({
   useEffect(() => {
     if (!import.meta.env.PROD) return;
     let active = true;
+    let stopWatching: (() => void) | undefined;
     apply.current = registerSW({
       immediate: true,
+      onRegisteredSW: (_url, registration) => {
+        if (!active) return;
+        stopWatching?.();
+        stopWatching = registration ? watchPwaUpdates(registration) : undefined;
+      },
       onNeedRefresh: () => {
         if (active) setUpdateReady(true);
       },
@@ -30,6 +37,7 @@ export function PwaUpdate({
     });
     return () => {
       active = false;
+      stopWatching?.();
       apply.current = null;
     };
   }, []);
