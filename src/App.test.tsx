@@ -96,6 +96,64 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
+it("advances the displayed day, steps and training week when returning to the foreground", () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-11-08T12:00:00Z"));
+  const data = {
+    version: 1,
+    metrics: [{ id: "fictional-sunday", date: "2026-11-08", steps: 1234 }],
+    workouts: [
+      {
+        id: "fictional-sunday-workout",
+        date: "2026-11-08",
+        type: "home",
+        minutes: 20,
+        calories: 0,
+        note: "虛構週日運動",
+      },
+    ],
+  };
+  const raw = JSON.stringify(data);
+  localStorage.setItem(LOCAL_KEY, raw);
+  const { container } = render(<App />);
+  const heading = container.querySelector(".title-row .eyebrow")!;
+  const steps = screen.getByText("今日步數").closest("article")!;
+  const week = screen
+    .getByText("本週運動", { exact: true })
+    .closest("article")!;
+  expect(heading.textContent).toContain("11月8日");
+  expect(steps.textContent).toContain("1,234");
+  expect(week.querySelector(".stat-value")!.textContent).toContain("20");
+  vi.setSystemTime(new Date("2026-11-09T12:00:00Z"));
+  act(() => window.dispatchEvent(new Event("focus")));
+  expect(heading.textContent).toContain("11月9日");
+  expect(steps.textContent).not.toContain("1,234");
+  expect(week.querySelector(".stat-value")!.textContent).toContain("0");
+  expect(localStorage.getItem(LOCAL_KEY)).toBe(raw);
+  expect(lifecycle.mounts).toBe(1);
+  expect(lifecycle.unmounts).toBe(0);
+});
+it("preserves an open health form's date and values while crossing into a new day", () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-11-08T12:00:00Z"));
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "記錄健康數據" }));
+  const date = screen.getByLabelText("日期") as HTMLInputElement;
+  const weight = screen.getByLabelText("體重（kg）") as HTMLInputElement;
+  fireEvent.change(weight, { target: { value: "60.5" } });
+  vi.setSystemTime(new Date("2026-11-09T12:00:00Z"));
+  act(() => window.dispatchEvent(new Event("focus")));
+  expect(document.querySelector(".title-row .eyebrow")!.textContent).toContain(
+    "11月9日",
+  );
+  Object.defineProperty(navigator, "onLine", {
+    configurable: true,
+    value: true,
+  });
+  act(() => window.dispatchEvent(new Event("online")));
+  expect(date.value).toBe("2026-11-08");
+  expect(weight.value).toBe("60.5");
+});
 it("exports the exact unreadable original and restores a valid backup through the explicit repair flow", async () => {
   const raw = "{fictional-unreadable \ud800";
   localStorage.setItem(LOCAL_KEY, raw);

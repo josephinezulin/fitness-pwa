@@ -36,7 +36,6 @@ import {
   type Data,
   type Workout,
   type Metric,
-  today,
   weekDays,
   workoutPlans,
   completed,
@@ -48,15 +47,13 @@ import { VideoLibrary } from "./VideoLibrary";
 import { readLibrary, watchUrl, type VideoCategory } from "./videos";
 import { CloudPanel, type CloudReadState } from "./CloudPanel";
 import { PwaUpdate } from "./PwaUpdate";
-import { calendarDateInZone } from "./calendar";
+import { useCalendarToday } from "./useCalendarToday";
 import { useWorkspace } from "./useWorkspace";
 import { AccountMenu } from "./AccountMenu";
 export function App() {
   const workspace = useWorkspace();
   const data = workspace.data;
-  const viewToday = workspace.cloud
-    ? calendarDateInZone(new Date(), workspace.cloud.timezone)
-    : today();
+  const viewToday = useCalendarToday(workspace.cloud?.timezone);
   const [cloudReadState, setCloudReadState] = useState<CloudReadState>({
     busy: false,
     error: "",
