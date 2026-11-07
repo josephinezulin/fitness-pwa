@@ -556,6 +556,10 @@ export function App() {
           <SettingsPage
             visible={page === "設定與備份"}
             cloud={!!workspace.cloud}
+            healthSync={workspace.healthSync}
+            timezone={workspace.cloud?.timezone}
+            readAt={workspace.cloud?.checkedAt}
+            online={online}
             workoutCount={data.workouts.length}
             metricCount={data.metrics.length}
             onExport={exportData}

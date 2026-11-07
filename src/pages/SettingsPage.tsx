@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { Download, Upload } from "lucide-react";
+import { HealthSyncCard } from "../HealthSyncCard";
+import type { HealthSyncSummary } from "../health-sync-status";
 /** Always mounted: hiding this page must not reset the Google session. */
 export function SettingsPage({
   visible,
@@ -10,6 +12,10 @@ export function SettingsPage({
   onExport,
   onRestore,
   onDemo,
+  healthSync,
+  timezone,
+  readAt,
+  online,
 }: {
   visible: boolean;
   cloud: boolean;
@@ -19,6 +25,10 @@ export function SettingsPage({
   onExport: () => void;
   onRestore: (file?: File) => Promise<void>;
   onDemo: () => void;
+  healthSync: HealthSyncSummary | null;
+  timezone?: string;
+  readAt?: string;
+  online: boolean;
 }) {
   return (
     <div
@@ -26,6 +36,13 @@ export function SettingsPage({
       style={{ display: visible ? "grid" : "none" }}
     >
       {children}
+      <HealthSyncCard
+        cloud={cloud}
+        summary={healthSync}
+        timezone={timezone}
+        readAt={readAt}
+        online={online}
+      />
       <section className="card">
         <h2>資料與備份</h2>
         <p className="guide">

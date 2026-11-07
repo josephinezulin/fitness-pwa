@@ -68,6 +68,41 @@ async function connect(
   await waitFor(() => expect(result.current.canEditCloud).toBe(true));
 }
 describe("cloud workspace lifecycle", () => {
+  it("keeps health-sync metadata memory-only and clears it across account/cache/local transitions", async () => {
+    const { result } = renderHook(() => useWorkspace());
+    const source = testSource();
+    source.grids.SyncLogs.push([
+      "private-request-marker",
+      "private-device-marker",
+      TEST_TIME,
+      "2026-11-01T00:00:00Z",
+      TEST_TIME,
+      "committed",
+      3,
+      0,
+      "",
+    ]);
+    const inspection = testInspection(source);
+    act(() => {
+      result.current.setGoogleSession(auth);
+      result.current.activateCloud(identity, inspection.data!, source);
+    });
+    await waitFor(() => expect(result.current.canEditCloud).toBe(true));
+    expect(result.current.healthSync?.lastSuccess?.acceptedCount).toBe(3);
+    const serialized = localStorage.getItem(snapshotKey(identity))!;
+    expect(serialized).not.toContain("private-request-marker");
+    expect(serialized).not.toContain("private-device-marker");
+    expect(serialized).not.toContain("lastSuccess");
+    await connect(result, { ...identity, subject: "B" });
+    expect(result.current.healthSync).toEqual({
+      latest: null,
+      lastSuccess: null,
+    });
+    act(() => result.current.activateCloud(identity, inspection.data!));
+    expect(result.current.healthSync).toBeNull();
+    act(() => result.current.disconnectCloud());
+    expect(result.current.healthSync).toBeNull();
+  });
   it("coalesces offline plan edits in order and isolates them by Google account", async () => {
     const { result } = renderHook(() => useWorkspace());
     await connect(result);

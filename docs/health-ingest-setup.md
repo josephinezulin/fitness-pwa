@@ -4,7 +4,15 @@
 
 ## 已驗證與未驗證
 
-使用者已回報 Google 登入及私人試算表「格式檢查通過」。這可作為本人裝置的基本讀取驗收，不能推定拒絕授權、帳號切換、過期與所有 Safari 主畫面情境都已通過。此階段先準備捷徑三項基本資料的上傳入口，PWA 雲端 CRUD 仍未開啟。
+使用者已回報 Google 登入及私人試算表「格式檢查通過」。這可作為本人裝置的基本讀取驗收，不能推定拒絕授權、帳號切換、過期與所有 Safari 主畫面情境都已通過。PWA 的運動／分段／課表／影片雲端寫入已實作，健康原始資料仍只由這個捷徑上傳入口處理。
+
+## 目前只需要先做哪一段
+
+1. Google 端：照下方一次性步驟放入程式、設定私人試算表 ID、執行初始化並完成本人授權。將裝置憑證只留在自己的捷徑，部署時先保持服務關閉。
+2. 把部署完成的 `/exec` 網址提供給開發流程；**不要提供裝置 Token**。目前環境未連接 Apps Script 部署工具或擁有者授權，不能直接代辦這個首次部署，也不會以 PWA 的 drive.file Token 冒充 Apps Script 授權。
+3. 開發流程先用沒有健康資料的未授權請求驗證。啟用後再檢查錯誤憑證確實被拒絕，最後本人在私人測試副本以捷徑寫入並核對。
+
+PWA「設定與備份」的 Apple 健康同步卡片只讀取該私人表的 SyncLogs，能顯示最近批次與上次成功處理時間；PWA 的「最後讀取」不是捷徑上傳成功時間。沒有同步紀錄不代表已部署或沒部署，也可能是請求尚未送出或在認證前被拒絕。卡片沒有新增端點設定或保存憑證。
 
 ## 程式檔
 
@@ -81,7 +89,7 @@
 - `BUSY_RETRY` 或暫時的 `SYNC_FAILED`：可短暫重試最多兩次，再等下次七天回掃。重試相同批次沿用 requestId。
 - 最近 50 批的請求摘要保留在 Script Properties，舊日誌仍存在；已過摘要保留期而重送舊 requestId 會 `REQUEST_EXPIRED`，以新批次 ID 重掃原範圍，靠樣本與日期唯一鍵去重。
 
-Script Lock 序列化此端點的健康寫入；Sheets 多表不是交易。SyncLogs 先記 partial，再寫指標與步數，全部完成才記 committed；中間失敗的同批重試可修復，不重複插入樣本。PWA 對健康表仍唯讀，避免未協調的雙寫；不要在同步期間直接手動改健康資料列。
+Script Lock 序列化此端點的健康寫入；本實作使用 SpreadsheetApp 逐表寫入，沒有將多表合併成同一筆原子 batchUpdate。SyncLogs 先記 partial，再寫指標與步數，全部完成才記 committed；中間失敗的同批重試可修復，不重複插入樣本。PWA 對健康表仍唯讀，避免未協調的雙寫；不要在同步期間直接手動改健康資料列。
 
 ## 驗收清單
 
@@ -112,3 +120,7 @@ python3 scripts/check_ingest_endpoint.py --url 'https://script.google.com/macros
 這個命令沒有 Token 參數，不需要把自己的憑證放進終端機歷史。只會測 GET、空 POST、固定錯誤 Token，並確認回應不含健康資料；SERVICE_DISABLED 代表服務尚未開啟。若導向 Google 登入頁、回傳 HTML、未授權卻 ok=true，檢查會失敗。通過後仍需用私人捷徑做本人授權的寫入測試。
 
 工具自身測試：`python3 -m unittest discover -s scripts -p 'test_*.py'`，已加入 GitHub Actions。
+
+工具會分開回報 `unauthenticated_mode=service_disabled` 與 `auth_rejected`。前者只證明服務關閉時沒有開放讀寫，啟用後仍須再跑一次；後者只證明固定錯誤憑證被拒絕，不證明正確憑證的寫入成功。檢查中若兩次 POST 回應狀態不一致，會停止驗收，先固定部署／啟用設定再重測。
+
+官方部署流程：https://developers.google.com/apps-script/guides/web 。每日自動化的健康權限、鎖定狀態與 iOS 背景限制仍依 shortcuts.md 的實機清單驗證，不能由部署成功推定。
