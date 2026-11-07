@@ -128,3 +128,9 @@ Chromium 在 320×852、390×844、844×390 的 57 項再記錄檢查通過：44
 完整 219 項 Vitest（34 檔）、8 項 Python、TypeScript／Vite／Service Worker 建置與 diff 檢查通過。實際 Chromium 在 320×852、390×844、844×390 共 63 項長表單檢查通過：50 段全部保留、內容獨立捲動、標題／關閉保持可見及可點、44px 目標、90dvh 上限、無水平溢位、邊界滾動、取消不寫入、焦點返回、首欄不被遮住、Tab／Shift+Tab／Escape、橫向切換保留草稿、完整運動儲存及健康短表單儲存。另有既有 57 項再記錄與 45 項介面／表單／離線檢查通過；已檢視 320px 與橫向底部截圖。測試只用虛構資料，腳本、截圖與報告位於 `/tmp/fitness-pwa-browser/`，沒有新增瀏覽器 CI 或登入 Google。
 
 正式合併、CI 與部署結果追加於本次 PR。iPhone Safari／軟體鍵盤／文字縮放／VoiceOver 仍待實機檢查：開啟多段運動，滑至最後填備註、旋轉螢幕、關閉／重開並儲存，確認標題可見、欄位可聚焦與原資料一致。
+
+## E11：瀏覽器回歸納入 CI
+
+將暫存腳本中的六個核心使用情境整理為 repo 內的 Playwright 測試，在三種 viewport 共跑 18 個案例。PR 與 Pages build 都先建置，再以 `/fitness-pwa/` 子路徑驗證同一份 dist，瀏覽器失敗即停止部署；失敗時保留虛構測試 context 的截圖、trace 與 HTML 報告七天。沒有新增產品功能或 Google 權限，也沒有將測試資料編入網站。
+
+完整本機 219 項 Vitest、8 項 Python、TypeScript／Vite／Service Worker 建置、E2E 型別檢查與 18 個 Chromium 案例通過。正式 GitHub 安裝與 workflow 結果追加於本次 PR；Safari／OAuth／健康捷徑仍需實機驗收。執行方式、官方依據與診斷範圍見 [瀏覽器測試](browser-tests.md)，不再把本輪新增的這 18 案例稱為「尚未加入 CI」；先前更完整的暫存 smoke 腳本仍可依需要手動使用。
