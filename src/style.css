@@ -883,6 +883,71 @@ footer button {
   min-height: 44px;
   margin: 16px 0 0;
 }
+.workout-filters {
+  min-width: 0;
+  margin: 16px 0;
+  padding: 12px;
+  border: 1px solid #dfe5d6;
+  border-radius: 10px;
+}
+.workout-filters legend,
+.workout-filters label {
+  font-size: 14px;
+  color: #465a3f;
+}
+.workout-filter-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.workout-filters label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 8px;
+}
+.workout-filters input,
+.workout-filters select {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px;
+  border: 1px solid #dfe5d6;
+  border-radius: 6px;
+  color: #3f5736;
+  background: #fff;
+}
+.workout-filters summary,
+.workout-filters .text-button {
+  min-height: 44px;
+  font-size: 14px;
+  color: #465a3f;
+  line-height: 1.8;
+  padding: 10px 0;
+}
+.workout-filters summary {
+  cursor: pointer;
+  margin-top: 8px;
+}
+.workout-history-status,
+.workout-history-empty {
+  color: #465a3f;
+  line-height: 1.8;
+  font-size: 14px;
+}
+.workout-history-more {
+  min-height: 44px;
+  margin-top: 16px;
+}
+.logs h3[tabindex="-1"]:focus {
+  outline: 2px solid #536c47;
+  outline-offset: 3px;
+  scroll-margin-block: 24px;
+}
+@media (max-width: 540px) {
+  .workout-filter-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .notice {
   background: #e9efe0;
   border: 1px solid #dfe8d4;

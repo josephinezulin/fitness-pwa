@@ -458,7 +458,11 @@ export function App() {
                 weekMinutes={weekMinutes}
               />
               <WeeklyActivity workouts={data.workouts} reference={viewToday} />
-              <WorkoutLogs {...logsProps} />
+              <WorkoutLogs
+                key={preferenceKey(workspace.cloud)}
+                {...logsProps}
+                history
+              />
             </>
           )}
           {page === "運動影片" && (
