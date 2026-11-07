@@ -13,6 +13,107 @@ import {
 } from "./fixtures";
 import { readFile } from "node:fs/promises";
 
+test("跨日回前景更新今日與本週統計，保留表單草稿並以新日期開新紀錄", async ({
+  page,
+}) => {
+  await page.goto("./");
+  const stored = {
+    ...fixtureData,
+    metrics: fixtureData.metrics.map((metric, index) =>
+      index === 0 ? { ...metric, steps: 1234 } : metric,
+    ),
+  };
+  const raw = JSON.stringify(stored);
+  await page.evaluate(({ key, raw }) => localStorage.setItem(key, raw), {
+    key: STORAGE_KEY,
+    raw,
+  });
+  await page.reload();
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+  });
+  const heading = page.locator(".title-row .eyebrow");
+  const steps = page
+    .locator(".stat")
+    .filter({ has: page.getByText("今日步數", { exact: true }) });
+  const week = page
+    .locator(".stat")
+    .filter({ has: page.getByText("本週運動", { exact: true }) })
+    .locator(".stat-value");
+  await expect(heading).toContainText("11月7日");
+  await expect(steps).toContainText("1,234");
+  await expect(week).toHaveText(/575\s*分鐘/);
+  await page.getByRole("button", { name: "記錄運動", exact: true }).click();
+  let form = page.getByRole("dialog");
+  await form.getByLabel("備註", { exact: true }).fill("虛構跨日運動草稿");
+  await form.getByLabel("分鐘數", { exact: true }).fill("31");
+  await page.context().setOffline(true);
+  await page.clock.setFixedTime(new Date("2026-11-08T04:00:00Z"));
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(heading).toContainText("11月8日");
+  await expect(steps).not.toContainText("1,234");
+  await expect(form.getByLabel("日期", { exact: true })).toHaveValue(TODAY);
+  await expect(form.getByLabel("備註", { exact: true })).toHaveValue(
+    "虛構跨日運動草稿",
+  );
+  await expect(form.getByLabel("分鐘數", { exact: true })).toHaveValue("31");
+  await expectNoOverflow(page);
+  await form.getByRole("button", { name: "關閉", exact: true }).click();
+  const offlineNotice = page.getByRole("button", {
+    name: "關閉離線通知",
+    exact: true,
+  });
+  if (await offlineNotice.isVisible()) await offlineNotice.click();
+  await page.getByRole("button", { name: "記錄健康數據", exact: true }).click();
+  form = page.getByRole("dialog");
+  await expect(form.getByLabel("日期", { exact: true })).toHaveValue(
+    "2026-11-08",
+  );
+  await form.getByLabel("體重（kg）", { exact: true }).fill("60.5");
+  await page.clock.setFixedTime(new Date("2026-11-09T04:00:00Z"));
+  await page.evaluate(() =>
+    document.dispatchEvent(new Event("visibilitychange")),
+  );
+  await expect(heading).toContainText("11月9日");
+  await expect(week).toHaveText(/0\s*分鐘/);
+  await expect(week.locator("..")).toContainText("課表 0/3 完成");
+  await expect(form.getByLabel("日期", { exact: true })).toHaveValue(
+    "2026-11-08",
+  );
+  await expect(form.getByLabel("日期", { exact: true })).toHaveAttribute(
+    "max",
+    "2026-11-09",
+  );
+  await expect(form.getByLabel("體重（kg）", { exact: true })).toHaveValue(
+    "60.5",
+  );
+  expect(
+    await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY),
+  ).toBe(raw);
+  await expectNoOverflow(page);
+  await form.getByRole("button", { name: "關閉", exact: true }).click();
+  await page.getByRole("button", { name: "記錄運動", exact: true }).click();
+  form = page.getByRole("dialog");
+  await expect(form.getByLabel("日期", { exact: true })).toHaveValue(
+    "2026-11-09",
+  );
+  await form.getByLabel("備註", { exact: true }).fill("虛構週一新紀錄");
+  await form.getByRole("button", { name: /儲存紀錄/ }).click();
+  await expect(form).toHaveCount(0);
+  await expect(week).toHaveText(/30\s*分鐘/);
+  await expect(week.locator("..")).toContainText("課表 1/3 完成");
+  const saved = await readData(page);
+  expect(saved.metrics).toEqual(stored.metrics);
+  expect(saved.workouts).toHaveLength(5);
+  expect(
+    saved.workouts.some(
+      (workout) =>
+        workout.date === "2026-11-09" && workout.note === "虛構週一新紀錄",
+    ),
+  ).toBe(true);
+  await expectNoOverflow(page);
+});
+
 test("平滑曲線、缺值及數值清單保留真實零", async ({ page }) => {
   await page.goto("./");
   await page.getByRole("button", { name: "健康趨勢", exact: true }).click();
