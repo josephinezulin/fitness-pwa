@@ -10,6 +10,7 @@ import {
   expectNoOverflow,
   reloadOffline,
 } from "./fixtures";
+import { readFile } from "node:fs/promises";
 
 test("平滑曲線、缺值及數值清單保留真實零", async ({ page }) => {
   await page.goto("./");
@@ -244,5 +245,55 @@ test("健康表單欄位字級與寬度適合手機，零步可儲存", async ({
     weight: 62,
     steps: 0,
   });
+  await expectNoOverflow(page);
+});
+
+test("JSON 備份可下載及還原，取消與壞檔保留原資料", async ({ page }) => {
+  await page.goto("./");
+  await page.getByRole("button", { name: "設定與備份", exact: true }).click();
+  const downloadReady = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "匯出 JSON 備份", exact: true })
+    .click();
+  const download = await downloadReady;
+  expect(download.suggestedFilename()).toBe(`日常動作-${TODAY}.json`);
+  const path = (await download.path())!;
+  const exported = JSON.parse(await readFile(path, "utf8"));
+  expect(exported.workouts).toEqual(fixtureData.workouts);
+  expect(exported.metrics).toEqual(fixtureData.metrics);
+  let accept = false,
+    confirmations = 0;
+  page.on("dialog", async (dialog) => {
+    confirmations++;
+    if (accept) await dialog.accept();
+    else await dialog.dismiss();
+  });
+  const input = page.getByLabel("還原 JSON 備份", { exact: true });
+  await input.setInputFiles({
+    name: "fictional-invalid.json",
+    mimeType: "application/json",
+    buffer: Buffer.from("invalid-json"),
+  });
+  await expect(page.getByText(/無法還原：/)).toBeVisible();
+  expect(confirmations).toBe(0);
+  expect((await readData(page)).workouts).toEqual(fixtureData.workouts);
+  await input.setInputFiles(path);
+  await expect.poll(() => confirmations).toBe(1);
+  await expect(input).toBeEnabled();
+  expect((await readData(page)).workouts).toEqual(fixtureData.workouts);
+  await page.getByRole("button", { name: "記錄運動", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog
+    .getByRole("textbox", { name: "備註", exact: true })
+    .fill("虛構備份之後的新紀錄");
+  await dialog.getByRole("button", { name: /儲存紀錄/ }).click();
+  await expect(dialog).toHaveCount(0);
+  expect((await readData(page)).workouts).toHaveLength(5);
+  accept = true;
+  await input.setInputFiles(path);
+  await expect(page.getByText("已成功還原資料", { exact: true })).toBeVisible();
+  expect(confirmations).toBe(2);
+  expect((await readData(page)).workouts).toEqual(exported.workouts);
+  expect((await readData(page)).metrics).toEqual(exported.metrics);
   await expectNoOverflow(page);
 });

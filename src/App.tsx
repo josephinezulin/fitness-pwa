@@ -13,7 +13,8 @@ import {
 import { preferenceKey, markSeen } from "./preferences";
 import { usePreferences } from "./usePreferences";
 import { WeeklyActivity } from "./WeeklyActivity";
-import { makeBackup, parseBackup } from "./backup";
+import { makeBackup } from "./backup";
+import { useBackupRestore } from "./useBackupRestore";
 import React, { useState } from "react";
 import {
   Activity,
@@ -44,12 +45,7 @@ import {
 } from "./model";
 import { WorkoutForm } from "./WorkoutForm";
 import { VideoLibrary } from "./VideoLibrary";
-import {
-  readLibrary,
-  storeLibrary,
-  watchUrl,
-  type VideoCategory,
-} from "./videos";
+import { readLibrary, watchUrl, type VideoCategory } from "./videos";
 import { CloudPanel, type CloudReadState } from "./CloudPanel";
 import { PwaUpdate } from "./PwaUpdate";
 import { calendarDateInZone } from "./calendar";
@@ -85,6 +81,13 @@ export function App() {
     preferenceKey(workspace.cloud),
     setMessage,
   );
+  const backupRestore = useBackupRestore({
+    scopeKey: preferenceKey(workspace.cloud),
+    prepare: workspace.prepareLocalRestore,
+    onLibraryRestored: () => setVideoVersion((version) => version + 1),
+    onPreferencesRestored: (next) => preferences.update(() => next),
+    onMessage: setMessage,
+  });
   React.useEffect(() => {
     if (!modal) return;
     const previous = document.activeElement as HTMLElement | null;
@@ -188,37 +191,6 @@ export function App() {
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
-  async function restore(file?: File) {
-    if (!file) return;
-    try {
-      if (file.size > 10_000_000) throw Error("檔案超過 10 MB");
-      const raw = JSON.parse(await file.text());
-      const parsed = parseBackup(raw);
-      const next = parsed.data;
-      const videos = parsed.library;
-      if (
-        confirm(
-          `將以備份取代現有資料（${next.workouts.length} 筆運動、${next.metrics.length} 筆健康資料${videos ? `、${videos.custom.length} 部自訂影片` : ""}）。建議先匯出備份。確定還原？`,
-        ) &&
-        save(next)
-      ) {
-        if (videos) {
-          storeLibrary(localStorage, videos);
-          setVideoVersion((v) => v + 1);
-        }
-        const restoredPreferences = parsed.preferences
-          ? preferences.update(() => parsed.preferences!)
-          : true;
-        setMessage(
-          restoredPreferences
-            ? "已成功還原資料"
-            : "運動與健康紀錄已還原；裝置偏好設定尚未還原，原始內容已保留。",
-        );
-      }
-    } catch (e) {
-      setMessage("無法還原：" + (e as Error).message);
-    }
-  }
   const chartProps = {
     metrics: data.metrics,
     viewToday,
@@ -565,7 +537,9 @@ export function App() {
             workoutCount={data.workouts.length}
             metricCount={data.metrics.length}
             onExport={exportData}
-            onRestore={restore}
+            onRestore={backupRestore.restore}
+            restoring={backupRestore.busy}
+            onCancelRestore={backupRestore.cancel}
             onDemo={() => {
               if (confirm("以虛構示範資料取代目前紀錄？")) save(demo());
             }}
@@ -597,9 +571,15 @@ export function App() {
         </div>
       </main>
       <PwaUpdate
-        blocked={!!modal || planDraftOpen || workspace.syncBusy}
+        blocked={
+          !!modal || planDraftOpen || workspace.syncBusy || backupRestore.busy
+        }
         blockedReason={
-          workspace.syncBusy ? "請稍候同步完成，再更新。" : undefined
+          workspace.syncBusy
+            ? "請稍候同步完成，再更新。"
+            : backupRestore.busy
+              ? "請等候備份讀取完成或取消後，再更新。"
+              : undefined
         }
       />
       {modal && (
