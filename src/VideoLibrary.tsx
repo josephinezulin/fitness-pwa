@@ -27,6 +27,9 @@ import {
 } from "./videos";
 import type { SheetVideo } from "./model";
 import { seenCount, type Preferences } from "./preferences";
+import { searchVideos, VIDEO_LENGTHS, type VideoLength } from "./video-search";
+
+const VIDEO_BATCH = 12;
 
 export function VideoLibrary({
   online,
@@ -41,6 +44,7 @@ export function VideoLibrary({
   onMarkSeen,
   onRecord,
   canRecord = false,
+  onDraftChange,
 }: {
   online: boolean;
   initialCategory?: VideoCategory | "全部";
@@ -55,6 +59,7 @@ export function VideoLibrary({
   onMarkSeen?: (id: string) => boolean;
   onRecord?: (video: Video, countWatch: boolean) => void;
   canRecord?: boolean;
+  onDraftChange?: (open: boolean) => void;
 }) {
   const [lib, setLib] = useState<Library>(() => readLibrary(localStorage));
   const [category, setCategory] = useState<VideoCategory | "全部">(
@@ -62,23 +67,47 @@ export function VideoLibrary({
   );
   const [playing, setPlaying] = useState<Video | null>(null);
   const [adding, setAdding] = useState(false);
+  React.useLayoutEffect(() => {
+    onDraftChange?.(adding);
+    return () => onDraftChange?.(false);
+  }, [adding, onDraftChange]);
   const [editing, setEditing] = useState<Video | null>(null);
   const [error, setError] = useState("");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [query, setQuery] = useState("");
+  const [length, setLength] = useState<VideoLength>("all");
+  const [shown, setShown] = useState(VIDEO_BATCH);
+  const searchRef = React.useRef<HTMLInputElement>(null);
+  const pendingFocus = React.useRef<string | null>(null);
+  const listId = `video-results-${React.useId().replace(/:/g, "")}`;
   const [markedThisPlay, setMarkedThisPlay] = useState(false);
   const playerRef = React.useRef<HTMLDivElement>(null);
-  React.useEffect(() => setCategory(initialCategory), [initialCategory]);
+  const resetBatch = () => {
+    pendingFocus.current = null;
+    setShown(VIDEO_BATCH);
+  };
+  React.useEffect(() => {
+    setCategory(initialCategory);
+    resetBatch();
+  }, [initialCategory]);
+  React.useEffect(() => {
+    pendingFocus.current = null;
+  });
 
   const all = visibleVideos(cloud ? { ...lib, custom: [] } : lib, sheetVideos);
   const available = favoritesOnly
     ? all.filter((x) => preferences?.favorites.includes(x.youtubeId))
     : all;
+  const matching = searchVideos(available, query, length);
   const list =
     category === "全部"
-      ? available
-      : available.filter((x) => x.category === category);
+      ? matching
+      : matching.filter((x) => x.category === category);
+  const visible = list.slice(0, shown);
+  const filtered =
+    query !== "" || length !== "all" || category !== "全部" || favoritesOnly;
   const counts = new Map<string, number>();
-  for (const x of available)
+  for (const x of matching)
     counts.set(x.category, (counts.get(x.category) || 0) + 1);
 
   function persist(next: Library) {
@@ -178,6 +207,10 @@ export function VideoLibrary({
                 setAdding(false);
                 setEditing(null);
                 setCategory(form.get("category") as VideoCategory);
+                setQuery("");
+                setLength("all");
+                setFavoritesOnly(false);
+                resetBatch();
               }
             } catch (err) {
               setError((err as Error).message);
@@ -239,19 +272,74 @@ export function VideoLibrary({
           </button>
         </form>
       )}
+      <fieldset className="video-filters">
+        <legend>尋找運動影片</legend>
+        <div className="video-filter-fields">
+          <label>
+            搜尋運動影片
+            <input
+              ref={searchRef}
+              type="search"
+              value={query}
+              maxLength={500}
+              placeholder="名稱、分類或 YouTube 連結"
+              onChange={(event) => {
+                setQuery(event.target.value);
+                resetBatch();
+              }}
+            />
+          </label>
+          <label>
+            影片長度
+            <select
+              value={length}
+              onChange={(event) => {
+                setLength(event.target.value as VideoLength);
+                resetBatch();
+              }}
+            >
+              {VIDEO_LENGTHS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <button
+          type="button"
+          className="text-button"
+          disabled={!filtered}
+          onClick={() => {
+            setQuery("");
+            setLength("all");
+            setCategory("全部");
+            setFavoritesOnly(false);
+            resetBatch();
+            searchRef.current?.focus();
+          }}
+        >
+          清除影片篩選
+        </button>
+      </fieldset>
       <div className="chips" role="tablist" aria-label="影片分類">
         {(["全部", ...VIDEO_CATEGORIES] as const)
-          .filter((c) => c === "全部" || counts.get(c))
+          .filter((c) => c === "全部" || c === category || counts.get(c))
           .map((c) => (
             <button
               key={c}
               role="tab"
               aria-selected={category === c}
               className={category === c ? "selected" : ""}
-              onClick={() => setCategory(c)}
+              onClick={() => {
+                setCategory(c);
+                resetBatch();
+              }}
             >
               {c}
-              <small>{c === "全部" ? available.length : counts.get(c)}</small>
+              <small>
+                {c === "全部" ? matching.length : counts.get(c) || 0}
+              </small>
             </button>
           ))}
       </div>
@@ -262,10 +350,11 @@ export function VideoLibrary({
           onClick={() => {
             setFavoritesOnly((v) => !v);
             setCategory("全部");
+            resetBatch();
           }}
         >
           <Star size={15} fill={favoritesOnly ? "currentColor" : "none"} />
-          {favoritesOnly ? "顯示全部影片" : "只看我的收藏"}
+          只看我的收藏
         </button>
       )}
       {playing && (
@@ -336,9 +425,17 @@ export function VideoLibrary({
           </div>
         </div>
       )}
+      <p className="video-results-status" role="status">
+        顯示 {visible.length}／{list.length} 部影片 · 影片庫共 {all.length} 部
+      </p>
       {list.length ? (
-        <div className="video-grid">
-          {list.map((x) => (
+        <div
+          className="video-grid"
+          id={listId}
+          role="region"
+          aria-label="影片搜尋結果"
+        >
+          {visible.map((x) => (
             <article
               key={x.id}
               className={"video-card" + (playing?.id === x.id ? " active" : "")}
@@ -361,7 +458,17 @@ export function VideoLibrary({
               </button>
               <div className="video-meta">
                 <div className="grow">
-                  <h3>{x.title}</h3>
+                  <h3
+                    tabIndex={-1}
+                    ref={(node) => {
+                      if (node && pendingFocus.current === x.id) {
+                        pendingFocus.current = null;
+                        node.focus();
+                      }
+                    }}
+                  >
+                    {x.title}
+                  </h3>
                   <p>
                     {x.category}
                     {x.fromSheet ? " · 試算表" : x.builtIn ? "" : " · 我的影片"}
@@ -425,10 +532,25 @@ export function VideoLibrary({
         </div>
       ) : (
         <div className="empty">
-          {favoritesOnly
-            ? "還沒有符合分類的收藏，點影片旁的星星加入收藏。"
-            : "這個分類還沒有影片，點「新增影片」貼上網址。"}
+          {query.trim() || length !== "all" || category !== "全部"
+            ? "沒有符合條件的影片，試試其他關鍵字或清除篩選。"
+            : favoritesOnly
+              ? "還沒有符合分類的收藏，點影片旁的星星加入收藏。"
+              : "這個分類還沒有影片，點「新增影片」貼上網址。"}
         </div>
+      )}
+      {visible.length < list.length && (
+        <button
+          type="button"
+          className="secondary video-more"
+          aria-controls={listId}
+          onClick={() => {
+            pendingFocus.current = list[visible.length].id;
+            setShown((count) => count + VIDEO_BATCH);
+          }}
+        >
+          再顯示 {Math.min(VIDEO_BATCH, list.length - visible.length)} 部影片
+        </button>
       )}
       <p className="tiny muted">
         影片直接在頁面內播放（YouTube 隱私強化模式）。

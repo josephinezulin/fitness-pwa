@@ -13,7 +13,7 @@ npm run build
 
 `dist/` 是部署產物。Vite 使用相對 base，可部署到 GitHub Pages 的 repo 子目錄。部署不需要私密 Token 或前端環境變數。
 
-瀏覽器回歸測試：`npx playwright install chromium`，完成 `npm run build` 後執行 `npm run test:e2e`。PR 與 Pages 建置都會自動檢查三種手機尺寸的 39 個 Chromium 案例，失敗會阻擋部署；只使用虛構資料。安裝方式、診斷報告與實機限制見 [瀏覽器測試](docs/browser-tests.md)。
+瀏覽器回歸測試：`npx playwright install chromium`，完成 `npm run build` 後執行 `npm run test:e2e`。PR 與 Pages 建置都會自動檢查三種手機尺寸的 42 個 Chromium 案例，失敗會阻擋部署；只使用虛構資料。安裝方式、診斷報告與實機限制見 [瀏覽器測試](docs/browser-tests.md)。
 
 ## 部署與手動授權
 
@@ -86,5 +86,7 @@ PWA 回到前景或恢復連線時會適度檢查介面新版，有新版本就�
 - 可用運動日之前最近的體重輔助估算熱量，或自行覆寫估算用體重。只有按套用才改熱量，保留手動／機台數值；計算範圍與粗估限制見 [熱量方法](docs/energy-estimates.md)。
 - 影片可收藏、標記看過，完成後先帶入運動草稿，確認才記錄。首頁顯示每週分鐘目標，運動頁可切換八週分鐘／跑步機距離／平均坡度。
 - 收藏、觀看標記與週目標存於裝置，依帳號／試算表分區並包含於 JSON 備份；不額外授權或新增 Google Sheets 分頁。實機驗收見 [階段 D](docs/stage-d-progress.md)。
+
+影片庫可搜尋名稱、分類或已收錄的 YouTube 連結，搭配收藏及長度篩選；未標示長度的影片可另外找。每批顯示 12 部，「再顯示」可繼續閱讀，備份仍包含全部自訂影片。修改篩選會保留目前播放器；新增／編輯影片時，介面更新會先暫緩，關閉表單或離開影片頁後解除。搜尋與草稿只存在目前頁，離頁或換工作區後重設。
 
 公開影片縮圖採受限的裝置快取，離線時可保留部分曾載入圖片；影片播放仍需網路。快取不含 Google 登入或健康 API，詳見 [階段 E](docs/stage-e-progress.md)。

@@ -12,6 +12,136 @@ import {
   reloadOffline,
 } from "./fixtures";
 import { readFile } from "node:fs/promises";
+import { BUILT_IN_VIDEOS, VIDEO_KEY } from "../src/videos";
+
+test("影片庫搜尋、長度與收藏可組合，分批保留播放並可離線查找與完整備份", async ({
+  page,
+}) => {
+  await page.goto("./");
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+  });
+  const custom = Array.from({ length: 25 }, (_, index) => ({
+    id: `fictional-video-${index}`,
+    youtubeId: `F${String(index).padStart(10, "0")}`,
+    title: `虛構 YOGA 練習 ${index + 1}`,
+    category: index % 2 ? "居家徒手" : "瑜伽",
+    ...(index % 3 === 2 ? {} : { minutes: index % 3 === 0 ? 10 : 20 }),
+  }));
+  const library = {
+    version: 1,
+    custom,
+    hidden: BUILT_IN_VIDEOS.map((video) => video.id),
+  };
+  const raw = JSON.stringify(library);
+  await page.evaluate(({ key, raw }) => localStorage.setItem(key, raw), {
+    key: VIDEO_KEY,
+    raw,
+  });
+  const healthRaw = await page.evaluate(
+    (key) => localStorage.getItem(key),
+    STORAGE_KEY,
+  );
+  await page.getByRole("button", { name: "運動影片", exact: true }).click();
+  const offlineNotice = page.getByRole("button", {
+    name: "關閉離線通知",
+    exact: true,
+  });
+  if (await offlineNotice.isVisible()) await offlineNotice.click();
+  const catalog = page.locator(".video-library");
+  const search = catalog.getByRole("searchbox", { name: "搜尋運動影片" });
+  const length = catalog.getByRole("combobox", { name: "影片長度" });
+  const rows = catalog.getByRole("article");
+  await expect(rows).toHaveCount(12);
+  await catalog.getByRole("button", { name: "再顯示 12 部影片" }).click();
+  await expect(rows).toHaveCount(24);
+  await expect(
+    catalog.getByRole("heading", { name: "虛構 YOGA 練習 13", exact: true }),
+  ).toBeFocused();
+  await catalog.getByRole("button", { name: "再顯示 1 部影片" }).click();
+  await expect(rows).toHaveCount(25);
+  await search.fill("ｙｏｇａ　練習");
+  await expect(rows).toHaveCount(12);
+  await length.selectOption("10");
+  await expect(rows).toHaveCount(9);
+  await catalog.getByRole("tab", { name: /^瑜伽/ }).click();
+  await expect(rows).toHaveCount(5);
+  const title = "虛構 YOGA 練習 25";
+  await catalog.getByRole("button", { name: `收藏影片：${title}` }).click();
+  const favorites = catalog.getByRole("button", {
+    name: "只看我的收藏",
+    exact: true,
+  });
+  await favorites.click();
+  await expect(favorites).toHaveAttribute("aria-pressed", "true");
+  await expect(rows).toHaveCount(1);
+  await expect(
+    catalog.getByRole("heading", { name: title, exact: true }),
+  ).toBeVisible();
+  await catalog.getByRole("button", { name: "清除影片篩選" }).click();
+  await expect(search).toBeFocused();
+  await expect(rows).toHaveCount(12);
+  const fields = await search.evaluate((element) => ({
+    font: parseFloat(getComputedStyle(element).fontSize),
+    height: element.getBoundingClientRect().height,
+  }));
+  expect(fields.font).toBeGreaterThanOrEqual(16);
+  expect(fields.height).toBeGreaterThanOrEqual(44);
+  expect((await length.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await expectNoOverflow(page);
+  await catalog.getByRole("button", { name: `播放：${title}` }).click();
+  const iframe = catalog.locator("iframe");
+  const originalFrame = (await iframe.elementHandle())!;
+  await expect(iframe).toHaveAttribute(
+    "src",
+    /youtube-nocookie\.com\/embed\/F0000000024/,
+  );
+  await search.fill("不存在的虛構影片");
+  await expect(rows).toHaveCount(0);
+  expect(
+    await iframe.evaluate((node, original) => node === original, originalFrame),
+  ).toBe(true);
+  await catalog.getByRole("button", { name: "看過一次", exact: true }).click();
+  await catalog
+    .getByRole("button", { name: "完成，記錄這次運動", exact: true })
+    .click();
+  const form = page.getByRole("dialog");
+  await expect(
+    form.getByRole("combobox", { name: "運動類型", exact: true }),
+  ).toHaveValue("yoga");
+  await expect(form.getByLabel("分鐘數", { exact: true })).toHaveValue("10");
+  await expect(
+    form.getByRole("textbox", { name: "備註", exact: true }),
+  ).toHaveValue(/虛構 YOGA 練習 25/);
+  await form.getByRole("button", { name: "關閉", exact: true }).click();
+  await page.context().setOffline(true);
+  await catalog.getByRole("button", { name: "清除影片篩選" }).click();
+  await length.selectOption("unknown");
+  await expect(rows).toHaveCount(8);
+  expect(
+    await page.evaluate((key) => localStorage.getItem(key), VIDEO_KEY),
+  ).toBe(raw);
+  expect(
+    await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY),
+  ).toBe(healthRaw);
+  await expectNoOverflow(page);
+  await page.getByRole("button", { name: "設定與備份", exact: true }).click();
+  const downloadReady = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "匯出 JSON 備份", exact: true })
+    .click();
+  const backup = JSON.parse(
+    await readFile((await (await downloadReady).path())!, "utf8"),
+  );
+  expect(backup.videoLibrary.custom).toEqual(custom);
+  expect(backup.workouts).toEqual(fixtureData.workouts);
+  await page.reload();
+  await page.getByRole("button", { name: "運動影片", exact: true }).click();
+  await expect(search).toHaveValue("");
+  await expect(length).toHaveValue("all");
+  await expect(rows).toHaveCount(12);
+  await expectNoOverflow(page);
+});
 
 test("跨日回前景更新今日與本週統計，保留表單草稿並以新日期開新紀錄", async ({
   page,
