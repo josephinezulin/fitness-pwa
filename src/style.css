@@ -1643,10 +1643,28 @@ button:disabled {
 .segment-detail {
   padding: 0 0 14px 51px;
 }
+.segment-detail-scroll {
+  max-height: min(320px, 50vh);
+  max-height: min(320px, 50svh);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.segment-detail-scroll:focus-visible {
+  outline: 2px solid #536c47;
+  outline-offset: 3px;
+}
+.segment-collapse {
+  min-height: 44px;
+  margin-top: 8px;
+  padding: 8px;
+  font-size: 13px;
+  color: #465a3f;
+}
 .segment-detail table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
-  font-size: 11px;
+  font-size: 13px;
   color: #6f7d66;
   margin-top: 8px;
 }
@@ -1656,9 +1674,20 @@ button:disabled {
   padding: 5px 6px;
   border-bottom: 1px solid #f0f2ec;
 }
+.segment-detail caption {
+  text-align: left;
+  font-size: 12px;
+  padding: 8px 0;
+}
+.segment-detail thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: white;
+}
 .segment-detail th {
   font-weight: 500;
-  color: #9aa390;
+  color: #465a3f;
 }
 .week-summary {
   display: grid;

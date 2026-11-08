@@ -17,6 +17,99 @@ import { BUILT_IN_VIDEOS, VIDEO_KEY } from "../src/videos";
 import { preferenceKey } from "../src/preferences";
 import { defaultPlans } from "../src/model";
 
+test("50 段跑步機明細限制高度並內部捲動，從下方收合後資料與備份仍完整", async ({
+  page,
+}) => {
+  await page.goto("./");
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+  });
+  await page.getByRole("button", { name: "運動紀錄", exact: true }).click();
+  const row = workoutRow(page, longWorkout.note);
+  const toggle = row.getByRole("button", { name: /跑步機 50 段/ });
+  await toggle.click();
+  const detail = row.locator(".segment-detail");
+  expect((await detail.boundingBox())!.height).toBeLessThanOrEqual(
+    Math.min(320, page.viewportSize()!.height / 2) + 80,
+  );
+  const panel = row.getByRole("region", {
+    name: `${longWorkout.date} 上坡快走／健走跑步機分段明細，可上下捲動`,
+    exact: true,
+  });
+  await expect(toggle).toHaveAttribute(
+    "aria-controls",
+    (await panel.getAttribute("id"))!,
+  );
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(panel.getByRole("row")).toHaveCount(51);
+  const box = await panel.boundingBox();
+  expect(box!.height).toBeLessThanOrEqual(
+    Math.min(320, page.viewportSize()!.height / 2) + 1,
+  );
+  expect(await panel.evaluate((n) => n.scrollHeight > n.clientHeight)).toBe(
+    true,
+  );
+  await panel.focus();
+  await expect(panel).toBeFocused();
+  const pageY = await page.evaluate(() => scrollY);
+  await panel.press("End");
+  await expect
+    .poll(() =>
+      panel.evaluate((n) => n.scrollHeight - n.clientHeight - n.scrollTop),
+    )
+    .toBeLessThanOrEqual(1);
+  const last = panel.getByRole("row").last();
+  await expect(
+    last.getByRole("rowheader", { name: "50", exact: true }),
+  ).toBeVisible();
+  const bounds = await panel.boundingBox();
+  const end = await last.boundingBox();
+  expect(end!.y + end!.height).toBeLessThanOrEqual(
+    bounds!.y + bounds!.height + 1,
+  );
+  const header = panel.locator("thead");
+  const headerBox = await header.boundingBox();
+  expect(Math.abs(headerBox!.y - bounds!.y)).toBeLessThanOrEqual(1);
+  expect(
+    Math.abs((await page.evaluate(() => scrollY)) - pageY),
+  ).toBeLessThanOrEqual(1);
+  const collapse = row.getByRole("button", {
+    name: "收合分段明細",
+    exact: true,
+  });
+  expect((await collapse.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await panel.press("Tab");
+  await expect(collapse).toBeFocused();
+  await collapse.press("Enter");
+  await expect(panel).toHaveCount(0);
+  await expect(toggle).toBeFocused();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  expect(await readData(page)).toEqual(fixtureData);
+  await expectNoOverflow(page);
+  await page.context().setOffline(true);
+  await toggle.click();
+  await expect(panel.getByRole("row")).toHaveCount(51);
+  await collapse.click();
+  await page.getByRole("button", { name: "設定與備份", exact: true }).click();
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "匯出 JSON 備份", exact: true }).click(),
+  ]);
+  const backup = JSON.parse(await readFile((await download.path())!, "utf8"));
+  expect(
+    backup.workouts.find((w: { id: string }) => w.id === longWorkout.id)
+      .segments,
+  ).toEqual(longWorkout.segments);
+  expect(backup.metrics).toEqual(fixtureData.metrics);
+  expect(await readData(page)).toEqual(fixtureData);
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "運動紀錄", exact: true }).click();
+  await toggle.click();
+  await expect(panel.getByRole("row")).toHaveCount(51);
+  expect(await readData(page)).toEqual(fixtureData);
+  await expectNoOverflow(page);
+});
+
 test("長課表清單開啟編輯會定位欄位，取消與離線儲存後回到原按鈕", async ({
   page,
 }) => {
