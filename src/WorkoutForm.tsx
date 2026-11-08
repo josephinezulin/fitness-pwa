@@ -121,6 +121,7 @@ export function WorkoutForm({
       defaultSegment(editing?.type || initialDraft?.type || "walk"),
     ],
   );
+  const [segmentsModified, setSegmentsModified] = useState(!!initialSegments);
   const [minutes, setMinutes] = useState(
     String(editing?.minutes || initialDraft?.minutes || 30),
   );
@@ -158,8 +159,12 @@ export function WorkoutForm({
     segments,
     weight,
   ]);
+  const changeSegments = (next: Draft[] | ((all: Draft[]) => Draft[])) => {
+    setSegmentsModified(true);
+    setSegments(next);
+  };
   const update = (i: number, field: keyof Draft, value: string) =>
-    setSegments((all) =>
+    changeSegments((all) =>
       all.map((d, j) => (j === i ? { ...d, [field]: value } : d)),
     );
   const [min, max] = [SEGMENT_LIMITS.minutes, SEGMENT_LIMITS.speed];
@@ -208,7 +213,7 @@ export function WorkoutForm({
             const next = e.target.value as WorkoutType;
             setType(next);
             if (!editing) setUseTreadmill(next === "walk" || next === "run");
-            if (!editing?.segments) setSegments([defaultSegment(next)]);
+            if (!segmentsModified) setSegments([defaultSegment(next)]);
           }}
         >
           {groups.map((g) => (
@@ -246,7 +251,7 @@ export function WorkoutForm({
                 onClick={() => {
                   setType(p.type);
                   setUseTreadmill(true);
-                  setSegments(p.segments.map(toDraft));
+                  changeSegments(p.segments.map(toDraft));
                 }}
               >
                 {p.title}
@@ -254,7 +259,7 @@ export function WorkoutForm({
             ))}
           </div>
           <p className="tiny muted">
-            套用範本會取代目前分段，可依實際機台設定修改。
+            套用範本會取代目前分段，可依實際機台設定修改；切換類型時會保留已修改或帶入的分段。
           </p>
           <div className="segment-head" aria-hidden="true">
             <span>#</span>
@@ -308,7 +313,7 @@ export function WorkoutForm({
                 aria-label={`刪除第 ${i + 1} 段`}
                 disabled={segments.length === 1}
                 onClick={() =>
-                  setSegments((all) => all.filter((_, j) => j !== i))
+                  changeSegments((all) => all.filter((_, j) => j !== i))
                 }
               >
                 <Trash2 size={15} />
@@ -328,7 +333,7 @@ export function WorkoutForm({
               className="secondary"
               disabled={segments.length >= SEGMENT_LIMITS.count}
               onClick={() =>
-                setSegments((all) => [
+                changeSegments((all) => [
                   ...all,
                   {
                     minutes: "5",
@@ -344,7 +349,9 @@ export function WorkoutForm({
               type="button"
               className="secondary"
               disabled={segments.length >= SEGMENT_LIMITS.count}
-              onClick={() => setSegments((all) => [...all, { ...all.at(-1)! }])}
+              onClick={() =>
+                changeSegments((all) => [...all, { ...all.at(-1)! }])
+              }
             >
               <Copy size={15} /> 複製上一段
             </button>

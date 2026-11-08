@@ -16,6 +16,121 @@ import { readFile } from "node:fs/promises";
 import { BUILT_IN_VIDEOS, VIDEO_KEY } from "../src/videos";
 import { preferenceKey } from "../src/preferences";
 
+test("跑步機分段在切換類型與模式時保留，取消不寫入，離線儲存與重開仍完整", async ({
+  page,
+}) => {
+  await page.goto("./");
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+  });
+  const source = workoutRow(page, sourceWorkout.note);
+  await source.getByRole("button", { name: /再記一次/ }).click();
+  const form = page.getByRole("dialog");
+  const type = form.getByRole("combobox", { name: "運動類型", exact: true });
+  const count = () => form.getByRole("spinbutton", { name: /^第 \d+ 段分鐘$/ });
+  await type.selectOption("run");
+  await expect(count()).toHaveCount(2);
+  await expect(form.getByLabel("第 2 段坡度", { exact: true })).toHaveValue(
+    "3",
+  );
+  await form.getByLabel("第 1 段分鐘", { exact: true }).fill("12.5");
+  await form.getByLabel("第 2 段分鐘", { exact: true }).fill("17.5");
+  await form.getByLabel("第 1 段速度", { exact: true }).fill("");
+  await form.getByLabel("消耗熱量（kcal）", { exact: true }).fill("123");
+  await form
+    .getByRole("textbox", { name: "備註", exact: true })
+    .fill("虛構分段切換草稿");
+  await type.selectOption("cycling");
+  await expect(count()).toHaveCount(0);
+  await type.selectOption("walk");
+  await expect(count()).toHaveCount(2);
+  await expect(form.getByLabel("第 1 段速度", { exact: true })).toHaveValue("");
+  await expect(form.getByLabel("第 1 段分鐘", { exact: true })).toHaveValue(
+    "12.5",
+  );
+  await expect(form.getByLabel("第 2 段分鐘", { exact: true })).toHaveValue(
+    "17.5",
+  );
+  await form.getByLabel("第 1 段速度", { exact: true }).fill("8.5");
+  await form.getByRole("checkbox").uncheck();
+  await expect(count()).toHaveCount(0);
+  await form.getByRole("checkbox").check();
+  await expect(count()).toHaveCount(2);
+  await expect(form.getByLabel("第 1 段速度", { exact: true })).toHaveValue(
+    "8.5",
+  );
+  await expect(
+    form.getByLabel("消耗熱量（kcal）", { exact: true }),
+  ).toHaveValue("123");
+  await expect(
+    form.getByRole("textbox", { name: "備註", exact: true }),
+  ).toHaveValue("虛構分段切換草稿");
+  await expect(form.getByLabel("日期", { exact: true })).toHaveValue(TODAY);
+  expect((await readData(page)).workouts).toEqual(fixtureData.workouts);
+  await expectNoOverflow(page);
+  await form
+    .getByRole("button", { name: "平地健走 20 分", exact: true })
+    .click();
+  await expect(count()).toHaveCount(3);
+  await expect(form.getByLabel("分鐘數", { exact: true })).toHaveValue("20");
+  await form.getByRole("button", { name: "關閉", exact: true }).click();
+  expect((await readData(page)).workouts).toEqual(fixtureData.workouts);
+  await source.getByRole("button", { name: /再記一次/ }).click();
+  await expect(count()).toHaveCount(2);
+  await expect(form.getByLabel("第 1 段分鐘", { exact: true })).toHaveValue(
+    "10",
+  );
+  await form.getByLabel("第 1 段分鐘", { exact: true }).fill("12.5");
+  await form.getByLabel("第 2 段分鐘", { exact: true }).fill("17.5");
+  await form.getByLabel("第 1 段速度", { exact: true }).fill("8.5");
+  await form.getByLabel("第 2 段速度", { exact: true }).fill("9");
+  await type.selectOption("run");
+  await expect(count()).toHaveCount(2);
+  await form.getByLabel("消耗熱量（kcal）", { exact: true }).fill("123");
+  await form
+    .getByRole("textbox", { name: "備註", exact: true })
+    .fill("虛構切換後保留分段");
+  await page.context().setOffline(true);
+  await form.getByRole("button", { name: /儲存紀錄/ }).click();
+  await expect(form).toHaveCount(0);
+  const saved = await readData(page);
+  expect(saved.workouts).toHaveLength(fixtureData.workouts.length + 1);
+  const fresh = saved.workouts.find(
+    (row) => !fixtureData.workouts.some((old) => old.id === row.id),
+  )!;
+  expect(fresh).toMatchObject({
+    date: TODAY,
+    type: "run",
+    minutes: 30,
+    calories: 123,
+    note: "虛構切換後保留分段",
+    segments: [
+      { minutes: 12.5, speed: 8.5, incline: 0 },
+      { minutes: 17.5, speed: 9, incline: 3 },
+    ],
+  });
+  expect(saved.workouts.find((row) => row.id === sourceWorkout.id)).toEqual(
+    sourceWorkout,
+  );
+  expect(saved.metrics).toEqual(fixtureData.metrics);
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "運動紀錄", exact: true }).click();
+  await workoutRow(page, fresh.note)
+    .getByRole("button", { name: "編輯運動", exact: true })
+    .click();
+  await type.selectOption("walk");
+  await expect(count()).toHaveCount(2);
+  await expect(form.getByLabel("第 1 段分鐘", { exact: true })).toHaveValue(
+    "12.5",
+  );
+  await expect(form.getByLabel("第 2 段速度", { exact: true })).toHaveValue(
+    "9",
+  );
+  await form.getByRole("button", { name: "關閉", exact: true }).click();
+  expect(await readData(page)).toEqual(saved);
+  await expectNoOverflow(page);
+});
+
 test("影片分類可用原生鍵盤切換與清除，保留播放器和完整資料，離線仍可篩選", async ({
   page,
 }) => {
