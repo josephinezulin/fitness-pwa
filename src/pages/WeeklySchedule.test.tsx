@@ -3,8 +3,119 @@ import { fireEvent, render, screen, cleanup } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PlanManager, WeeklySchedule } from "./WeeklySchedule";
 import { defaultPlans, weekDays } from "../model";
+import { useState } from "react";
 afterEach(cleanup);
 describe("weekly plan experience", () => {
+  it("focuses a named plan form and returns to the opener on cancel without saving", () => {
+    const save = vi.fn(() => true);
+    render(
+      <PlanManager
+        plans={[defaultPlans[0]]}
+        canEdit
+        onSave={save}
+        onDraftChange={() => {}}
+      />,
+    );
+    const opener = screen.getByRole("button", { name: "編輯居家徒手訓練" });
+    opener.focus();
+    fireEvent.click(opener);
+    const name = screen.getByLabelText("課表名稱");
+    expect(document.activeElement).toBe(name);
+    const form = screen.getByRole("form", { name: "編輯課表" });
+    expect(opener.getAttribute("aria-controls")).toBe(form.id);
+    expect(opener.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.change(name, { target: { value: "虛構未儲存課表" } });
+    fireEvent.click(screen.getByRole("button", { name: "取消編輯課表" }));
+    expect(document.activeElement).toBe(opener);
+    expect(opener.getAttribute("aria-expanded")).toBe("false");
+    expect(save).not.toHaveBeenCalled();
+    expect(defaultPlans[0].title).toBe("居家徒手訓練");
+  });
+  it("returns to the still-connected edit button after a successful rename", () => {
+    function Example() {
+      const [plans, setPlans] = useState([defaultPlans[0]]);
+      return (
+        <PlanManager
+          plans={plans}
+          canEdit
+          onSave={(next) => {
+            setPlans(next);
+            return true;
+          }}
+          onDraftChange={() => {}}
+        />
+      );
+    }
+    render(<Example />);
+    const opener = screen.getByRole("button", { name: "編輯居家徒手訓練" });
+    fireEvent.click(opener);
+    fireEvent.change(screen.getByLabelText("課表名稱"), {
+      target: { value: "虛構更名課表" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "儲存課表" }));
+    expect(screen.queryByRole("form")).toBeNull();
+    expect(screen.getByRole("button", { name: "編輯虛構更名課表" })).toBe(
+      opener,
+    );
+    expect(document.activeElement).toBe(opener);
+  });
+  it("preserves failed drafts and focus on rerenders, returning to add only after cancel", () => {
+    const save = vi.fn(() => false);
+    const { rerender } = render(
+      <PlanManager plans={[]} canEdit onSave={save} onDraftChange={() => {}} />,
+    );
+    const opener = screen.getByRole("button", { name: "新增課表" });
+    fireEvent.click(opener);
+    const name = screen.getByLabelText("課表名稱") as HTMLInputElement;
+    expect(document.activeElement).toBe(name);
+    fireEvent.change(name, { target: { value: "虛構保留草稿" } });
+    const submit = screen.getByRole("button", { name: "儲存課表" });
+    submit.focus();
+    fireEvent.click(submit);
+    expect(save).toHaveBeenCalledOnce();
+    expect(name.value).toBe("虛構保留草稿");
+    expect(document.activeElement).toBe(submit);
+    rerender(
+      <PlanManager
+        plans={[defaultPlans[0]]}
+        canEdit
+        onSave={save}
+        onDraftChange={() => {}}
+      />,
+    );
+    expect(document.activeElement).toBe(submit);
+    expect(name.value).toBe("虛構保留草稿");
+    fireEvent.click(screen.getByRole("button", { name: "取消編輯課表" }));
+    expect(document.activeElement).toBe(opener);
+  });
+  it.each(["removed", "disabled"])(
+    "returns to the manager heading if the opener is %s",
+    (reason) => {
+      const p = { ...defaultPlans[0] };
+      const props = {
+        canEdit: true,
+        onSave: () => true,
+        onDraftChange: () => {},
+      };
+      const { rerender } = render(<PlanManager {...props} plans={[p]} />);
+      fireEvent.click(screen.getByRole("button", { name: "編輯居家徒手訓練" }));
+      fireEvent.change(screen.getByLabelText("課表名稱"), {
+        target: { value: "虛構待確認" },
+      });
+      rerender(
+        <PlanManager
+          {...props}
+          canEdit={reason !== "disabled"}
+          plans={reason === "removed" ? [] : [p]}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "取消編輯課表" }));
+      expect(document.activeElement).toBe(
+        screen.getByRole("heading", { name: "管理課表" }),
+      );
+      expect(screen.queryByRole("form")).toBeNull();
+    },
+  );
   it("saves an explicit plan with ISO weekday and a literal title", () => {
     const save = vi.fn(() => true);
     render(

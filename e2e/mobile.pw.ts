@@ -15,6 +15,136 @@ import {
 import { readFile } from "node:fs/promises";
 import { BUILT_IN_VIDEOS, VIDEO_KEY } from "../src/videos";
 import { preferenceKey } from "../src/preferences";
+import { defaultPlans } from "../src/model";
+
+test("長課表清單開啟編輯會定位欄位，取消與離線儲存後回到原按鈕", async ({
+  page,
+}) => {
+  const plans = [
+    ...defaultPlans,
+    ...Array.from({ length: 14 }, (_, i) => ({
+      ...defaultPlans[0],
+      id: `fictional-paused-${i}`,
+      title: `虛構停用課表 ${i + 1}`,
+      active: false,
+    })),
+  ];
+  const original = { ...fixtureData, plans };
+  await page.goto("./");
+  await page.evaluate(
+    ({ key, data }) => localStorage.setItem(key, JSON.stringify(data)),
+    { key: STORAGE_KEY, data: original },
+  );
+  await page.reload();
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+  });
+  await page.getByRole("button", { name: "本週課表", exact: true }).click();
+  const manager = page.locator(".plan-manager");
+  const opener = manager
+    .getByRole("button", { name: "編輯居家徒手訓練", exact: true })
+    .first();
+  await opener.click();
+  const name = manager.getByLabel("課表名稱", { exact: true });
+  await expect(name).toBeFocused();
+  const form = manager.getByRole("form", { name: "編輯課表", exact: true });
+  await expect(opener).toHaveAttribute("aria-expanded", "true");
+  await expect(opener).toHaveAttribute(
+    "aria-controls",
+    (await form.getAttribute("id"))!,
+  );
+  const rect = await name.boundingBox();
+  expect(rect!.y).toBeGreaterThanOrEqual(0);
+  expect(rect!.y + rect!.height).toBeLessThanOrEqual(
+    page.viewportSize()!.height,
+  );
+  await expect(name).toHaveCSS("font-size", "16px");
+  for (const field of [
+    name,
+    form.getByLabel("最少分鐘", { exact: true }),
+    form.getByLabel("最多分鐘", { exact: true }),
+    form.getByRole("combobox", { name: "星期", exact: true }),
+    form.getByRole("combobox", { name: "運動類型", exact: true }),
+  ]) {
+    const box = await field.boundingBox();
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+    await expect(field).toHaveCSS("font-size", "16px");
+  }
+  expect(
+    await name.evaluate((node) => {
+      const rect = node.getBoundingClientRect();
+      return (
+        document.elementFromPoint(
+          rect.x + rect.width / 2,
+          rect.y + rect.height / 2,
+        ) === node
+      );
+    }),
+  ).toBe(true);
+  for (const button of [
+    opener,
+    form.getByRole("button", { name: "取消編輯課表", exact: true }),
+  ]) {
+    const box = await button.boundingBox();
+    expect(box!.width).toBeGreaterThanOrEqual(44);
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+  }
+  await name.press("Tab");
+  await expect(
+    form.getByRole("combobox", { name: "星期", exact: true }),
+  ).toBeFocused();
+  await form
+    .getByRole("combobox", { name: "星期", exact: true })
+    .press("Shift+Tab");
+  await expect(name).toBeFocused();
+  await name.fill("虛構取消草稿");
+  await form.getByRole("button", { name: "取消編輯課表", exact: true }).click();
+  await expect(form).toHaveCount(0);
+  await expect(opener).toBeFocused();
+  await expect(opener).toHaveAttribute("aria-expanded", "false");
+  expect(await readData(page)).toEqual(original);
+  await expectNoOverflow(page);
+  await opener.click();
+  await expect(name).toBeFocused();
+  await name.fill("虛構調整課表");
+  await form.getByLabel("最少分鐘", { exact: true }).fill("22");
+  await form.getByLabel("最多分鐘", { exact: true }).fill("35");
+  await page.context().setOffline(true);
+  await form.getByRole("button", { name: "儲存課表", exact: true }).click();
+  await expect(form).toHaveCount(0);
+  const updatedOpener = manager.getByRole("button", {
+    name: "編輯虛構調整課表",
+    exact: true,
+  });
+  await expect(updatedOpener).toBeFocused();
+  const saved = await readData(page);
+  expect(saved.plans).toContainEqual({
+    ...plans[0],
+    title: "虛構調整課表",
+    minMinutes: 22,
+    maxMinutes: 35,
+  });
+  expect(saved.plans!.filter((p) => p.id !== plans[0].id)).toEqual(
+    plans.slice(1),
+  );
+  expect(saved.workouts).toEqual(original.workouts);
+  expect(saved.metrics).toEqual(original.metrics);
+  const add = manager.getByRole("button", { name: "新增課表", exact: true });
+  await add.click();
+  const newForm = manager.getByRole("form", { name: "新增課表", exact: true });
+  await expect(newForm.getByLabel("課表名稱", { exact: true })).toBeFocused();
+  await newForm
+    .getByRole("button", { name: "取消編輯課表", exact: true })
+    .click();
+  await expect(add).toBeFocused();
+  expect(await readData(page)).toEqual(saved);
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "本週課表", exact: true }).click();
+  await expect(updatedOpener).toBeVisible();
+  await expect(manager.getByRole("form")).toHaveCount(0);
+  expect(await readData(page)).toEqual(saved);
+  await expectNoOverflow(page);
+});
 
 test("離開跑步機時帶入總分鐘並說明小數轉換，可修改後離線儲存整數紀錄", async ({
   page,
