@@ -7,6 +7,7 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
+import { useState } from "react";
 import { WorkoutLogs } from "./WorkoutLogs";
 import type { Workout } from "../model";
 import { calendarDaysEnding } from "../calendar";
@@ -176,3 +177,72 @@ it("keeps filters available without edit permission and leaves the overview limi
   expect(screen.queryByRole("status")).toBeNull();
   expect(screen.queryByRole("button", { name: /再顯示/ })).toBeNull();
 });
+
+it.each([true, false])(
+  "keeps the full treadmill detail readable and returns collapse focus with edit permission %s",
+  (canEdit) => {
+    const source: Workout = {
+      id: "fictional special / id",
+      date: "2026-11-07",
+      type: "walk",
+      minutes: 500,
+      calories: 123,
+      note: "虛構完整分段",
+      segments: Array.from({ length: 50 }, (_, i) => ({
+        minutes: 10,
+        speed: 4 + i / 100,
+        incline: i % 2,
+      })),
+    };
+    const original = JSON.stringify(source);
+    const callbacks = {
+      onBegin: vi.fn(),
+      onRepeat: vi.fn(),
+      onDelete: vi.fn(),
+    };
+    function Example() {
+      const [expanded, setExpanded] = useState<string | null>(null);
+      return (
+        <WorkoutLogs
+          workouts={[source]}
+          canEdit={canEdit}
+          {...callbacks}
+          expanded={expanded}
+          setExpanded={setExpanded}
+        />
+      );
+    }
+    render(<Example />);
+    const toggle = screen.getByRole("button", { name: /跑步機 50 段/ });
+    expect(screen.queryByRole("region", { name: /分段明細/ })).toBeNull();
+    fireEvent.click(toggle);
+    const region = screen.getByRole("region", {
+      name: "2026-11-07 上坡快走／健走跑步機分段明細，可上下捲動",
+    });
+    expect(toggle.getAttribute("aria-controls")).toBe(region.id);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(region.tabIndex).toBe(0);
+    expect(within(region).getAllByRole("row")).toHaveLength(51);
+    expect(within(region).getAllByRole("columnheader")).toHaveLength(4);
+    const last = within(region).getAllByRole("row").at(-1)!;
+    expect(within(last).getByRole("rowheader", { name: "50" })).toBeTruthy();
+    expect(
+      within(last)
+        .getAllByRole("cell")
+        .map((n) => n.textContent),
+    ).toEqual(["10", "4.49", "1"]);
+    const collapse = screen.getByRole("button", { name: "收合分段明細" });
+    collapse.focus();
+    fireEvent.click(collapse);
+    expect(screen.queryByRole("region", { name: /分段明細/ })).toBeNull();
+    expect(document.activeElement).toBe(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(toggle.hasAttribute("aria-controls")).toBe(false);
+    fireEvent.click(toggle);
+    expect(screen.getAllByRole("row")).toHaveLength(51);
+    expect(JSON.stringify(source)).toBe(original);
+    expect(callbacks.onBegin).not.toHaveBeenCalled();
+    expect(callbacks.onRepeat).not.toHaveBeenCalled();
+    expect(callbacks.onDelete).not.toHaveBeenCalled();
+  },
+);

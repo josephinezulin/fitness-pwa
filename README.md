@@ -13,7 +13,7 @@ npm run build
 
 `dist/` 是部署產物。Vite 使用相對 base，可部署到 GitHub Pages 的 repo 子目錄。部署不需要私密 Token 或前端環境變數。
 
-瀏覽器回歸測試：`npx playwright install chromium`，完成 `npm run build` 後執行 `npm run test:e2e`。PR 與 Pages 建置都會自動檢查三種手機尺寸的 63 個 Chromium 案例，失敗會阻擋部署；只使用虛構資料。安裝方式、診斷報告與實機限制見 [瀏覽器測試](docs/browser-tests.md)。
+瀏覽器回歸測試：`npx playwright install chromium`，完成 `npm run build` 後執行 `npm run test:e2e`。PR 與 Pages 建置都會自動檢查三種手機尺寸的 66 個 Chromium 案例，失敗會阻擋部署；只使用虛構資料。安裝方式、診斷報告與實機限制見 [瀏覽器測試](docs/browser-tests.md)。
 
 ## 部署與手動授權
 
@@ -74,6 +74,8 @@ PWA 回到前景或恢復連線時會適度檢查介面新版，有新版本就�
 每週目標調整中的草稿也會暫緩介面更新；先儲存或按「取消調整」後，才可套用新版。草稿只留目前頁，離頁或切換工作區後清除。
 
 ## 運動紀錄與影片庫
+
+跑步機明細限制展開高度，可在明細內捲動查看全部分段，欄名固定；下方可直接收合，不必沿長表格滑回頂端。
 
 新增或編輯課表時會直接定位名稱欄位，取消或儲存成功後回到原操作按鈕；課表欄位與按鈕適合手機操作。
 

@@ -102,6 +102,7 @@ export function WorkoutLogs({
   const [filters, setFilters] = useState<WorkoutFilters>(emptyWorkoutFilters);
   const [shown, setShown] = useState(HISTORY_BATCH);
   const pendingFocus = useRef<string | null>(null);
+  const segmentButtons = useRef(new Map<string, HTMLButtonElement>());
   const result = useMemo(
     () => workoutHistory(workouts, history ? filters : emptyWorkoutFilters),
     [workouts, filters, history],
@@ -232,8 +233,9 @@ export function WorkoutLogs({
       )}
       <div id={`${id}-rows`}>
         {visible.length ? (
-          visible.map((w) => {
+          visible.map((w, index) => {
             const Icon = typeIcon(w.type);
+            const segmentId = `${id}-segments-${index}`;
             return (
               <div className="log-wrap" key={w.id}>
                 <div className="log">
@@ -265,6 +267,13 @@ export function WorkoutLogs({
                         <button
                           className="inline-link"
                           aria-expanded={expanded === w.id}
+                          aria-controls={
+                            expanded === w.id ? segmentId : undefined
+                          }
+                          ref={(node) => {
+                            if (node) segmentButtons.current.set(w.id, node);
+                            else segmentButtons.current.delete(w.id);
+                          }}
                           onClick={() =>
                             setExpanded(expanded === w.id ? null : w.id)
                           }
@@ -302,27 +311,54 @@ export function WorkoutLogs({
                 </button>
                 {w.segments && expanded === w.id && (
                   <div className="segment-detail">
-                    <TreadmillStats segments={w.segments} />
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>段</th>
-                          <th>分鐘</th>
-                          <th>速度 km/h</th>
-                          <th>坡度 %</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {w.segments.map((s, i) => (
-                          <tr key={i}>
-                            <td>{i + 1}</td>
-                            <td>{s.minutes}</td>
-                            <td>{s.speed}</td>
-                            <td>{s.incline}</td>
+                    <div
+                      className="segment-detail-scroll"
+                      id={segmentId}
+                      role="region"
+                      aria-label={`${w.date} ${WORKOUT_TYPES[w.type].label}跑步機分段明細，可上下捲動`}
+                      tabIndex={0}
+                    >
+                      <TreadmillStats segments={w.segments} />
+                      <table>
+                        <caption>
+                          共 {w.segments.length} 段，可上下捲動查看
+                        </caption>
+                        <thead>
+                          <tr>
+                            <th scope="col">段</th>
+                            <th scope="col">分鐘</th>
+                            <th scope="col">速度 km/h</th>
+                            <th scope="col">坡度 %</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {w.segments.map((s, i) => (
+                            <tr key={i}>
+                              <th scope="row">{i + 1}</th>
+                              <td>{s.minutes}</td>
+                              <td>{s.speed}</td>
+                              <td>{s.incline}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <button
+                      type="button"
+                      className="text-button segment-collapse"
+                      onClick={() => {
+                        setExpanded(null);
+                        const button = segmentButtons.current.get(w.id);
+                        button?.focus({ preventScroll: true });
+                        button?.scrollIntoView?.({
+                          block: "center",
+                          inline: "nearest",
+                          behavior: "auto",
+                        });
+                      }}
+                    >
+                      收合分段明細
+                    </button>
                   </div>
                 )}
               </div>
