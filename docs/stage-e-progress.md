@@ -399,3 +399,27 @@ WeeklyGoal 在 useLayoutEffect 回報 editing，表單出現前納入 App 的 dr
 新增三種尺寸的真實 Service Worker 升級流程：版本 1 開目標草稿，提供版本 2 並回前景；新版已就緒但更新停用，未儲存偏好 raw 不變。取消後可更新但不寫入，再開回 150 分鐘，明確儲存 180 後回到調整按鈕並解鎖；點更新後 controller 讀回版本 2，離線重載仍為 180，運動／健康 raw 完整不變。這使用隔離 loopback server 的虛構 worker 標記，沒有改公開 worker 或登入 Google。
 
 已檢視 320px／844px 目標表單截圖，無水平溢出；發現取消控制項原為 35px 後，增加 scoped min-height 並加入瀏覽器斷言，最終取消／儲存實測 44／46px，輸入 16px、高 46px。最終樣式重建後再次跑全部 51 個案例通過（2.2 分鐘），原有曲線、備份、離線與多分頁回歸完整保留。測試與截圖只用虛構資料，沒有修改私人 Sheet、Google 設定或健康 API。CI／合併／Pages 與正式資產結果追加於本次 PR。
+
+
+## E23：影片分類的原生按鈕語意與鍵盤操作
+
+影片分類原本以 tablist／tab 宣告，卻沒有對應的 tabpanel、方向鍵與 roving tabindex。這裡的操作是篩選同一份清單，本輪改用具名 group 與原生 type=button，以 aria-pressed 呈現目前分類；外觀、分類文字及數量保留，選中零結果分類仍可見。沒有加入自訂鍵盤攔截，Tab／Shift+Tab 逐一移動，Enter／空白鍵沿用瀏覽器原生按鈕啟用。
+
+分類切換仍只改目前頁的 category 與批次，焦點留在操作按鈕；按鈕有深色 2px 焦點框與 3px 間隔，沿用至少 44px 觸控高度及既有橫向捲動容器。實際鍵盤測試先在 320／390px 重現：焦點到了右側分類，按鈕卻被裁成一小段，scrollLeft 仍為 0。補上 onFocus 的 scrollIntoView，block／inline 均為 nearest、behavior 為 auto，只就近讓整顆按鈕可見，不攔截鍵盤或加入動畫；瀏覽器另檢查完整按鈕邊界落在分類列內。清除篩選回到搜尋欄位。播放器不因分類切換而重建，資料、收藏／看過、JSON 備份、雲端權限、搜尋及其他篩選的邏輯均未改動，也不新增儲存 key、Google scope、Sheet 或 API。
+
+官方依據（2026-11-08 實際讀取）：W3C APG 的 Button Pattern 指定 Enter／Space 啟用，toggle button 以 aria-pressed 呈現狀態；Tabs Pattern 則對應不同 panel，要求左右鍵等焦點行為。本輪採原生按鈕群組，與健康／運動趨勢指標的既有控制方式一致，不把單純清單篩選宣告為未完整實作的 tabs。
+
+- https://www.w3.org/WAI/ARIA/apg/patterns/button/
+- https://www.w3.org/WAI/ARIA/apg/patterns/tabs/
+- https://developer.mozilla.org/en-US/docs/Web/API/Element/scrollIntoView
+
+手動驗收：iPhone 接鍵盤時，在影片頁用 Tab 從搜尋、長度移到分類，確認焦點框可見；Enter 選居家徒手，空白鍵選瑜伽，Shift+Tab 可返回。較窄螢幕應能沿分類列水平捲到焦點，整頁不水平溢出。VoiceOver 應以具名群組／按鈕及按下狀態呈現分類，不再宣告 tabs；此項仍需本人實機確認。清除應回搜尋欄位，播放中的影片仍留在頁面；離線可篩選既有清單，實際播放仍需網路。沒有新的 Google 授權動作。
+
+限制：這不是完整 VoiceOver 或 WCAG 符合性驗收，Chromium 的角色、焦點與鍵盤結果不代表 iPhone Safari／主畫面 PWA 的讀屏與觸控已通過。搜尋狀態仍只留目前頁，沒有加分類偏好持久化；健康捷徑與本人 OAuth 的既有手動待辦保持不變。
+
+
+本機驗證：npm ci、347 項 Vitest（42 檔）、8 項 Python、TypeScript／Vite／Service Worker 正式建置、瀏覽器型別檢查、Prettier 及 diff 檢查通過。既有組合篩選、零結果選取分類、雲端唯讀／編輯權限、草稿、播放器與備份單元回歸保留，只更新分類角色與狀態的查詢，沒有新增僅複述標記的單元案例。
+
+新增三種尺寸的實際鍵盤流程，先重現窄螢幕右側分類部分可見卻未捲動的兩個失敗，再於修正後通過完整 54 個 Playwright 案例（2.3 分鐘）。涵蓋原生 Tab／Shift+Tab、Enter／Space、按下狀態互斥、切換後焦點保留、深色框與 44px 高度、水平列捲動及完整按鈕邊界、清除回搜尋、同一 iframe 保留；離線仍能分類，影片／健康運動／偏好 raw 均未寫入，離線重開仍有完整三部虛構影片。原有曲線、備份、離線、多分頁與真實 worker 更新案例全數通過。
+
+已檢視 320px／844px 的末端分類焦點截圖，顯示完整「跳繩」標籤、44px 按鈕與深色焦點框，整頁無水平溢出。測試與截圖均用獨立 context／虛構資料，外部影片請求被阻擋，沒有登入 Google 或修改私人 Sheet；不將 iframe／角色 DOM 通過稱為真實 YouTube 或 VoiceOver 驗收。CI／合併／Pages 與正式資產結果追加於本次 PR。

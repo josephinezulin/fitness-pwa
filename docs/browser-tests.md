@@ -19,7 +19,7 @@ Linux CI 使用官方 `npx playwright install --with-deps chromium` 安裝 Chrom
 
 ## 範圍
 
-十七個使用情境，各在 320×852、390×844、844×390 執行，共 51 個案例：
+十八個使用情境，各在 320×852、390×844、844×390 執行，共 54 個案例：
 
 - 平滑曲線、相鄰量測、缺日斷線、真實零及鍵盤 Tooltip，並與每日數值表比對。
 - 每日／每週清單最大高度、內部鍵盤捲動、固定欄名，以及捲到底後直接收合。
@@ -42,6 +42,8 @@ Linux CI 使用官方 `npx playwright install --with-deps chromium` 安裝 Chrom
 - 本機 25 部自訂影片：從搜尋開編輯後 URL 聚焦、取消不寫入、拒絕重複連結、移除選填長度，保留 ID／原順序並展開到第 25 部的更新標題與焦點。更換網址／分類／長度後仍維持同一 iframe，收藏／看過原始字串及運動／健康 raw 不變，真正下載的備份完整，離線重開可查到新資料。
 
 - 每週目標的真實 Service Worker 更新：表單取得焦點、16px／44px 與展開狀態，填寫時發現新版仍阻擋更新；取消不寫入，再開回原目標，儲存後才解鎖並回到調整按鈕。明確更新後讀回新版 controller，離線重開仍有新目標，運動／健康 raw 不變。
+
+- 影片分類的原生鍵盤流程：搜尋欄 Tab 到長度再到分類，Enter／空白鍵切換，Shift+Tab 返回，焦點保留及按下狀態互斥。窄螢幕橫向分類列隨焦點捲動，深色焦點框及 44px 控制項、清除後回搜尋、同一 iframe、離線篩選／重開與全部 raw 不變。
 
 每個案例使用新的瀏覽器 context，僅填入 e2e/fixtures.ts 的虛構 localStorage 資料。Date 固定為 2026-11-07，避免 CI 跨午夜造成日期漂移，計時器與繪圖仍正常執行。請求以 loopback origin 過濾，不進行 Google 登入、Picker、私人 Sheets、健康 API 或真實 YouTube 播放，也沒有 storageState、Token 或真實帳號 fixture。離線案例明確等待 Service Worker 就緒與控制頁面後才切斷網路。
 
@@ -72,4 +74,6 @@ E20 的 PR #27 與 Pages 完整檢查通過 334 項 Vitest（42 檔）、8 項 P
 
 E21 的 PR #28 與 Pages 已通過 342 項 Vitest（42 檔）、8 項 Python、正式建置及 48 個 Playwright 案例（2.1 分鐘）。新案例包含實際下載備份及離線重開，僅驗證頁面 DOM 與虛構 localStorage，CI／Pages 及正式資產驗證見 PR #28。
 
-E22 本機通過 347 項 Vitest（42 檔）、8 項 Python、正式建置及最終樣式的 51 個 Playwright 案例（2.2 分鐘）。新增的每週目標流程使用真實 worker waiting／更新／controller 回讀及離線重載；只代表 Chromium 中的虛構測試 context，不代替 iPhone 實機驗收。CI／Pages 結果見本輪 PR。
+E22 的 PR #29 與 Pages 已通過 347 項 Vitest（42 檔）、8 項 Python、正式建置及最終樣式的 51 個 Playwright 案例（2.2 分鐘）。新增的每週目標流程使用真實 worker waiting／更新／controller 回讀及離線重載；只代表 Chromium 中的虛構測試 context，不代替 iPhone 實機驗收。CI／Pages 及正式資產驗證見 PR #29。
+
+E23 新增影片分類的原生鍵盤流程，完整 54 個 Playwright 案例通過（2.3 分鐘）。初跑在 320／390px 發現焦點按鈕被裁切而分類列不捲動，補 onFocus 的 nearest 捲入後原斷言及完整按鈕邊界均通過；只測虛構清單，CI／Pages 結果見本輪 PR。
