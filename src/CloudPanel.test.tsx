@@ -10,7 +10,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CloudPanel } from "./CloudPanel";
-import { rememberSelection } from "./workspace";
+import { rememberSelection, selectionKey } from "./workspace";
 const mock = vi.hoisted(() => ({
   login: vi.fn(),
   prepare: vi.fn(),
@@ -104,7 +104,7 @@ describe("Google connection lifecycle", () => {
   it("asks for no API key inputs and leaves login unavailable if the site is not configured", async () => {
     mock.config.mockResolvedValue(null);
     render(<CloudPanel {...props()} />);
-    await screen.findByText(/Google 連線準備中/);
+    await screen.findByText(/Google 連線暫時無法使用/);
     expect(screen.queryAllByRole("textbox")).toHaveLength(0);
     expect(
       (
@@ -155,12 +155,28 @@ describe("Google connection lifecycle", () => {
     const signal = mock.inspect.mock.calls[0][2] as AbortSignal;
     fireEvent.click(screen.getByRole("button", { name: "登出" }));
     expect(signal.aborted).toBe(true);
+    // Account B has no remembered file, so sign-in opens the picker; the user cancels it.
+    mock.choose.mockResolvedValueOnce(null);
     await ready();
     fireEvent.click(screen.getByRole("button", { name: "使用 Google 登入" }));
     await screen.findByText("b@example.com");
+    await waitFor(() => expect(mock.choose).toHaveBeenCalledTimes(1));
     await act(async () => finish(inspection()));
     expect(p.onUseSnapshot).not.toHaveBeenCalled();
     expect(mock.inspect).toHaveBeenCalledTimes(1);
+  });
+  it("opens the picker on first sign-in and applies and remembers a compatible pick at once", async () => {
+    const p = props();
+    render(<CloudPanel {...p} />);
+    await connect();
+    await waitFor(() => expect(p.onUseSnapshot).toHaveBeenCalledTimes(1));
+    expect(mock.choose).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByRole("button", { name: "在首頁查看這份雲端資料" }),
+    ).toBeNull();
+    expect(JSON.parse(localStorage.getItem(selectionKey("A"))!).id).toBe(
+      "sheet-private-1",
+    );
   });
   it("ignores a completed login after the user cancels", async () => {
     let finish!: (value: ReturnType<typeof session>) => void;
@@ -185,14 +201,8 @@ describe("Google connection lifecycle", () => {
     const p = props();
     const view = render(<CloudPanel {...p} />);
     await connect();
-    fireEvent.click(
-      screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
-    );
     await screen.findByText("格式檢查通過");
-    fireEvent.click(
-      screen.getByRole("button", { name: "在首頁查看這份雲端資料" }),
-    );
-    expect(p.onUseSnapshot).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(p.onUseSnapshot).toHaveBeenCalledTimes(1));
     view.rerender(<CloudPanel {...p} activeSpreadsheetId="sheet-private-1" />);
     let finish!: (value: ReturnType<typeof inspection>) => void;
     mock.inspect.mockImplementationOnce(
@@ -211,13 +221,8 @@ describe("Google connection lifecycle", () => {
     const p = props();
     const view = render(<CloudPanel {...p} />);
     await connect();
-    fireEvent.click(
-      screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
-    );
     await screen.findByText("格式檢查通過");
-    fireEvent.click(
-      screen.getByRole("button", { name: "在首頁查看這份雲端資料" }),
-    );
+    await waitFor(() => expect(p.onUseSnapshot).toHaveBeenCalledTimes(1));
     view.rerender(<CloudPanel {...p} activeSpreadsheetId="sheet-private-1" />);
     mock.inspect.mockRejectedValueOnce(Error("offline"));
     act(() => window.dispatchEvent(new Event("daily-movement-refresh")));
