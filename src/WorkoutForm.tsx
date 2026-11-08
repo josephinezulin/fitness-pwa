@@ -110,7 +110,9 @@ export function WorkoutForm({
       ? !!editing.segments
       : (initialDraft?.treadmill ?? initialDraft?.type === "walk"),
   );
-  const [date, setDate] = useState(editing?.date || today);
+  const [date, setDate] = useState(
+    editing?.date || initialDraft?.date || today,
+  );
   const [calories, setCalories] = useState(String(editing?.calories ?? 0));
   const [weightOverride, setWeightOverride] = useState("");
   const [appliedEstimate, setAppliedEstimate] = useState<string | null>(null);

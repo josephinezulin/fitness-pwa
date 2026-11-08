@@ -18,7 +18,35 @@ export type WorkoutDraft = {
   countWatch?: boolean;
   segments?: Segment[];
   fromDate?: string;
+  /** Prefilled record date, e.g. checking off an earlier day this week. */
+  date?: string;
 };
+/** Draft for checking off a planned session: walks use the personal incline routine. */
+export function planWorkoutDraft(
+  plan: { type: WorkoutType; title: string; minMinutes: number },
+  date: string,
+): WorkoutDraft {
+  const routine =
+    plan.type === "walk"
+      ? TREADMILL_PRESETS.find((p) => p.id === "my-incline-55")
+      : undefined;
+  return routine
+    ? {
+        type: "walk",
+        minutes: routine.segments.reduce((sum, s) => sum + s.minutes, 0),
+        note: "",
+        treadmill: true,
+        segments: routine.segments.map((s) => ({ ...s })),
+        date,
+      }
+    : {
+        type: plan.type,
+        minutes: plan.minMinutes,
+        note: "",
+        treadmill: false,
+        date,
+      };
+}
 /** Reuse settings as a new draft; identity, date, calories and watch counts are not copied. */
 export function repeatWorkoutDraft(workout: Workout): WorkoutDraft {
   return {

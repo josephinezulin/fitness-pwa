@@ -40,7 +40,7 @@ test("偏好在雙分頁更新，保留影片與目標草稿、播放器及離�
     ({ key, data }) => localStorage.setItem(key, JSON.stringify(data)),
     { key: VIDEO_KEY, data: libraryData },
   );
-  await page.getByRole("button", { name: "運動影片", exact: true }).click();
+  await page.getByRole("button", { name: "影片", exact: true }).click();
   const catalog = page.locator(".video-library");
   await catalog
     .getByRole("searchbox", { name: "搜尋運動影片" })
@@ -61,7 +61,7 @@ test("偏好在雙分頁更新，保留影片與目標草稿、播放器及離�
   try {
     await other.clock.setFixedTime(new Date(`${TODAY}T04:00:00Z`));
     await other.goto("./");
-    await other.getByRole("button", { name: "運動影片", exact: true }).click();
+    await other.getByRole("button", { name: "影片", exact: true }).click();
     const otherCatalog = other.locator(".video-library");
     await otherCatalog
       .getByRole("button", { name: `收藏影片：${video.title}`, exact: true })
@@ -90,14 +90,14 @@ test("偏好在雙分頁更新，保留影片與目標草稿、播放器及離�
         .evaluate((node, original) => node === original, iframe),
     ).toBe(true);
     await catalog.getByRole("button", { name: "取消", exact: true }).click();
-    await page.getByRole("button", { name: "總覽", exact: true }).click();
+    await page.getByRole("button", { name: "首頁", exact: true }).click();
     await page.getByRole("button", { name: "調整目標", exact: true }).click();
     const goal = page.getByRole("spinbutton", {
       name: "每週目標（分鐘）",
       exact: true,
     });
     await goal.fill("175");
-    await other.getByRole("button", { name: "總覽", exact: true }).click();
+    await other.getByRole("button", { name: "首頁", exact: true }).click();
     await other.getByRole("button", { name: "調整目標", exact: true }).click();
     await other
       .getByRole("spinbutton", { name: "每週目標（分鐘）", exact: true })
@@ -114,12 +114,12 @@ test("偏好在雙分頁更新，保留影片與目標草稿、播放器及離�
     expect(
       await page.evaluate((key) => localStorage.getItem(key), preferenceKey()),
     ).toBe(beforeCancel);
-    await page.getByRole("button", { name: "運動影片", exact: true }).click();
+    await page.getByRole("button", { name: "影片", exact: true }).click();
     await catalog
       .getByRole("button", { name: `播放：${video.title}`, exact: true })
       .click();
     await catalog.getByRole("button", { name: /看過一次/ }).click();
-    await other.getByRole("button", { name: "運動影片", exact: true }).click();
+    await other.getByRole("button", { name: "影片", exact: true }).click();
     await expect(
       otherCatalog.getByRole("article").getByText(/看過 2 次/),
     ).toBeVisible();
@@ -144,6 +144,9 @@ test("偏好在雙分頁更新，保留影片與目標草稿、播放器及離�
     ).toEqual(libraryData);
     await expectNoOverflow(page);
     await page.context().setOffline(true);
+    await page
+      .getByRole("button", { name: "帳號與同步設定", exact: true })
+      .click();
     await page.getByRole("button", { name: "設定與備份", exact: true }).click();
     const [download] = await Promise.all([
       page.waitForEvent("download"),
@@ -154,7 +157,7 @@ test("偏好在雙分頁更新，保留影片與目標草稿、播放器及離�
     expect(backup.workouts).toEqual(fixtureData.workouts);
     await page.reload({ waitUntil: "networkidle" });
     await expect(page.locator(".goal-total")).toContainText("/ 240");
-    await page.getByRole("button", { name: "運動影片", exact: true }).click();
+    await page.getByRole("button", { name: "影片", exact: true }).click();
     await expect(
       catalog.getByRole("button", {
         name: `收藏影片：${video.title}`,
@@ -179,7 +182,7 @@ test("50 段跑步機明細限制高度並內部捲動，從下方收合後資�
   await page.evaluate(async () => {
     await navigator.serviceWorker.ready;
   });
-  await page.getByRole("button", { name: "運動紀錄", exact: true }).click();
+  await page.getByRole("button", { name: "紀錄", exact: true }).click();
   const row = workoutRow(page, longWorkout.note);
   const toggle = row.getByRole("button", { name: /跑步機 50 段/ });
   await toggle.click();
@@ -245,6 +248,9 @@ test("50 段跑步機明細限制高度並內部捲動，從下方收合後資�
   await toggle.click();
   await expect(panel.getByRole("row")).toHaveCount(51);
   await collapse.click();
+  await page
+    .getByRole("button", { name: "帳號與同步設定", exact: true })
+    .click();
   await page.getByRole("button", { name: "設定與備份", exact: true }).click();
   const [download] = await Promise.all([
     page.waitForEvent("download"),
@@ -258,7 +264,7 @@ test("50 段跑步機明細限制高度並內部捲動，從下方收合後資�
   expect(backup.metrics).toEqual(fixtureData.metrics);
   expect(await readData(page)).toEqual(fixtureData);
   await page.reload({ waitUntil: "networkidle" });
-  await page.getByRole("button", { name: "運動紀錄", exact: true }).click();
+  await page.getByRole("button", { name: "紀錄", exact: true }).click();
   await toggle.click();
   await expect(panel.getByRole("row")).toHaveCount(51);
   expect(await readData(page)).toEqual(fixtureData);
@@ -287,7 +293,7 @@ test("長課表清單開啟編輯會定位欄位，取消與離線儲存後回�
   await page.evaluate(async () => {
     await navigator.serviceWorker.ready;
   });
-  await page.getByRole("button", { name: "本週課表", exact: true }).click();
+  await page.getByRole("button", { name: "課表", exact: true }).click();
   const manager = page.locator(".plan-manager");
   const opener = manager
     .getByRole("button", { name: "編輯居家徒手訓練", exact: true })
@@ -387,7 +393,7 @@ test("長課表清單開啟編輯會定位欄位，取消與離線儲存後回�
   await expect(add).toBeFocused();
   expect(await readData(page)).toEqual(saved);
   await page.reload({ waitUntil: "networkidle" });
-  await page.getByRole("button", { name: "本週課表", exact: true }).click();
+  await page.getByRole("button", { name: "課表", exact: true }).click();
   await expect(updatedOpener).toBeVisible();
   await expect(manager.getByRole("form")).toHaveCount(0);
   expect(await readData(page)).toEqual(saved);
@@ -472,7 +478,7 @@ test("離開跑步機時帶入總分鐘並說明小數轉換，可修改後離�
   );
   expect(saved.metrics).toEqual(fixtureData.metrics);
   await page.reload({ waitUntil: "networkidle" });
-  await page.getByRole("button", { name: "運動紀錄", exact: true }).click();
+  await page.getByRole("button", { name: "紀錄", exact: true }).click();
   await workoutRow(page, fresh.note)
     .getByRole("button", { name: "編輯運動", exact: true })
     .click();
@@ -581,7 +587,7 @@ test("跑步機分段在切換類型與模式時保留，取消不寫入，離�
   );
   expect(saved.metrics).toEqual(fixtureData.metrics);
   await page.reload({ waitUntil: "networkidle" });
-  await page.getByRole("button", { name: "運動紀錄", exact: true }).click();
+  await page.getByRole("button", { name: "紀錄", exact: true }).click();
   await workoutRow(page, fresh.note)
     .getByRole("button", { name: "編輯運動", exact: true })
     .click();
@@ -636,7 +642,7 @@ test("影片分類可用原生鍵盤切換與清除，保留播放器和完整�
     (keys) => keys.map((key) => localStorage.getItem(key)),
     [VIDEO_KEY, STORAGE_KEY, preferenceKey()],
   );
-  await page.getByRole("button", { name: "運動影片", exact: true }).click();
+  await page.getByRole("button", { name: "影片", exact: true }).click();
   const toast = page.getByRole("button", { name: "關閉離線通知", exact: true });
   if (await toast.isVisible()) await toast.click();
   const library = page.locator(".video-library");
@@ -736,7 +742,7 @@ test("影片分類可用原生鍵盤切換與清除，保留播放器和完整�
   ).toEqual(before);
   await expectNoOverflow(page);
   await page.reload();
-  await page.getByRole("button", { name: "運動影片", exact: true }).click();
+  await page.getByRole("button", { name: "影片", exact: true }).click();
   await expect(all).toHaveAttribute("aria-pressed", "true");
   await expect(library.getByRole("article")).toHaveCount(3);
   await expectNoOverflow(page);
@@ -795,7 +801,7 @@ test("本機自訂影片可取消或編輯，保留原 ID、排序、播放與�
     (key) => localStorage.getItem(key),
     preferenceKey(),
   );
-  await page.getByRole("button", { name: "運動影片", exact: true }).click();
+  await page.getByRole("button", { name: "影片", exact: true }).click();
   const toast = page.getByRole("button", { name: "關閉離線通知", exact: true });
   if (await toast.isVisible()) await toast.click();
   const library = page.locator(".video-library");
@@ -899,6 +905,9 @@ test("本機自訂影片可取消或編輯，保留原 ID、排序、播放與�
     await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY),
   ).toBe(healthRaw);
   await expectNoOverflow(page);
+  await page
+    .getByRole("button", { name: "帳號與同步設定", exact: true })
+    .click();
   await page.getByRole("button", { name: "設定與備份", exact: true }).click();
   const ready = page.waitForEvent("download");
   await page
@@ -910,7 +919,7 @@ test("本機自訂影片可取消或編輯，保留原 ID、排序、播放與�
   expect(backup.videoLibrary).toEqual(stored);
   await page.context().setOffline(true);
   await page.reload();
-  await page.getByRole("button", { name: "運動影片", exact: true }).click();
+  await page.getByRole("button", { name: "影片", exact: true }).click();
   await library.getByRole("searchbox").fill("N0000000001");
   await expect(
     library.getByRole("heading", { name: "虛構修正版影片", exact: true }),
@@ -954,7 +963,7 @@ test("影片庫雙分頁保留草稿與播放器，明確重新讀取後新增�
     (key) => localStorage.getItem(key),
     STORAGE_KEY,
   );
-  await page.getByRole("button", { name: "運動影片", exact: true }).click();
+  await page.getByRole("button", { name: "影片", exact: true }).click();
   const toast = page.getByRole("button", { name: "關閉離線通知", exact: true });
   if (await toast.isVisible()) await toast.click();
   const library = page.locator(".video-library");
@@ -973,7 +982,7 @@ test("影片庫雙分頁保留草稿與播放器，明確重新讀取後新增�
   other.on("pageerror", (error) => errors.push(error.message));
   try {
     await other.goto("./");
-    await other.getByRole("button", { name: "運動影片", exact: true }).click();
+    await other.getByRole("button", { name: "影片", exact: true }).click();
     await other.getByRole("button", { name: "新增影片" }).click();
     await other
       .getByRole("textbox", { name: "YouTube 網址" })
@@ -1036,7 +1045,7 @@ test("影片庫雙分頁保留草稿與播放器，明確重新讀取後新增�
     ).toBe(healthRaw);
     await page.context().setOffline(true);
     await page.reload();
-    await page.getByRole("button", { name: "運動影片", exact: true }).click();
+    await page.getByRole("button", { name: "影片", exact: true }).click();
     await expect(library.getByRole("article")).toHaveCount(3);
     await expectNoOverflow(page);
     expect(errors).toEqual([]);
@@ -1073,7 +1082,7 @@ test("影片庫搜尋、長度與收藏可組合，分批保留播放並可離�
     (key) => localStorage.getItem(key),
     STORAGE_KEY,
   );
-  await page.getByRole("button", { name: "運動影片", exact: true }).click();
+  await page.getByRole("button", { name: "影片", exact: true }).click();
   const offlineNotice = page.getByRole("button", {
     name: "關閉離線通知",
     exact: true,
@@ -1156,6 +1165,9 @@ test("影片庫搜尋、長度與收藏可組合，分批保留播放並可離�
     await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY),
   ).toBe(healthRaw);
   await expectNoOverflow(page);
+  await page
+    .getByRole("button", { name: "帳號與同步設定", exact: true })
+    .click();
   await page.getByRole("button", { name: "設定與備份", exact: true }).click();
   const downloadReady = page.waitForEvent("download");
   await page
@@ -1167,7 +1179,7 @@ test("影片庫搜尋、長度與收藏可組合，分批保留播放並可離�
   expect(backup.videoLibrary.custom).toEqual(custom);
   expect(backup.workouts).toEqual(fixtureData.workouts);
   await page.reload();
-  await page.getByRole("button", { name: "運動影片", exact: true }).click();
+  await page.getByRole("button", { name: "影片", exact: true }).click();
   await expect(search).toHaveValue("");
   await expect(length).toHaveValue("all");
   await expect(rows).toHaveCount(12);
@@ -1357,7 +1369,7 @@ test("每日與每週數值限制高度，捲到底仍可直接收合", async ({
     expect((await details.boundingBox())!.height).toBeLessThanOrEqual(50);
   };
   await verify("查看每日數值", 91);
-  await page.getByRole("button", { name: "運動紀錄", exact: true }).click();
+  await page.getByRole("button", { name: "紀錄", exact: true }).click();
   await verify("查看每週數值", 9);
   await expectNoOverflow(page);
 });
@@ -1468,7 +1480,7 @@ test("再記一次保留原紀錄，離線重載仍可新增", async ({ page }) 
     sourceWorkout,
   );
   await reloadOffline(page);
-  await page.getByRole("button", { name: "運動紀錄", exact: true }).click();
+  await page.getByRole("button", { name: "紀錄", exact: true }).click();
   await workoutRow(page, "虛構戶外健走")
     .getByRole("button", { name: /再記一次/ })
     .click();
@@ -1513,6 +1525,9 @@ test("健康表單欄位字級與寬度適合手機，零步可儲存", async ({
 
 test("JSON 備份可下載及還原，取消與壞檔保留原資料", async ({ page }) => {
   await page.goto("./");
+  await page
+    .getByRole("button", { name: "帳號與同步設定", exact: true })
+    .click();
   await page.getByRole("button", { name: "設定與備份", exact: true }).click();
   const downloadReady = page.waitForEvent("download");
   await page
@@ -1571,6 +1586,9 @@ test("本機內容損壞可先另存原始檔案，再用有效備份修復並�
     raw,
   });
   await page.reload();
+  await page
+    .getByRole("button", { name: "帳號與同步設定", exact: true })
+    .click();
   await page.getByRole("button", { name: "設定與備份", exact: true }).click();
   const input = page.getByLabel("選擇有效備份來修復", { exact: true });
   const choose = page.getByRole("button", {
@@ -1680,8 +1698,8 @@ test("運動歷史可篩選與分批，保留全部資料並可再記一次", as
     { key: STORAGE_KEY, data: stored },
   );
   await page.reload();
-  await page.getByRole("button", { name: "運動紀錄", exact: true }).click();
-  const history = page.getByRole("region", { name: "運動紀錄", exact: true });
+  await page.getByRole("button", { name: "紀錄", exact: true }).click();
+  const history = page.getByRole("region", { name: "紀錄", exact: true });
   const rows = history.locator(".log-wrap");
   await expect(rows).toHaveCount(12);
   await expect(history.getByRole("status")).toContainText(
@@ -1735,7 +1753,7 @@ test("運動歷史可篩選與分批，保留全部資料並可再記一次", as
   expect((await readData(page)).workouts).toEqual(stored.workouts);
   await expectNoOverflow(page);
   await reloadOffline(page);
-  await page.getByRole("button", { name: "運動紀錄", exact: true }).click();
+  await page.getByRole("button", { name: "紀錄", exact: true }).click();
   await expect(history.getByRole("searchbox")).toHaveValue("");
   await expect(rows).toHaveCount(12);
   await history.getByRole("searchbox").fill("虛構歷史");

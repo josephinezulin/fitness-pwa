@@ -7,6 +7,7 @@ import { WorkoutLogs, WorkoutWeekSummary } from "./pages/WorkoutLogs";
 import { WeeklySchedule, PlanManager } from "./pages/WeeklySchedule";
 import {
   CATEGORY_WORKOUT,
+  planWorkoutDraft,
   repeatWorkoutDraft,
   type WorkoutDraft,
 } from "./exercise";
@@ -18,19 +19,17 @@ import { useBackupRestore } from "./useBackupRestore";
 import React, { useState, type ReactNode } from "react";
 import { MotionConfig, motion } from "motion/react";
 import {
-  Activity,
   Plus,
   Dumbbell,
   Check,
   WifiOff,
   X,
-  Heart,
-  LayoutDashboard,
+  House,
   CalendarDays,
-  ChartNoAxesCombined,
-  Settings,
   MonitorPlay,
 } from "lucide-react";
+import { Welcome } from "./Welcome";
+import { readAccount, readEntry, writeEntry } from "./entry";
 
 const ease = [0.16, 1, 0.3, 1] as const;
 /** Enter transition for a page; keyed by page so switching tabs replays it. */
@@ -49,6 +48,14 @@ function Page({ children }: { children: ReactNode }) {
 function greeting(hour = new Date().getHours()) {
   return hour < 5 ? "晚安" : hour < 11 ? "早安" : hour < 18 ? "午安" : "晚安";
 }
+const TAGLINES = [
+  "比昨天多動一點就好",
+  "每次開始都算數 🌱",
+  "慢慢來，比較快",
+  "今天也照顧一下自己 ☀️",
+  "動一動，心情也會好",
+  "身體會記得你的努力 ✨",
+];
 import {
   type Data,
   type Workout,
@@ -74,7 +81,7 @@ export function App() {
     busy: false,
     error: "",
   });
-  const [page, setPage] = useState("總覽"),
+  const [page, setPage] = useState("首頁"),
     [modal, setModal] = useState<"workout" | "metric" | null>(null),
     [editing, setEditing] = useState<Workout | null>(null),
     [message, setMessage] = useState(""),
@@ -92,6 +99,24 @@ export function App() {
   const [videoDraftOpen, setVideoDraftOpen] = useState(false);
   const [goalDraftOpen, setGoalDraftOpen] = useState(false);
   const [workoutDraft, setWorkoutDraft] = useState<WorkoutDraft | null>(null);
+  const [tagline] = useState(
+    () => TAGLINES[Math.floor(Math.random() * TAGLINES.length)],
+  );
+  // Entry: Google first; "browse" keeps this device only. Remembered per browser.
+  const [entry, setEntry] = useState(() => readEntry(localStorage));
+  const [browsing, setBrowsing] = useState(false);
+  const [loginReady, setLoginReady] = useState(false);
+  const [loginWaiting, setLoginWaiting] = useState(false);
+  const loginAction = React.useRef<(() => void) | null>(null);
+  React.useEffect(() => {
+    if (!workspace.cloud) return;
+    setLoginWaiting(false);
+    if (entry !== "google") {
+      writeEntry(localStorage, "google");
+      setEntry("google");
+    }
+  }, [workspace.cloud, entry]);
+  const showWelcome = !workspace.cloud && entry !== "local" && !browsing;
   const draftOpen = !!modal || planDraftOpen || videoDraftOpen || goalDraftOpen;
   const preferences = usePreferences(
     preferenceKey(workspace.cloud),
@@ -251,7 +276,7 @@ export function App() {
     workouts: data.workouts,
     viewToday,
     days,
-    onManage: () => setPage("本週課表"),
+    onManage: () => setPage("課表"),
   };
   const logsProps = {
     workouts: data.workouts,
@@ -271,48 +296,57 @@ export function App() {
           <span />
           <span />
         </div>
-        <aside>
-          <a className="brand" href="#">
-            <span>
-              <Activity size={22} />
-            </span>
-            <div>日常動作</div>
-          </a>
-          <nav>
-            {(
-              [
-                ["總覽", LayoutDashboard],
-                ["本週課表", CalendarDays],
-                ["運動紀錄", Dumbbell],
-                ["運動影片", MonitorPlay],
-                ["健康趨勢", ChartNoAxesCombined],
-                ["設定與備份", Settings],
-              ] as const
-            ).map(([name, Icon]) => (
-              <button
-                key={name as string}
-                className={page === name ? "active" : ""}
-                onClick={() => setPage(name as string)}
+        <nav className="dock" aria-label="主要頁面">
+          {(
+            [
+              ["首頁", House],
+              ["課表", CalendarDays],
+              null,
+              ["紀錄", Dumbbell],
+              ["影片", MonitorPlay],
+            ] as const
+          ).map((item) =>
+            item === null ? (
+              <motion.button
+                key="fab"
+                className="fab"
+                aria-label="記錄運動"
+                disabled={!workspace.canEditCloud}
+                onClick={() => begin()}
+                whileTap={{ scale: 0.88, rotate: 90 }}
               >
-                {page === name && (
+                <Plus size={26} strokeWidth={2.5} />
+              </motion.button>
+            ) : (
+              <button
+                key={item[0]}
+                className={page === item[0] ? "active" : ""}
+                aria-current={page === item[0] ? "page" : undefined}
+                onClick={() => setPage(item[0])}
+              >
+                {page === item[0] && (
                   <motion.i
                     className="nav-pill"
                     layoutId="nav-pill"
                     transition={{ type: "spring", stiffness: 420, damping: 34 }}
                   />
                 )}
-                <Icon size={20} />
-                <span>{name as string}</span>
+                {(() => {
+                  const Icon = item[1];
+                  return <Icon size={21} />;
+                })()}
+                <span>{item[0]}</span>
               </button>
-            ))}
-          </nav>
-          <div className="local-badge">
-            <i />
-            {workspace.cloud ? "雲端摘要已讀取" : "資料儲存於此裝置"}
-          </div>
-        </aside>
+            ),
+          )}
+        </nav>
         <main>
           <header>
+            {!online && (
+              <span className="offline-dot" title="離線中">
+                <WifiOff size={16} aria-label="離線中" />
+              </span>
+            )}
             <div className="header-right">
               <AccountMenu
                 cloud={workspace.cloud}
@@ -326,6 +360,7 @@ export function App() {
                   window.dispatchEvent(new Event("daily-movement-refresh"))
                 }
                 onSettings={() => setPage("設定與備份")}
+                onTrends={() => setPage("健康趨勢")}
                 onLocal={workspace.disconnectCloud}
               />
             </div>
@@ -348,20 +383,10 @@ export function App() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, ease }}
                 >
-                  {page === "總覽" ? greeting() : page}
+                  {page === "首頁" ? greeting() : page}
                 </motion.h1>
+                {page === "首頁" && <p className="tagline">{tagline}</p>}
               </div>
-              <motion.button
-                className="primary fab"
-                aria-label="記錄運動"
-                disabled={!workspace.canEditCloud}
-                onClick={() => begin()}
-                whileHover={{ y: -2 }}
-                whileTap={{ scale: 0.92 }}
-              >
-                <Plus size={20} />
-                <span className="fab-label">記錄運動</span>
-              </motion.button>
             </div>
             {workspace.storageError && (
               <div className="notice" role="status">
@@ -483,32 +508,63 @@ export function App() {
                 </button>
               </div>
             )}
-            {page === "總覽" && (
-              <Page key="總覽">
+            {page === "首頁" && (
+              <Page key="首頁">
                 <OverviewPage
                   key={preferenceKey(workspace.cloud)}
                   metrics={data.metrics}
+                  workouts={data.workouts}
+                  plans={activePlans}
+                  days={days}
                   viewToday={viewToday}
                   weekMinutes={weekMinutes}
                   weeklyGoal={preferences.value.weeklyGoal}
-                  done={done}
-                  planCount={activePlans.length}
-                  chart={<HealthChart {...chartProps} />}
-                  schedule={
-                    <WeeklySchedule
-                      key={preferenceKey(workspace.cloud)}
-                      {...scheduleProps}
-                    />
+                  canEdit={workspace.canEditCloud}
+                  canAddMetric={!workspace.cloud && workspace.canEditCloud}
+                  seen={preferences.value.seen}
+                  hidden={
+                    workspace.cloud ? [] : readLibrary(localStorage).hidden
                   }
-                  logs={<WorkoutLogs {...logsProps} limit={4} />}
                   onGoalChange={(weeklyGoal) =>
                     preferences.update((p) => ({ ...p, weeklyGoal }))
                   }
                   onGoalDraftChange={setGoalDraftOpen}
+                  onCheck={(plan, date) =>
+                    begin(undefined, planWorkoutDraft(plan, date))
+                  }
+                  onUncheck={(plan, date) => {
+                    const matches = data.workouts.filter(
+                      (w) => w.date === date && w.type === plan.type,
+                    );
+                    if (
+                      matches.length &&
+                      confirm(
+                        `要把 ${date.slice(5).replace("-", "/")} 的${plan.title}拿掉嗎？`,
+                      )
+                    )
+                      save({
+                        ...data,
+                        workouts: data.workouts.filter(
+                          (w) => !matches.includes(w),
+                        ),
+                      });
+                  }}
+                  onVideoDone={(video) =>
+                    begin(undefined, {
+                      type: CATEGORY_WORKOUT[video.category],
+                      minutes: video.minutes || 10,
+                      note: `影片：${video.title}\n${watchUrl(video.youtubeId)}`,
+                      treadmill: false,
+                      videoId: video.youtubeId,
+                      countWatch: true,
+                    })
+                  }
+                  onOpenTrends={() => setPage("健康趨勢")}
+                  onAddMetric={() => setModal("metric")}
                 />
               </Page>
             )}
-            <div hidden={page !== "本週課表"}>
+            <div hidden={page !== "課表"}>
               <PlanManager
                 key={preferenceKey(workspace.cloud)}
                 plans={workoutPlans(data)}
@@ -517,8 +573,8 @@ export function App() {
                 onDraftChange={setPlanDraftOpen}
               />
             </div>
-            {page === "本週課表" && (
-              <Page key="本週課表">
+            {page === "課表" && (
+              <Page key="課表">
                 <WeeklyPage
                   schedule={
                     <WeeklySchedule
@@ -528,13 +584,13 @@ export function App() {
                   }
                   onVideo={(category) => {
                     setVideoCategory(category);
-                    setPage("運動影片");
+                    setPage("影片");
                   }}
                 />
               </Page>
             )}
-            {page === "運動紀錄" && (
-              <Page key="運動紀錄">
+            {page === "紀錄" && (
+              <Page key="紀錄">
                 <WorkoutWeekSummary
                   weekWorkouts={weekWorkouts}
                   weekMinutes={weekMinutes}
@@ -550,8 +606,8 @@ export function App() {
                 />
               </Page>
             )}
-            {page === "運動影片" && (
-              <Page key="運動影片">
+            {page === "影片" && (
+              <Page key="影片">
                 <VideoLibrary
                   key={`${videoVersion}:${workspace.cloud?.subject || "local"}:${workspace.cloud?.spreadsheetId || ""}`}
                   online={online}
@@ -657,19 +713,32 @@ export function App() {
                   if (reason) setMessage(reason);
                 }}
                 onReadState={setCloudReadState}
+                eager={showWelcome}
+                onLoginReady={(signIn) => {
+                  loginAction.current = signIn;
+                  setLoginReady(!!signIn);
+                  if (!signIn) setLoginWaiting(false);
+                }}
               />
             </SettingsPage>
-            <footer>
-              <button
-                disabled={!!workspace.cloud || !workspace.canEditCloud}
-                onClick={() => setModal("metric")}
-              >
-                <Heart size={14} />
-                記錄健康數據
-              </button>
-            </footer>
           </div>
         </main>
+        {showWelcome && (
+          <Welcome
+            account={readAccount(localStorage)}
+            loginReady={loginReady}
+            waiting={loginWaiting || cloudReadState.busy}
+            onLogin={() => {
+              setLoginWaiting(true);
+              loginAction.current?.();
+            }}
+            onLocal={() => {
+              writeEntry(localStorage, "local");
+              setEntry("local");
+              setBrowsing(true);
+            }}
+          />
+        )}
         <PwaUpdate
           blocked={draftOpen || workspace.syncBusy || backupRestore.busy}
           blockedReason={
@@ -704,7 +773,7 @@ export function App() {
                     ? "記錄健康數據"
                     : editing
                       ? "編輯運動紀錄"
-                      : "記錄今天的努力"}
+                      : "今天動了什麼？"}
                 </h2>
                 <button
                   className="icon-button"

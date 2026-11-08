@@ -1,5 +1,12 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { RefreshCw, Settings, LogOut, Cloud, HardDrive } from "lucide-react";
+import {
+  RefreshCw,
+  Settings,
+  LogOut,
+  Cloud,
+  HardDrive,
+  ChartNoAxesCombined,
+} from "lucide-react";
 import type { CloudIdentity } from "./workspace";
 
 /** Presentational disclosure only: sessions and account selection stay in CloudPanel/workspace. */
@@ -13,6 +20,7 @@ export function AccountMenu({
   contextKey,
   onRefresh,
   onSettings,
+  onTrends,
   onLocal,
 }: {
   cloud: CloudIdentity | null;
@@ -24,6 +32,7 @@ export function AccountMenu({
   contextKey: string;
   onRefresh: () => void;
   onSettings: () => void;
+  onTrends?: () => void;
   onLocal: () => void;
 }) {
   const id = useId(),
@@ -126,9 +135,18 @@ export function AccountMenu({
               </button>
             </>
           ) : (
-            <p className="account-help">
-              紀錄儲存在此瀏覽器。可在設定連線自己的 Google 試算表。
-            </p>
+            <p className="account-help">資料存在這支手機</p>
+          )}
+          {onTrends && (
+            <button
+              onClick={() => {
+                close(true);
+                onTrends();
+              }}
+            >
+              <ChartNoAxesCombined size={16} />
+              健康趨勢
+            </button>
           )}
           <button
             onClick={() => {
@@ -137,7 +155,7 @@ export function AccountMenu({
             }}
           >
             <Settings size={16} />
-            管理 Google 連線
+            設定與備份
           </button>
           {cloud && (
             <button

@@ -26,6 +26,8 @@ import {
 } from "./trends";
 import { TrendData, TrendTooltip } from "./TrendData";
 import { CountUp, ProgressRing } from "./motion-ui";
+import { motion } from "motion/react";
+import { Target, X } from "lucide-react";
 export function WeeklyGoal({
   minutes,
   goal,
@@ -49,14 +51,33 @@ export function WeeklyGoal({
   }, [editing, onDraftChange]);
   const left = Math.max(0, Math.round((goal - minutes) * 10) / 10);
   return (
-    <article className="card weekly-goal">
-      <div className="section-head">
-        <div>
+    <article className={"card weekly-goal" + (left ? "" : " reached")}>
+      <div className="week-head">
+        <ProgressRing value={minutes} goal={goal} size={52} stroke={7} />
+        <div className="grow">
           <h2>本週運動</h2>
+          <p className="week-total">
+            <strong className="stat-value">
+              <CountUp value={minutes} decimals={1} />
+            </strong>
+            <span className="goal-total"> / {goal} 分</span>
+            {!left && (
+              <motion.span
+                className="cheer-inline"
+                aria-hidden="true"
+                initial={{ scale: 0, rotate: -20 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ type: "spring", stiffness: 500, damping: 18 }}
+              >
+                🎉
+              </motion.span>
+            )}
+          </p>
         </div>
         <button
           ref={toggleRef}
-          className="text-button"
+          className="icon-button round"
+          aria-label={editing ? "取消調整" : "調整目標"}
           aria-expanded={editing}
           aria-controls={editing ? `${id}-editor` : undefined}
           onClick={() => {
@@ -64,24 +85,16 @@ export function WeeklyGoal({
             setEditing((value) => !value);
           }}
         >
-          {editing ? "取消調整" : "調整目標"}
+          {editing ? <X size={17} /> : <Target size={17} />}
         </button>
       </div>
-      <ProgressRing value={minutes} goal={goal}>
-        <strong className="stat-value">
-          <CountUp value={minutes} decimals={1} />
-        </strong>
-        <p className="goal-total">
-          / {goal} <span>分鐘</span>
-        </p>
-      </ProgressRing>
       <progress
         className="sr-only"
         aria-label="本週運動分鐘進度"
         max={goal}
         value={Math.min(minutes, goal)}
       />
-      <p className={"goal-status" + (left ? "" : " reached")}>
+      <p className="sr-only">
         {left ? `還差 ${left} 分鐘` : "已達到自己的累積目標"}
       </p>
       {children}
