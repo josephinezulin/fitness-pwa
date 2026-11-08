@@ -1050,7 +1050,8 @@ footer button {
   margin: 0;
   padding: 6px 26px 26px;
 }
-.dialog label {
+.dialog label,
+.plan-form label {
   display: flex;
   flex-direction: column;
   gap: 9px;
@@ -1060,7 +1061,9 @@ footer button {
 }
 .dialog input,
 .dialog select,
-.dialog textarea {
+.dialog textarea,
+.plan-form input,
+.plan-form select {
   width: 100%;
   padding: 12px;
   border: 1px solid #dfe5d6;
@@ -2207,6 +2210,11 @@ button.video-link {
 .plan-manager .log {
   flex-wrap: wrap;
 }
+.plan-manager .icon-button,
+.plan-manager .text-button {
+  min-width: 44px;
+  min-height: 44px;
+}
 .plan-manager .grow {
   min-width: 0;
   flex-basis: 55%;
@@ -2233,12 +2241,16 @@ button.video-link {
 }
 .plan-form .checkbox-label {
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 10px;
+  min-height: 44px;
 }
 .plan-form .checkbox-label input {
   width: 20px;
   min-height: 24px;
+  padding: 0;
+  flex-shrink: 0;
 }
 .plan-player {
   padding-bottom: 16px;

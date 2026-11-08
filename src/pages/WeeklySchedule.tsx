@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { Check, Dumbbell, Pencil, Plus, Play, X } from "lucide-react";
 import {
   completed,
@@ -145,6 +145,28 @@ export function PlanManager({
 }) {
   const [editing, setEditing] = useState<WorkoutPlan | "new" | null>(null);
   const [error, setError] = useState("");
+  const formId = useId();
+  const titleRef = useRef<HTMLInputElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const openerRef = useRef<HTMLButtonElement | null>(null);
+  useLayoutEffect(() => {
+    let target: HTMLElement | null;
+    if (editing) {
+      target = titleRef.current;
+    } else {
+      const opener = openerRef.current;
+      if (!opener) return;
+      openerRef.current = null;
+      target =
+        opener.isConnected && !opener.disabled ? opener : headingRef.current;
+    }
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView?.({
+      block: "center",
+      inline: "nearest",
+      behavior: "auto",
+    });
+  }, [editing]);
   useEffect(() => {
     onDraftChange(!!editing);
     return () => onDraftChange(false);
@@ -161,16 +183,24 @@ export function PlanManager({
     }
   }
   return (
-    <section className="card plan-manager">
+    <section
+      className="card plan-manager"
+      aria-labelledby={`${formId}-manager`}
+    >
       <div className="section-head">
         <div>
           <span className="eyebrow">安排自己的節奏</span>
-          <h2>管理課表</h2>
+          <h2 id={`${formId}-manager`} ref={headingRef} tabIndex={-1}>
+            管理課表
+          </h2>
         </div>
         <button
           className="text-button"
           disabled={!canEdit || !!editing}
-          onClick={() => {
+          aria-expanded={editing === "new"}
+          aria-controls={editing === "new" ? formId : undefined}
+          onClick={(event) => {
+            openerRef.current = event.currentTarget;
             setError("");
             setEditing("new");
           }}
@@ -196,7 +226,12 @@ export function PlanManager({
             className="icon-button"
             aria-label={`編輯${p.title}`}
             disabled={!canEdit || !!editing}
-            onClick={() => {
+            aria-expanded={editing !== "new" && editing?.id === p.id}
+            aria-controls={
+              editing !== "new" && editing?.id === p.id ? formId : undefined
+            }
+            onClick={(event) => {
+              openerRef.current = event.currentTarget;
               setError("");
               setEditing({ ...p });
             }}
@@ -227,6 +262,8 @@ export function PlanManager({
       {editing && (
         <form
           className="plan-form"
+          id={formId}
+          aria-labelledby={`${formId}-title`}
           onSubmit={(event) => {
             event.preventDefault();
             if (!canEdit) return;
@@ -258,7 +295,9 @@ export function PlanManager({
           }}
         >
           <div className="section-head">
-            <h3>{editing === "new" ? "新增課表" : "編輯課表"}</h3>
+            <h3 id={`${formId}-title`}>
+              {editing === "new" ? "新增課表" : "編輯課表"}
+            </h3>
             <button
               type="button"
               className="icon-button"
@@ -276,6 +315,7 @@ export function PlanManager({
               課表名稱
               <input
                 name="title"
+                ref={titleRef}
                 required
                 maxLength={200}
                 defaultValue={editing === "new" ? "" : editing.title}
