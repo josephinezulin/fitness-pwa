@@ -63,7 +63,7 @@ export function readPreferences(
   key: string,
 ) {
   const saved = storage.getItem(key);
-  return saved
-    ? validatePreferences(JSON.parse(saved))
-    : structuredClone(defaultPreferences);
+  return saved === null
+    ? structuredClone(defaultPreferences)
+    : validatePreferences(JSON.parse(saved));
 }

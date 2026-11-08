@@ -37,18 +37,165 @@ describe("personal experience preferences", () => {
       [],
     );
   });
-  it("preserves corrupted storage instead of overwriting it with defaults", () => {
+  it.each(["{broken", ""])(
+    "preserves corrupted storage %j instead of overwriting it with defaults",
+    (raw) => {
+      const key = preferenceKey(a),
+        onError = vi.fn();
+      localStorage.setItem(key, raw);
+      const { result } = renderHook(() => usePreferences(key, onError));
+      act(() => {
+        expect(result.current.update((p) => ({ ...p, weeklyGoal: 100 }))).toBe(
+          false,
+        );
+      });
+      expect(localStorage.getItem(key)).toBe(raw);
+      expect(onError).toHaveBeenCalled();
+    },
+  );
+  it("refreshes only the matching local storage key and retains fresh fields in later writes", () => {
     const key = preferenceKey(a),
       onError = vi.fn();
-    localStorage.setItem(key, "{broken");
     const { result } = renderHook(() => usePreferences(key, onError));
+    const initial = result.current.value;
+    const next = {
+      ...defaultPreferences,
+      weeklyGoal: 220,
+      favorites: ["v7AYKMP6rOE"],
+      seen: { v7AYKMP6rOE: 2 },
+    };
+    localStorage.setItem(key, JSON.stringify(next));
+    act(() =>
+      window.dispatchEvent(
+        new StorageEvent("storage", {
+          key: "unrelated",
+          storageArea: localStorage,
+        }),
+      ),
+    );
+    expect(result.current.value).toBe(initial);
+    act(() =>
+      window.dispatchEvent(
+        new StorageEvent("storage", { key, storageArea: sessionStorage }),
+      ),
+    );
+    expect(result.current.value).toBe(initial);
+    act(() =>
+      window.dispatchEvent(
+        new StorageEvent("storage", {
+          key,
+          newValue: "ignored payload",
+          storageArea: localStorage,
+        }),
+      ),
+    );
+    expect(result.current.value).toEqual(next);
+    const updated = result.current.value;
+    act(() =>
+      window.dispatchEvent(
+        new StorageEvent("storage", { key, storageArea: localStorage }),
+      ),
+    );
+    expect(result.current.value).toBe(updated);
     act(() => {
-      expect(result.current.update((p) => ({ ...p, weeklyGoal: 100 }))).toBe(
-        false,
+      expect(result.current.update((p) => markSeen(p, "v7AYKMP6rOE"))).toBe(
+        true,
       );
     });
-    expect(localStorage.getItem(key)).toBe("{broken");
-    expect(onError).toHaveBeenCalled();
+    expect(readPreferences(localStorage, key)).toEqual({
+      ...next,
+      seen: { v7AYKMP6rOE: 3 },
+    });
+    localStorage.removeItem(key);
+    act(() =>
+      window.dispatchEvent(
+        new StorageEvent("storage", { key: null, storageArea: localStorage }),
+      ),
+    );
+    expect(result.current.value).toEqual(defaultPreferences);
+    expect(localStorage.getItem(key)).toBeNull();
+    expect(onError).not.toHaveBeenCalled();
+  });
+  it.each(["focus", "pageshow", "visibilitychange"])(
+    "refreshes on visible %s and preserves the last valid view when reads fail",
+    (event) => {
+      const key = preferenceKey(a),
+        onError = vi.fn();
+      const { result } = renderHook(() => usePreferences(key, onError));
+      const visibility = vi.spyOn(document, "visibilityState", "get");
+      const dispatch = () =>
+        (event === "visibilitychange" ? document : window).dispatchEvent(
+          new Event(event),
+        );
+      try {
+        localStorage.setItem(
+          key,
+          JSON.stringify({ ...defaultPreferences, weeklyGoal: 180 }),
+        );
+        visibility.mockReturnValue("hidden");
+        act(dispatch);
+        expect(result.current.value.weeklyGoal).toBe(150);
+        visibility.mockReturnValue("visible");
+        act(dispatch);
+        expect(result.current.value.weeklyGoal).toBe(180);
+        const valid = result.current.value;
+        localStorage.setItem(key, "{broken");
+        act(dispatch);
+        expect(result.current.value).toBe(valid);
+        act(() => {
+          expect(
+            result.current.update((p) => ({ ...p, weeklyGoal: 100 })),
+          ).toBe(false);
+        });
+        expect(localStorage.getItem(key)).toBe("{broken");
+        expect(result.current.value).toBe(valid);
+      } finally {
+        visibility.mockRestore();
+      }
+    },
+  );
+  it("switches the active subscription with the account and removes listeners on unmount", () => {
+    const aKey = preferenceKey(a),
+      bKey = preferenceKey({ ...a, subject: "B" });
+    const onError = vi.fn();
+    localStorage.setItem(
+      aKey,
+      JSON.stringify({ ...defaultPreferences, weeklyGoal: 90 }),
+    );
+    const { result, rerender, unmount } = renderHook(
+      ({ key }) => usePreferences(key, onError),
+      { initialProps: { key: aKey } },
+    );
+    expect(result.current.value.weeklyGoal).toBe(90);
+    rerender({ key: bKey });
+    expect(result.current.value).toEqual(defaultPreferences);
+    localStorage.setItem(
+      bKey,
+      JSON.stringify({ ...defaultPreferences, weeklyGoal: 240 }),
+    );
+    act(() =>
+      window.dispatchEvent(
+        new StorageEvent("storage", { key: aKey, storageArea: localStorage }),
+      ),
+    );
+    expect(result.current.value.weeklyGoal).toBe(150);
+    act(() =>
+      window.dispatchEvent(
+        new StorageEvent("storage", { key: bKey, storageArea: localStorage }),
+      ),
+    );
+    expect(result.current.value.weeklyGoal).toBe(240);
+    const get = vi.spyOn(Storage.prototype, "getItem");
+    unmount();
+    get.mockClear();
+    window.dispatchEvent(
+      new StorageEvent("storage", { key: bKey, storageArea: localStorage }),
+    );
+    window.dispatchEvent(new Event("focus"));
+    window.dispatchEvent(new Event("pageshow"));
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(get).not.toHaveBeenCalled();
+    get.mockRestore();
   });
   it("whitelists serialized fields and rejects invalid counters or IDs", () => {
     const value = validatePreferences({

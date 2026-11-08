@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   defaultPreferences,
   readPreferences,
@@ -21,6 +21,44 @@ export function usePreferences(
   );
   // Derive the matching scope immediately so account switches never render another account's preferences.
   const value = state.key === key ? state.value : load();
+  useEffect(() => {
+    const refresh = () => {
+      try {
+        const next = readPreferences(localStorage, key);
+        setState((current) =>
+          current.key === key &&
+          JSON.stringify(current.value) === JSON.stringify(next)
+            ? current
+            : { key, value: next },
+        );
+      } catch {
+        // Keep the last valid view; explicit writes still reject unreadable storage.
+      }
+    };
+    const storage = (event: StorageEvent) => {
+      if (event.key !== null && event.key !== key) return;
+      try {
+        if (event.storageArea && event.storageArea !== localStorage) return;
+      } catch {
+        return;
+      }
+      refresh();
+    };
+    const foreground = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    window.addEventListener("storage", storage);
+    window.addEventListener("focus", foreground);
+    window.addEventListener("pageshow", foreground);
+    document.addEventListener("visibilitychange", foreground);
+    refresh();
+    return () => {
+      window.removeEventListener("storage", storage);
+      window.removeEventListener("focus", foreground);
+      window.removeEventListener("pageshow", foreground);
+      document.removeEventListener("visibilitychange", foreground);
+    };
+  }, [key]);
   function update(change: (current: Preferences) => Preferences) {
     try {
       const next = validatePreferences(

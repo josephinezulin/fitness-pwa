@@ -497,3 +497,28 @@ WeeklyGoal 在 useLayoutEffect 回報 editing，表單出現前納入 App 的 dr
 手動方式：在 iPhone 運動紀錄展開一筆長跑步機紀錄，用手指在明細內捲到底，應能看第 50 段且欄名保留；從下方直接收合，不必沿表格回頂端。外接鍵盤可聚焦區域後捲動，再 Tab 到收合並用 Enter 關閉；回到原摘要。離線重開後仍應可查看完整資料，匯出備份仍含全部分段。不需新的 Google 授權。
 
 限制：Chromium 的內捲動、位置與焦點不等於 Safari／VoiceOver 的觸控捲動與宣告已驗收，iPhone 主畫面 PWA 與實際安全區仍待本人實機。明細區域包含統計與表格，較矮橫向螢幕需在區域內捲到表格；下方收合控制始終在這個區域之外。健康捷徑部署／首次授權與其他既有實機待辦不變。
+
+## E28：同一瀏覽器分頁的偏好刷新
+
+usePreferences 的寫入原本已先讀最新儲存內容，但畫面只在目前分頁更新時換 state；其他分頁的收藏、看過次數與每週目標留在舊值，回前景也不刷新。先以六個單元失敗與 320px 實際雙分頁重現：B 已收藏，A 的 aria-pressed 仍為 false。
+
+依目前 preferenceKey 訂閱 storage，僅處理該 key 或 clear，忽略不相關 key 及其他 Storage 區域。收到事件重新讀取並驗證真實 localStorage，不採信 event.newValue；另於可見時的 focus、pageshow、visibilitychange 補讀。訂閱後立即再讀，帳號／副本切換更換訂閱，卸載移除所有 listener；仍即時從新 key 衍生畫面，避免短暫呈現舊帳號偏好。相同驗證結果保留同一 state 參考，不建立輪詢／計時器、網路請求或新的儲存 key。
+
+讀取／驗證失敗時保留最後有效畫面與原始內容，明確更新仍沿用原錯誤回報及不寫入規則；初次無法讀取時沿用既有預設顯示。另修正 readPreferences 只將 null 視為沒有儲存：空字串是無法解讀的原始內容，不能默默當預設再覆寫。原有 update 仍在寫入前讀最新偏好，改看過次數時保留另一頁的收藏與目標。
+
+刷新只更新偏好 props，不改表單 key 或草稿 state。影片新增草稿、搜尋及同一 iframe 保留；每週目標草稿維持手填值，背景已儲存的目標可更新顯示，取消不寫入。沒有動到健康／運動資料、影片清單、備份格式、Google scope、Sheet schema、API 或依賴；原帳號／副本分區與 PWA 草稿保護保持不變。
+
+官方依據（2026-11-08 實際讀取）：MDN storage 說明同來源、共用 localStorage 的其他瀏覽情境會收到事件，寫入的目前分頁本身不會收到，因此仍保留原 update 的 state 更新；visibilitychange 包含切分頁與行動裝置切 App，這裡只在文件可見時補讀。不是 iOS 背景排程，也不讀 Apple 健康資料。
+
+- https://developer.mozilla.org/en-US/docs/Web/API/Window/storage_event
+- https://developer.mozilla.org/en-US/docs/Web/API/Document/visibilitychange_event
+
+本機單元／建置檢查：npm ci、372 項 Vitest（42 檔）、8 項 Python、TypeScript／Vite／Service Worker 正式建置通過。新增六項單元情境，涵蓋空字串保護、正確 key／Storage／clear／事件 payload、最新字段保留、三種前景事件的隱藏／可見與無法解讀時保留，以及切帳號與卸載清理；舊分區與欄位白名單測試保留。
+
+手動方式：在同一瀏覽器開兩個網站分頁，用虛構影片於 B 收藏／標記看過，A 應更新狀態，已填的影片草稿與播放區仍在。A 開目標草稿填 175，B 儲存 240，A 應仍保留 175 的輸入；取消後保留已儲存的 240。切去其他 App 再回來，確認重新讀到同儲存空間的偏好。離線重開及匯出 JSON 應保留目標、收藏、次數。不需新 Google 授權。
+
+限制：僅刷新共用同一 localStorage 的同來源分頁，不是跨裝置或獨立儲存空間的 Safari／主畫面 PWA 偏好同步。寫前讀取不是原子鎖，完全同時寫入仍可能競爭；目標草稿明確儲存時沿用原規則採手填值，不宣稱自動合併同一欄位。初次偏好損壞仍用預設顯示，未新增自動修復或覆寫功能。本人 Safari／主畫面 PWA／VoiceOver 與健康捷徑仍待實機。
+
+完整瀏覽器驗證：69 個 Playwright 案例通過（3.1 分鐘）。新增三種尺寸的真實雙分頁流程，B 收藏／看過後 A 更新星號與次數，同時保留新增影片草稿值、焦點、搜尋與同一 iframe；B 儲存 240 分目標時，A 的 175 分草稿保留，取消後原始偏好字串不變。A 再標記看過，B 讀回 2 次，目標及收藏保持；離線下載 JSON 的 experience 與完整偏好相同，重開仍有 240 分、收藏及 2 次，原影片庫與運動／健康資料完整，整頁無水平溢出。
+
+全部使用隔離 context／虛構資料，外部影片與 Google 請求阻擋，沒有登入 Google 或寫私人 Sheet。這輪沒有 CSS／外觀調整；iframe DOM 保留不代表真實 YouTube 播放。Prettier 與 git diff --check 通過。CI／合併／Pages 與正式資產證據追加於本次 PR。

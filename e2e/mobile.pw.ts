@@ -17,6 +17,161 @@ import { BUILT_IN_VIDEOS, VIDEO_KEY } from "../src/videos";
 import { preferenceKey } from "../src/preferences";
 import { defaultPlans } from "../src/model";
 
+test("偏好在雙分頁更新，保留影片與目標草稿、播放器及離線備份", async ({
+  page,
+}) => {
+  await page.goto("./");
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+  });
+  const video = {
+    id: "fictional-preference-video",
+    youtubeId: "v7AYKMP6rOE",
+    title: "虛構分頁影片",
+    category: "瑜伽",
+    minutes: 20,
+  };
+  const libraryData = {
+    version: 1,
+    custom: [video],
+    hidden: BUILT_IN_VIDEOS.map((v) => v.id),
+  };
+  await page.evaluate(
+    ({ key, data }) => localStorage.setItem(key, JSON.stringify(data)),
+    { key: VIDEO_KEY, data: libraryData },
+  );
+  await page.getByRole("button", { name: "運動影片", exact: true }).click();
+  const catalog = page.locator(".video-library");
+  await catalog
+    .getByRole("searchbox", { name: "搜尋運動影片" })
+    .fill("虛構分頁");
+  await catalog
+    .getByRole("button", { name: `播放：${video.title}`, exact: true })
+    .click();
+  const iframe = await catalog.locator("iframe").elementHandle();
+  await catalog.getByRole("button", { name: "新增影片", exact: true }).click();
+  await catalog
+    .getByRole("textbox", { name: "YouTube 網址", exact: true })
+    .fill("https://youtu.be/a0000000001");
+  const draft = catalog.getByRole("textbox", { name: "名稱", exact: true });
+  await draft.fill("虛構尚未儲存草稿");
+  const other = await page.context().newPage();
+  const errors: string[] = [];
+  other.on("pageerror", (error) => errors.push(error.message));
+  try {
+    await other.clock.setFixedTime(new Date(`${TODAY}T04:00:00Z`));
+    await other.goto("./");
+    await other.getByRole("button", { name: "運動影片", exact: true }).click();
+    const otherCatalog = other.locator(".video-library");
+    await otherCatalog
+      .getByRole("button", { name: `收藏影片：${video.title}`, exact: true })
+      .click();
+    await expect(
+      catalog.getByRole("button", {
+        name: `收藏影片：${video.title}`,
+        exact: true,
+      }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await otherCatalog
+      .getByRole("button", { name: `播放：${video.title}`, exact: true })
+      .click();
+    await otherCatalog
+      .getByRole("button", { name: "看過一次", exact: true })
+      .click();
+    await expect(
+      catalog.getByRole("article").getByText(/看過 1 次/),
+    ).toBeVisible();
+    await expect(draft).toHaveValue("虛構尚未儲存草稿");
+    await expect(draft).toBeFocused();
+    await expect(catalog.getByRole("searchbox")).toHaveValue("虛構分頁");
+    expect(
+      await catalog
+        .locator("iframe")
+        .evaluate((node, original) => node === original, iframe),
+    ).toBe(true);
+    await catalog.getByRole("button", { name: "取消", exact: true }).click();
+    await page.getByRole("button", { name: "總覽", exact: true }).click();
+    await page.getByRole("button", { name: "調整目標", exact: true }).click();
+    const goal = page.getByRole("spinbutton", {
+      name: "每週目標（分鐘）",
+      exact: true,
+    });
+    await goal.fill("175");
+    await other.getByRole("button", { name: "總覽", exact: true }).click();
+    await other.getByRole("button", { name: "調整目標", exact: true }).click();
+    await other
+      .getByRole("spinbutton", { name: "每週目標（分鐘）", exact: true })
+      .fill("240");
+    await other.getByRole("button", { name: "儲存目標", exact: true }).click();
+    await expect(page.locator(".goal-total")).toContainText("/ 240");
+    await expect(goal).toHaveValue("175");
+    await expect(goal).toBeFocused();
+    const beforeCancel = await page.evaluate(
+      (key) => localStorage.getItem(key),
+      preferenceKey(),
+    );
+    await page.getByRole("button", { name: "取消調整", exact: true }).click();
+    expect(
+      await page.evaluate((key) => localStorage.getItem(key), preferenceKey()),
+    ).toBe(beforeCancel);
+    await page.getByRole("button", { name: "運動影片", exact: true }).click();
+    await catalog
+      .getByRole("button", { name: `播放：${video.title}`, exact: true })
+      .click();
+    await catalog.getByRole("button", { name: /看過一次/ }).click();
+    await other.getByRole("button", { name: "運動影片", exact: true }).click();
+    await expect(
+      otherCatalog.getByRole("article").getByText(/看過 2 次/),
+    ).toBeVisible();
+    const stored = {
+      version: 1,
+      weeklyGoal: 240,
+      favorites: [video.youtubeId],
+      seen: { [video.youtubeId]: 2 },
+    };
+    expect(
+      await page.evaluate(
+        (key) => JSON.parse(localStorage.getItem(key)!),
+        preferenceKey(),
+      ),
+    ).toEqual(stored);
+    expect(await readData(page)).toEqual(fixtureData);
+    expect(
+      await page.evaluate(
+        (key) => JSON.parse(localStorage.getItem(key)!),
+        VIDEO_KEY,
+      ),
+    ).toEqual(libraryData);
+    await expectNoOverflow(page);
+    await page.context().setOffline(true);
+    await page.getByRole("button", { name: "設定與備份", exact: true }).click();
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      page.getByRole("button", { name: "匯出 JSON 備份", exact: true }).click(),
+    ]);
+    const backup = JSON.parse(await readFile((await download.path())!, "utf8"));
+    expect(backup.experience).toEqual(stored);
+    expect(backup.workouts).toEqual(fixtureData.workouts);
+    await page.reload({ waitUntil: "networkidle" });
+    await expect(page.locator(".goal-total")).toContainText("/ 240");
+    await page.getByRole("button", { name: "運動影片", exact: true }).click();
+    await expect(
+      catalog.getByRole("button", {
+        name: `收藏影片：${video.title}`,
+        exact: true,
+      }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(
+      catalog.getByRole("article").getByText(/看過 2 次/),
+    ).toBeVisible();
+    expect(await readData(page)).toEqual(fixtureData);
+    await expectNoOverflow(page);
+    expect(errors).toEqual([]);
+  } finally {
+    await other.close();
+  }
+});
+
 test("50 段跑步機明細限制高度並內部捲動，從下方收合後資料與備份仍完整", async ({
   page,
 }) => {
