@@ -16,6 +16,108 @@ function field(name: string) {
   return screen.getByRole("spinbutton", { name }) as HTMLInputElement;
 }
 describe("workout recording experience", () => {
+  it("keeps type-specific defaults until a segment has actually been configured", () => {
+    render(<WorkoutForm {...props()} />);
+    const type = screen.getByRole("combobox", { name: "運動類型" });
+    fireEvent.change(type, { target: { value: "walk" } });
+    expect(field("第 1 段速度").value).toBe("5.5");
+    fireEvent.change(type, { target: { value: "run" } });
+    expect(field("第 1 段速度").value).toBe("8.5");
+    expect(field("第 1 段分鐘").value).toBe("20");
+  });
+  it("retains incomplete and decimal segment fields through another activity and a treadmill toggle", () => {
+    const p = props();
+    const { container } = render(<WorkoutForm {...p} />);
+    const type = screen.getByRole("combobox", { name: "運動類型" });
+    fireEvent.change(type, { target: { value: "walk" } });
+    fireEvent.change(field("第 1 段分鐘"), { target: { value: "12.5" } });
+    fireEvent.change(field("第 1 段速度"), { target: { value: "" } });
+    fireEvent.change(field("第 1 段坡度"), { target: { value: "0" } });
+    fireEvent.change(field("消耗熱量（kcal）"), { target: { value: "123" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "備註" }), {
+      target: { value: "虛構未完成草稿" },
+    });
+    fireEvent.change(type, { target: { value: "cycling" } });
+    expect(
+      screen.queryByRole("spinbutton", { name: "第 1 段速度" }),
+    ).toBeNull();
+    fireEvent.change(type, { target: { value: "run" } });
+    expect(field("第 1 段速度").value).toBe("");
+    expect(field("第 1 段分鐘").value).toBe("12.5");
+    expect(field("第 1 段坡度").value).toBe("0");
+    fireEvent.submit(container.querySelector("form")!);
+    expect(p.onSave).not.toHaveBeenCalled();
+    fireEvent.change(field("第 1 段速度"), { target: { value: "8.5" } });
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("checkbox"));
+    expect(field("第 1 段分鐘").value).toBe("12.5");
+    expect(field("消耗熱量（kcal）").value).toBe("123");
+    expect(screen.getByRole("textbox", { name: "備註" })).toHaveProperty(
+      "value",
+      "虛構未完成草稿",
+    );
+  });
+  it.each([
+    ["新增一段", 2],
+    ["複製上一段", 2],
+    ["平地健走 20 分", 3],
+    ["刪除第 2 段", 1],
+  ] as const)(
+    "preserves structural segment changes from %s when changing type",
+    (action, count) => {
+      render(<WorkoutForm {...props()} />);
+      const type = screen.getByRole("combobox", { name: "運動類型" });
+      fireEvent.change(type, { target: { value: "walk" } });
+      if (action.startsWith("刪除"))
+        fireEvent.click(screen.getByRole("button", { name: /新增一段/ }));
+      fireEvent.click(screen.getByRole("button", { name: new RegExp(action) }));
+      const before = screen
+        .getAllByRole("spinbutton", { name: /第 .* 段/ })
+        .map((node) => (node as HTMLInputElement).value);
+      fireEvent.change(type, { target: { value: "run" } });
+      expect(
+        screen.getAllByRole("spinbutton", { name: /第 .* 段分鐘/ }),
+      ).toHaveLength(count);
+      expect(
+        screen
+          .getAllByRole("spinbutton", { name: /第 .* 段/ })
+          .map((node) => (node as HTMLInputElement).value),
+      ).toEqual(before);
+    },
+  );
+  it("preserves repeated segments when changing between walking and running", () => {
+    const p = props();
+    const original: Workout = {
+      id: "fictional-repeat",
+      date: "2026-10-30",
+      type: "walk",
+      minutes: 30,
+      calories: 99,
+      note: "虛構分段",
+      segments: [
+        { minutes: 12.5, speed: 4, incline: 0 },
+        { minutes: 17.5, speed: 5, incline: 3 },
+      ],
+    };
+    render(<WorkoutForm {...p} initialDraft={repeatWorkoutDraft(original)} />);
+    fireEvent.change(screen.getByRole("combobox", { name: "運動類型" }), {
+      target: { value: "run" },
+    });
+    expect(
+      screen.getAllByRole("spinbutton", { name: /第 .* 段分鐘/ }),
+    ).toHaveLength(2);
+    expect(field("第 1 段分鐘").value).toBe("12.5");
+    expect(field("第 2 段坡度").value).toBe("3");
+    fireEvent.click(screen.getByRole("button", { name: /儲存紀錄/ }));
+    expect(p.onSave.mock.calls[0][0]).toMatchObject({
+      type: "run",
+      minutes: 30,
+      calories: 0,
+      segments: original.segments,
+    });
+    expect(original.type).toBe("walk");
+    expect(original.calories).toBe(99);
+  });
   it("opens repeated treadmill settings for today with independent segments, a new ID and fresh calories", () => {
     const p = props();
     const original: Workout = {
