@@ -19,7 +19,7 @@ Linux CI 使用官方 `npx playwright install --with-deps chromium` 安裝 Chrom
 
 ## 範圍
 
-十四個使用情境，各在 320×852、390×844、844×390 執行，共 42 個案例：
+十五個使用情境，各在 320×852、390×844、844×390 執行，共 45 個案例：
 
 - 平滑曲線、相鄰量測、缺日斷線、真實零及鍵盤 Tooltip，並與每日數值表比對。
 - 每日／每週清單最大高度、內部鍵盤捲動、固定欄名，以及捲到底後直接收合。
@@ -37,6 +37,8 @@ Linux CI 使用官方 `npx playwright install --with-deps chromium` 安裝 Chrom
 - 離線跨日回前景：週六運動草稿保留原日期／分鐘／備註，進到週日後今日步數不沿用週六；週日健康表單進到週一仍保留原日期／體重，日期上限跟隨今天。週一統計與課表重設，新表單用週一日期，存入新運動後只計入新週，原有資料保留且不溢出。
 - 25 部虛構影片的搜尋／長度／分類／收藏交集、12 部分批與首筆新增標題焦點、16px／44px 控制項、零結果時保留 iframe 節點、明確標記看過及預填運動後取消。離線查找未標示長度、下載 JSON 仍包含全部影片，離線重開重設搜尋且資料完整。外部影片與縮圖請求被阻擋，不把 DOM 節點保留當成實際 YouTube 播放驗收。
 
+- 影片庫真實雙分頁：B 頁先新增影片，A 頁保留影片草稿與同一 iframe，停用加入及重新讀取；關閉草稿並明確讀取後保留搜尋，新增 A 的影片不覆蓋 B 的影片。原運動／健康 raw 不變，離線重開後三支虛構影片完整且無水平溢出。
+
 每個案例使用新的瀏覽器 context，僅填入 e2e/fixtures.ts 的虛構 localStorage 資料。Date 固定為 2026-11-07，避免 CI 跨午夜造成日期漂移，計時器與繪圖仍正常執行。請求以 loopback origin 過濾，不進行 Google 登入、Picker、私人 Sheets、健康 API 或真實 YouTube 播放，也沒有 storageState、Token 或真實帳號 fixture。離線案例明確等待 Service Worker 就緒與控制頁面後才切斷網路。
 
 PWA 升級案例另以 e2e/pwa-server.ts 建立獨立 127.0.0.1 隨機 port 的靜態測試 server，提供同一份 dist 的 `/fitness-pwa/` 路徑。僅在記憶體中的 sw.js HTTP 回應附加虛構版本辨識，先註冊版本 1，再提供版本 2；透過真實 MessageChannel 讀取 active controller 版本，沒有 mock 瀏覽器的 ServiceWorker API。推進測試的 Date 61 秒並發送 focus 事件，驗證節流後的實際註冊更新。沒有修改 dist、正式 worker 或公開部署，也不是兩套不同前端產物的快取遷移測試；額外 server 於測試後關閉。每個案例僅允許自己的 loopback origin。E15 的雙分頁案例在同一隔離 context 開兩頁，共用虛構 localStorage 與 worker；先在舊實作重現草稿因自動重載而消失的失敗，再確認修正後可繼續儲存與自行重載。這不是 Safari 與獨立安裝 PWA 是否共享 worker 的驗證。
@@ -53,7 +55,7 @@ Playwright 固定 1.65.0（npm 官方 metadata：Node ≥20，現有 Node 22 符
 
 E16 的本機雙分頁案例先在舊程式重現「A 頁儲存後 B 頁新紀錄消失」的失敗，再確認偵測變更、保留草稿、明確重新讀取與重新記錄的流程通過。這只驗證同來源 localStorage 的先後修改；比對後寫入不是原子操作，不保證真正同時寫入的所有交錯順序，也不驗證不同 iOS 容器是否共享儲存。
 
-E16 的 PR #23 與 Pages 已通過 277 項 Vitest、8 項 Python 與 33 個 Playwright 案例；E17 的 PR #24 與 Pages 已通過 291 項 Vitest（39 檔）、8 項 Python 與 36 個 Playwright 案例；E18 的 PR #25 與 Pages 已通過 302 項 Vitest（40 檔）、8 項 Python 與 39 個 Playwright 案例。E19 本機通過 318 項 Vitest（41 檔）、8 項 Python、TypeScript／Vite／Service Worker 建置、瀏覽器型別檢查與 42 個 Playwright 案例；CI／Pages 結果以本輪 PR 記錄為準。本機瀏覽器為系統 Chromium 156；E11 的 PR #18 與 Pages 均已實際安裝並通過原 18 個案例；E12 的 PR #19 與 Pages 均已通過 21 個案例；E13 的 PR #20 與 Pages 已通過 24 個案例；E14 的 PR #21 與 Pages 已通過 27 個案例；E15 的 PR #22 與 Pages 已通過 30 個案例。失敗 artifact 上傳條件已設定，成功執行不代表實際觸發過上傳。
+E16 的 PR #23 與 Pages 已通過 277 項 Vitest、8 項 Python 與 33 個 Playwright 案例；E17 的 PR #24 與 Pages 已通過 291 項 Vitest（39 檔）、8 項 Python 與 36 個 Playwright 案例；E18 的 PR #25 與 Pages 已通過 302 項 Vitest（40 檔）、8 項 Python 與 39 個 Playwright 案例。E19 的 PR #26 與 Pages 已通過 318 項 Vitest（41 檔）、8 項 Python、TypeScript／Vite／Service Worker 建置、瀏覽器型別檢查與 42 個 Playwright 案例；部署與正式資產驗證見 PR #26。本機瀏覽器為系統 Chromium 156；E11 的 PR #18 與 Pages 均已實際安裝並通過原 18 個案例；E12 的 PR #19 與 Pages 均已通過 21 個案例；E13 的 PR #20 與 Pages 已通過 24 個案例；E14 的 PR #21 與 Pages 已通過 27 個案例；E15 的 PR #22 與 Pages 已通過 30 個案例。失敗 artifact 上傳條件已設定，成功執行不代表實際觸發過上傳。
 
 官方依據：
 
@@ -61,3 +63,5 @@ E16 的 PR #23 與 Pages 已通過 277 項 Vitest、8 項 Python 與 33 個 Play
 - https://playwright.dev/docs/test-webserver
 - https://playwright.dev/docs/service-workers
 - https://github.com/actions/upload-artifact/tree/cf430e030ddbb5b0abf93d22962f4752f3646cd9
+
+E20 本機完整檢查通過 334 項 Vitest（42 檔）、8 項 Python、正式建置及 45 個 Playwright 案例；增加的影片庫雙分頁案例使用相同 context 的兩頁及真實 localStorage 事件。只驗證先後修改，不宣稱真正同時寫入已原子化；CI／Pages 結果見本輪 PR。

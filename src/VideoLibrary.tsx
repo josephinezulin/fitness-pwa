@@ -13,21 +13,19 @@ import {
   VIDEO_CATEGORIES,
   addVideo,
   embedUrl,
-  readLibrary,
   parseYouTubeId,
   validateLibrary,
   removeVideo,
-  storeLibrary,
   thumbnailUrl,
   visibleVideos,
   watchUrl,
   type Video,
   type VideoCategory,
-  type VideoLibrary as Library,
 } from "./videos";
 import type { SheetVideo } from "./model";
 import { seenCount, type Preferences } from "./preferences";
 import { searchVideos, VIDEO_LENGTHS, type VideoLength } from "./video-search";
+import { useVideoStorage } from "./useVideoStorage";
 
 const VIDEO_BATCH = 12;
 
@@ -61,7 +59,8 @@ export function VideoLibrary({
   canRecord?: boolean;
   onDraftChange?: (open: boolean) => void;
 }) {
-  const [lib, setLib] = useState<Library>(() => readLibrary(localStorage));
+  const videoStorage = useVideoStorage();
+  const lib = videoStorage.library;
   const [category, setCategory] = useState<VideoCategory | "全部">(
     initialCategory,
   );
@@ -110,17 +109,7 @@ export function VideoLibrary({
   for (const x of matching)
     counts.set(x.category, (counts.get(x.category) || 0) + 1);
 
-  function persist(next: Library) {
-    try {
-      storeLibrary(localStorage, next);
-      setLib(next);
-      setError("");
-      return true;
-    } catch (e) {
-      setError("影片清單儲存失敗：" + (e as Error).message);
-      return false;
-    }
-  }
+  const persist = videoStorage.persist;
   function play(video: Video) {
     setPlaying(video);
     setMarkedThisPlay(false);
@@ -138,7 +127,10 @@ export function VideoLibrary({
         </div>
         <button
           className="text-button"
-          disabled={cloud && (!canEditCloud || !sheetVideos)}
+          disabled={
+            !adding &&
+            (cloud ? !canEditCloud || !sheetVideos : videoStorage.blocked)
+          }
           onClick={() => {
             setEditing(null);
             setAdding((a) => !a);
@@ -157,6 +149,24 @@ export function VideoLibrary({
         <p className="notice" role="status">
           {error}
         </p>
+      )}
+      {videoStorage.error && (
+        <div className="notice video-storage-notice" role="status">
+          <p>{videoStorage.error}</p>
+          <p>
+            請先複製需要的草稿並關閉影片表單，再重新讀取清單。重新讀取會保留目前搜尋與播放器。
+          </p>
+          <button
+            type="button"
+            className="secondary"
+            disabled={adding}
+            onClick={() => {
+              if (videoStorage.reload()) setError("");
+            }}
+          >
+            重新讀取影片清單
+          </button>
+        </div>
       )}
       {adding && (
         <form
@@ -204,6 +214,7 @@ export function VideoLibrary({
                   })
                 : persist(next);
               if (saved) {
+                setError("");
                 setAdding(false);
                 setEditing(null);
                 setCategory(form.get("category") as VideoCategory);
@@ -266,7 +277,7 @@ export function VideoLibrary({
           <button
             className="primary"
             type="submit"
-            disabled={cloud && !canEditCloud}
+            disabled={cloud ? !canEditCloud : videoStorage.blocked}
           >
             {editing ? "儲存影片" : "加入影片庫"} <Plus size={16} />
           </button>
@@ -513,7 +524,9 @@ export function VideoLibrary({
                   <button
                     className="icon-button"
                     aria-label={`從清單移除：${x.title}`}
-                    disabled={x.fromSheet && !canEditCloud}
+                    disabled={
+                      x.fromSheet ? !canEditCloud : videoStorage.blocked
+                    }
                     onClick={() => {
                       if (confirm(`從影片庫移除「${x.title}」？`)) {
                         const saved = x.fromSheet
@@ -567,6 +580,7 @@ export function VideoLibrary({
             已隱藏 {lib.hidden.length} 部內建影片，
             <button
               className="inline-link"
+              disabled={videoStorage.blocked}
               onClick={() => persist({ ...lib, hidden: [] })}
             >
               <RotateCcw size={11} /> 還原內建影片

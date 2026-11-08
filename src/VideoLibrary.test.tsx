@@ -3,7 +3,12 @@ import React from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { VideoLibrary } from "./VideoLibrary";
-import { BUILT_IN_VIDEOS, storeLibrary } from "./videos";
+import {
+  BUILT_IN_VIDEOS,
+  storeLibrary,
+  VIDEO_KEY,
+  type VideoLibrary as Library,
+} from "./videos";
 beforeEach(() => {
   localStorage.clear();
   vi.stubGlobal("confirm", () => true);
@@ -16,7 +21,7 @@ const video = {
   id: "cloud-video-1",
   youtubeId: "v7AYKMP6rOE",
   title: "雲端自己的影片",
-  category: "瑜伽",
+  category: "瑜伽" as const,
   minutes: 20,
 };
 const hideBuiltIns = () =>
@@ -34,6 +39,135 @@ const catalog = () =>
   }));
 const search = () => screen.getByRole("searchbox", { name: "搜尋運動影片" });
 const length = () => screen.getByRole("combobox", { name: "影片長度" });
+
+const fillLocalDraft = () => {
+  fireEvent.click(screen.getByRole("button", { name: "新增影片" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "YouTube 網址" }), {
+    target: { value: "https://youtu.be/local000001" },
+  });
+  fireEvent.change(screen.getByRole("textbox", { name: "名稱" }), {
+    target: { value: "虛構 A 頁草稿" },
+  });
+};
+
+it("refuses a stale local video save before any storage event can arrive", () => {
+  render(<VideoLibrary online />);
+  fillLocalDraft();
+  const other: Library = { version: 1, custom: [video], hidden: [] };
+  storeLibrary(localStorage, other);
+  const raw = localStorage.getItem(VIDEO_KEY);
+  fireEvent.click(screen.getByRole("button", { name: "加入影片庫" }));
+  expect(localStorage.getItem(VIDEO_KEY)).toBe(raw);
+  expect(screen.getByRole("textbox", { name: "名稱" })).toHaveProperty(
+    "value",
+    "虛構 A 頁草稿",
+  );
+  expect(screen.getByText(/影片清單已在其他分頁變更/)).toBeTruthy();
+});
+
+it("does not overwrite an unreadable video library with the empty fallback", () => {
+  localStorage.setItem(VIDEO_KEY, "{fictional-invalid");
+  render(<VideoLibrary online />);
+  expect(screen.getByRole("button", { name: "新增影片" })).toHaveProperty(
+    "disabled",
+    true,
+  );
+  expect(localStorage.getItem(VIDEO_KEY)).toBe("{fictional-invalid");
+  expect(screen.getByText(/無法讀取影片清單/)).toBeTruthy();
+});
+
+it("keeps the draft, filters and player until explicit reload, with local mutations blocked", () => {
+  vi.stubGlobal(
+    "requestAnimationFrame",
+    vi.fn(() => 0),
+  );
+  storeLibrary(localStorage, { version: 1, custom: [video], hidden: [] });
+  render(<VideoLibrary online />);
+  fireEvent.click(screen.getByRole("button", { name: `播放：${video.title}` }));
+  const frame = screen.getByTitle(video.title);
+  fireEvent.change(search(), { target: { value: "影片" } });
+  fillLocalDraft();
+  storeLibrary(localStorage, {
+    version: 1,
+    custom: [{ ...video, title: "另一頁影片" }],
+    hidden: [],
+  });
+  fireEvent(
+    window,
+    new StorageEvent("storage", { key: VIDEO_KEY, storageArea: localStorage }),
+  );
+  const reload = screen.getByRole("button", { name: "重新讀取影片清單" });
+  expect(reload).toHaveProperty("disabled", true);
+  expect(screen.getByRole("button", { name: "加入影片庫" })).toHaveProperty(
+    "disabled",
+    true,
+  );
+  expect(screen.getByRole("textbox", { name: "名稱" })).toHaveProperty(
+    "value",
+    "虛構 A 頁草稿",
+  );
+  expect(screen.getByTitle(video.title)).toBe(frame);
+  fireEvent.click(screen.getByRole("button", { name: "取消" }));
+  expect(reload).toHaveProperty("disabled", false);
+  fireEvent.click(reload);
+  expect(screen.getByRole("heading", { name: "另一頁影片" })).toBeTruthy();
+  expect(search()).toHaveProperty("value", "影片");
+  expect(screen.getByTitle(video.title)).toBe(frame);
+  expect(screen.getByRole("button", { name: "新增影片" })).toHaveProperty(
+    "disabled",
+    false,
+  );
+});
+
+it("checks local removal immediately rather than erasing another page's new video", () => {
+  storeLibrary(localStorage, { version: 1, custom: [video], hidden: [] });
+  render(<VideoLibrary online />);
+  storeLibrary(localStorage, {
+    version: 1,
+    custom: [
+      video,
+      {
+        ...video,
+        id: "fictional-b",
+        youtubeId: "b0000000001",
+        title: "B 影片",
+      },
+    ],
+    hidden: [],
+  });
+  const raw = localStorage.getItem(VIDEO_KEY);
+  fireEvent.click(
+    screen.getByRole("button", { name: `從清單移除：${video.title}` }),
+  );
+  expect(localStorage.getItem(VIDEO_KEY)).toBe(raw);
+  expect(screen.getByRole("heading", { name: video.title })).toBeTruthy();
+});
+
+it("leaves cloud save and delete callbacks usable when local video storage is blocked", () => {
+  const save = vi.fn(() => true),
+    remove = vi.fn(() => true);
+  localStorage.setItem(VIDEO_KEY, "{fictional-invalid");
+  render(
+    <VideoLibrary
+      online
+      cloud
+      canEditCloud
+      sheetVideos={[video]}
+      onSaveVideo={save}
+      onDeleteVideo={remove}
+    />,
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: `編輯影片：${video.title}` }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "儲存影片" }));
+  expect(save).toHaveBeenCalledWith(video);
+  fireEvent.click(
+    screen.getByRole("button", { name: `從清單移除：${video.title}` }),
+  );
+  expect(remove).toHaveBeenCalledWith(video.id);
+  expect(localStorage.getItem(VIDEO_KEY)).toBe("{fictional-invalid");
+});
 
 it("reads the full catalog in batches and focuses the first newly revealed title", () => {
   hideBuiltIns();
