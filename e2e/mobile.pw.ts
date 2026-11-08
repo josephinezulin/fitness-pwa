@@ -14,6 +14,126 @@ import {
 import { readFile } from "node:fs/promises";
 import { BUILT_IN_VIDEOS, VIDEO_KEY } from "../src/videos";
 
+test("影片庫雙分頁保留草稿與播放器，明確重新讀取後新增不覆蓋另一頁影片", async ({
+  page,
+}) => {
+  await page.goto("./");
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+  });
+  const first = {
+    id: "fictional-first",
+    youtubeId: "F0000000000",
+    title: "虛構原有影片",
+    category: "瑜伽",
+    minutes: 10,
+  };
+  await page.evaluate(
+    ({ key, library }) => localStorage.setItem(key, JSON.stringify(library)),
+    {
+      key: VIDEO_KEY,
+      library: {
+        version: 1,
+        custom: [first],
+        hidden: BUILT_IN_VIDEOS.map((v) => v.id),
+      },
+    },
+  );
+  const healthRaw = await page.evaluate(
+    (key) => localStorage.getItem(key),
+    STORAGE_KEY,
+  );
+  await page.getByRole("button", { name: "運動影片", exact: true }).click();
+  const toast = page.getByRole("button", { name: "關閉離線通知", exact: true });
+  if (await toast.isVisible()) await toast.click();
+  const library = page.locator(".video-library");
+  await library.getByRole("searchbox").fill("虛構");
+  await library.getByRole("button", { name: `播放：${first.title}` }).click();
+  const frame = (await library.locator("iframe").elementHandle())!;
+  await library.getByRole("button", { name: "新增影片" }).click();
+  await library
+    .getByRole("textbox", { name: "YouTube 網址" })
+    .fill("https://youtu.be/a0000000001");
+  await library
+    .getByRole("textbox", { name: "名稱", exact: true })
+    .fill("虛構 A 頁草稿");
+  const other = await page.context().newPage();
+  const errors: string[] = [];
+  other.on("pageerror", (error) => errors.push(error.message));
+  try {
+    await other.goto("./");
+    await other.getByRole("button", { name: "運動影片", exact: true }).click();
+    await other.getByRole("button", { name: "新增影片" }).click();
+    await other
+      .getByRole("textbox", { name: "YouTube 網址" })
+      .fill("https://youtu.be/b0000000001");
+    await other
+      .getByRole("textbox", { name: "名稱", exact: true })
+      .fill("虛構 B 頁新影片");
+    await other.getByRole("button", { name: "加入影片庫" }).click();
+    await expect(
+      other.getByRole("heading", { name: "虛構 B 頁新影片" }),
+    ).toBeVisible();
+    await page.bringToFront();
+    await expect(library.getByText(/影片清單已在其他分頁變更/)).toBeVisible();
+    await expect(
+      library.getByRole("textbox", { name: "名稱", exact: true }),
+    ).toHaveValue("虛構 A 頁草稿");
+    await expect(
+      library.getByRole("button", { name: "加入影片庫" }),
+    ).toBeDisabled();
+    const reload = library.getByRole("button", { name: "重新讀取影片清單" });
+    await expect(reload).toBeDisabled();
+    expect(
+      JSON.parse(
+        (await page.evaluate((key) => localStorage.getItem(key), VIDEO_KEY))!,
+      ).custom,
+    ).toHaveLength(2);
+    await expectNoOverflow(page);
+    await library.getByRole("button", { name: "取消", exact: true }).click();
+    await expect(reload).toBeEnabled();
+    expect((await reload.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    await reload.click();
+    await expect(
+      library.getByRole("heading", { name: "虛構 B 頁新影片" }),
+    ).toBeVisible();
+    await expect(library.getByRole("searchbox")).toHaveValue("虛構");
+    expect(
+      await library
+        .locator("iframe")
+        .evaluate((node, original) => node === original, frame),
+    ).toBe(true);
+    await library.getByRole("button", { name: "新增影片" }).click();
+    await library
+      .getByRole("textbox", { name: "YouTube 網址" })
+      .fill("https://youtu.be/a0000000001");
+    await library
+      .getByRole("textbox", { name: "名稱", exact: true })
+      .fill("虛構 A 頁新影片");
+    await library.getByRole("button", { name: "加入影片庫" }).click();
+    const stored = await page.evaluate(
+      (key) => JSON.parse(localStorage.getItem(key)!),
+      VIDEO_KEY,
+    );
+    expect(stored.custom.map((v: { title: string }) => v.title)).toEqual([
+      first.title,
+      "虛構 B 頁新影片",
+      "虛構 A 頁新影片",
+    ]);
+    expect(
+      await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY),
+    ).toBe(healthRaw);
+    await page.context().setOffline(true);
+    await page.reload();
+    await page.getByRole("button", { name: "運動影片", exact: true }).click();
+    await expect(library.getByRole("article")).toHaveCount(3);
+    await expectNoOverflow(page);
+    expect(errors).toEqual([]);
+  } finally {
+    await other.close();
+  }
+});
+
 test("影片庫搜尋、長度與收藏可組合，分批保留播放並可離線查找與完整備份", async ({
   page,
 }) => {
