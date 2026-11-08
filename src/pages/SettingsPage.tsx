@@ -19,7 +19,6 @@ export function SettingsPage({
   onRestore,
   restoring,
   onCancelRestore,
-  onDemo,
   healthSync,
   timezone,
   readAt,
@@ -39,7 +38,6 @@ export function SettingsPage({
   onRestore: (file?: File) => Promise<void>;
   restoring: boolean;
   onCancelRestore: () => void;
-  onDemo: () => void;
   healthSync: HealthSyncSummary | null;
   timezone?: string;
   readAt?: string;
@@ -119,30 +117,6 @@ export function SettingsPage({
           離線模式支援介面、紀錄與備份。影片播放與雲端同步需要網路。裝置儲存空間不足時，iOS
           可能清除網站資料。
         </p>
-      </section>
-      <section className="card">
-        <h2>整合進度</h2>
-        <p className="guide">
-          第一階段：本機 PWA
-          <br />
-          第二階段：Google 登入、選檔及私人雲端同步
-          <br />
-          第三階段：Apple 健康與 iOS 捷徑（待部署及實機驗收）
-        </p>
-        <span className="pill">運動、課表與影片支援私人雲端同步</span>
-      </section>
-      <section className="card">
-        <h2>試用示範資料</h2>
-        <p className="guide">
-          載入 14 天虛構健康摘要，預覽趨勢與課表。會取代目前資料，請先備份。
-        </p>
-        <button
-          className="secondary"
-          disabled={cloud || !localWritable || restoring}
-          onClick={onDemo}
-        >
-          載入示範資料
-        </button>
       </section>
     </div>
   );

@@ -1,14 +1,11 @@
 import type { ReactNode } from "react";
-import {
-  Activity,
-  Scale,
-  Footprints,
-  Flame,
-  Leaf,
-  ArrowUpRight,
-} from "lucide-react";
+import { Activity, Scale, Footprints, CalendarCheck } from "lucide-react";
 import { WeeklyGoal } from "../WeeklyActivity";
+import { CountUp, Sparkline } from "../motion-ui";
 import type { Metric } from "../model";
+
+type Field = "weight" | "fat" | "steps";
+
 export function OverviewPage({
   metrics,
   viewToday,
@@ -21,7 +18,6 @@ export function OverviewPage({
   logs,
   onGoalChange,
   onGoalDraftChange,
-  onSchedule,
 }: {
   metrics: Metric[];
   viewToday: string;
@@ -34,98 +30,101 @@ export function OverviewPage({
   logs: ReactNode;
   onGoalChange: (goal: number) => boolean;
   onGoalDraftChange?: (open: boolean) => void;
-  onSchedule: () => void;
 }) {
-  const latest = (field: keyof Metric) =>
+  const history = (field: Field) =>
     [...metrics]
       .filter((m) => m[field] !== undefined && m.date <= viewToday)
-      .sort((a, b) => b.date.localeCompare(a.date))[0];
-  const w = latest("weight"),
-    f = latest("fat"),
-    steps = metrics.find((m) => m.date === viewToday)?.steps;
+      .sort((a, b) => a.date.localeCompare(b.date));
+  const weights = history("weight"),
+    fats = history("fat"),
+    steps = history("steps");
+  const w = weights.at(-1),
+    f = fats.at(-1),
+    today = metrics.find((m) => m.date === viewToday)?.steps;
+  const short = (date?: string) => date?.slice(5).replace("-", "/");
+  const tiles = [
+    {
+      label: "最新體重",
+      value: w?.weight,
+      decimals: 1,
+      unit: "kg",
+      icon: Scale,
+      sub: short(w?.date),
+      trend: weights.slice(-14).map((m) => m.weight!),
+      color: "sage",
+    },
+    {
+      label: "最新體脂率",
+      value: f?.fat,
+      decimals: 1,
+      unit: "%",
+      icon: Activity,
+      sub: short(f?.date),
+      trend: fats.slice(-14).map((m) => m.fat!),
+      color: "sand",
+    },
+    {
+      label: "今日步數",
+      value: today,
+      decimals: 0,
+      unit: "步",
+      icon: Footprints,
+      sub: undefined,
+      trend: steps.slice(-14).map((m) => m.steps!),
+      color: "blue",
+      format: (n: number) => Math.round(n).toLocaleString(),
+    },
+  ];
   return (
     <>
-      <div className="stats">
-        {[
-          {
-            label: "最新體重",
-            value: w?.weight,
-            unit: "kg",
-            icon: Scale,
-            sub: w?.date || "等待第一次記錄",
-            color: "sage",
-          },
-          {
-            label: "最新體脂率",
-            value: f?.fat,
-            unit: "%",
-            icon: Activity,
-            sub: f?.date || "了解自己的身體",
-            color: "sand",
-          },
-          {
-            label: "今日步數",
-            value: steps?.toLocaleString(),
-            unit: "步",
-            icon: Footprints,
-            sub: "每一步，都是進步",
-            color: "blue",
-          },
-          {
-            label: "本週運動",
-            value: weekMinutes,
-            unit: "分鐘",
-            icon: Flame,
-            sub: `本週目標 ${weeklyGoal} 分鐘 · 課表 ${done}/${planCount} 完成`,
-            color: "peach",
-          },
-        ].map((s) => (
-          <article className="card stat" key={s.label}>
-            <div className="stat-top">
-              <span>{s.label}</span>
-              <div className={"stat-icon " + s.color}>
-                <s.icon size={19} />
+      <div className="hero">
+        <WeeklyGoal
+          minutes={weekMinutes}
+          goal={weeklyGoal}
+          onChange={onGoalChange}
+          onDraftChange={onGoalDraftChange}
+        >
+          {planCount > 0 && (
+            <p className="ring-chip">
+              <CalendarCheck size={14} aria-hidden="true" />
+              課表 {done}/{planCount}
+            </p>
+          )}
+        </WeeklyGoal>
+        <div className="tiles">
+          {tiles.map((s) => (
+            <article className={"card stat " + s.color} key={s.label}>
+              <div className="stat-top">
+                <span>{s.label}</span>
+                <div className="stat-icon">
+                  <s.icon size={17} />
+                </div>
               </div>
-            </div>
-            <div className="stat-value">
-              {s.value ?? "—"}
-              <small>{s.unit}</small>
-            </div>
-            <p>{s.sub}</p>
-          </article>
-        ))}
+              <div className="stat-value">
+                {s.value === undefined ? (
+                  "—"
+                ) : (
+                  <CountUp
+                    value={s.value}
+                    decimals={s.decimals}
+                    format={s.format}
+                  />
+                )}
+                <small>{s.unit}</small>
+              </div>
+              <div className="stat-foot">
+                {s.sub && <span>{s.sub}</span>}
+                <Sparkline values={s.trend} />
+              </div>
+            </article>
+          ))}
+        </div>
       </div>
-      <WeeklyGoal
-        minutes={weekMinutes}
-        goal={weeklyGoal}
-        onChange={onGoalChange}
-        onDraftChange={onGoalDraftChange}
-      />
       <div className="two-column">
         {chart}
         {schedule}
       </div>
-      <div className="two-column bottom">
-        {logs}
-        <section className="tip">
-          <span className="eyebrow">YOUR DAILY REMINDER</span>
-          <div className="abstract">
-            <span />
-            <span />
-            <span />
-            <Leaf size={68} />
-          </div>
-          <h2>
-            不求一次到位，
-            <br />
-            只要持續前進。
-          </h2>
-          <p>今天的你，也值得被好好照顧。</p>
-          <button onClick={onSchedule}>
-            看看本週安排 <ArrowUpRight size={17} />
-          </button>
-        </section>
-      </div>
+      {logs}
     </>
   );
 }

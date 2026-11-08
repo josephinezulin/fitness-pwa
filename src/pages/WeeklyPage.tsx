@@ -12,7 +12,6 @@ export function WeeklyPage({
     <div className="two-column">
       {schedule}
       <section className="card">
-        <span className="eyebrow">在家，也能好好動</span>
         <h2>居家訓練小指南</h2>
         <p className="guide">
           建議先暖身 5

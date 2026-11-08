@@ -1,4 +1,10 @@
-import { useId, useLayoutEffect, useRef, useState } from "react";
+import {
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   Bar,
   BarChart,
@@ -19,16 +25,19 @@ import {
   type WeeklyRow,
 } from "./trends";
 import { TrendData, TrendTooltip } from "./TrendData";
+import { CountUp, ProgressRing } from "./motion-ui";
 export function WeeklyGoal({
   minutes,
   goal,
   onChange,
   onDraftChange,
+  children,
 }: {
   minutes: number;
   goal: number;
   onChange: (goal: number) => boolean;
   onDraftChange?: (open: boolean) => void;
+  children?: ReactNode;
 }) {
   const id = useId();
   const [editing, setEditing] = useState(false),
@@ -40,11 +49,10 @@ export function WeeklyGoal({
   }, [editing, onDraftChange]);
   const left = Math.max(0, Math.round((goal - minutes) * 10) / 10);
   return (
-    <section className="card weekly-goal">
+    <article className="card weekly-goal">
       <div className="section-head">
         <div>
-          <span className="eyebrow">一點一點，累積自己的節奏</span>
-          <h2>本週累積運動</h2>
+          <h2>本週運動</h2>
         </div>
         <button
           ref={toggleRef}
@@ -59,19 +67,24 @@ export function WeeklyGoal({
           {editing ? "取消調整" : "調整目標"}
         </button>
       </div>
-      <p className="goal-total">
-        <strong>{minutes}</strong> / {goal} <span>分鐘</span>
-      </p>
+      <ProgressRing value={minutes} goal={goal}>
+        <strong className="stat-value">
+          <CountUp value={minutes} decimals={1} />
+        </strong>
+        <p className="goal-total">
+          / {goal} <span>分鐘</span>
+        </p>
+      </ProgressRing>
       <progress
+        className="sr-only"
         aria-label="本週運動分鐘進度"
         max={goal}
         value={Math.min(minutes, goal)}
       />
-      <p className="tiny muted">
-        {left
-          ? `距離這週的目標還有 ${left} 分鐘，每次短短運動也算進步。`
-          : "這週已達到自己的累積目標，做得很好。"}
+      <p className={"goal-status" + (left ? "" : " reached")}>
+        {left ? `還差 ${left} 分鐘` : "已達到自己的累積目標"}
       </p>
+      {children}
       {editing && (
         <form
           id={`${id}-editor`}
@@ -106,9 +119,6 @@ export function WeeklyGoal({
           <button className="secondary" type="submit">
             儲存目標
           </button>
-          <p className="tiny muted">
-            目標儲存在此裝置，依本機或登入帳號／試算表分開保存。
-          </p>
           {error && (
             <p role="status" className="cloud-error">
               {error}
@@ -116,7 +126,7 @@ export function WeeklyGoal({
           )}
         </form>
       )}
-    </section>
+    </article>
   );
 }
 export function WeeklyActivity({
@@ -139,7 +149,7 @@ export function WeeklyActivity({
       <div className="section-head">
         <div>
           <span className="eyebrow">最近 8 週</span>
-          <h2 id={`${id}-heading`}>看見每週的小進步</h2>
+          <h2 id={`${id}-heading`}>每週趨勢</h2>
         </div>
       </div>
       <div className="chips" role="group" aria-label="每週運動趨勢指標">

@@ -19,7 +19,6 @@ const props = () => ({
   onRestore: vi.fn(async () => {}),
   restoring: false,
   onCancelRestore: vi.fn(),
-  onDemo: vi.fn(),
   healthSync: null,
   online: false,
 });
