@@ -496,6 +496,7 @@ test("跑步機分段在切換類型與模式時保留，取消不寫入，離�
   await page.evaluate(async () => {
     await navigator.serviceWorker.ready;
   });
+  await page.getByRole("button", { name: "紀錄", exact: true }).click();
   const source = workoutRow(page, sourceWorkout.note);
   await source.getByRole("button", { name: /再記一次/ }).click();
   const form = page.getByRole("dialog");
@@ -1207,15 +1208,12 @@ test("跨日回前景更新今日與本週統計，保留表單草稿並以新�
   });
   const heading = page.locator(".title-row .eyebrow");
   const steps = page
-    .locator(".stat")
+    .locator(".card.mini")
     .filter({ has: page.getByText("今日步數", { exact: true }) });
-  const week = page
-    .locator(".stat")
-    .filter({ has: page.getByText("本週運動", { exact: true }) })
-    .locator(".stat-value");
+  const week = page.locator(".weekly-goal .week-total");
   await expect(heading).toContainText("11月7日");
   await expect(steps).toContainText("1,234");
-  await expect(week).toHaveText(/575\s*分鐘/);
+  await expect(week).toHaveText(/^575\s*\/\s*\d+ 分/);
   await page.getByRole("button", { name: "記錄運動", exact: true }).click();
   let form = page.getByRole("dialog");
   await form.getByLabel("備註", { exact: true }).fill("虛構跨日運動草稿");
@@ -1248,8 +1246,8 @@ test("跨日回前景更新今日與本週統計，保留表單草稿並以新�
     document.dispatchEvent(new Event("visibilitychange")),
   );
   await expect(heading).toContainText("11月9日");
-  await expect(week).toHaveText(/0\s*分鐘/);
-  await expect(week.locator("..")).toContainText("課表 0/3 完成");
+  await expect(week).toHaveText(/^0\s*\/\s*\d+ 分/);
+  await expect(page.locator(".week-list [aria-checked=true]")).toHaveCount(0);
   await expect(form.getByLabel("日期", { exact: true })).toHaveValue(
     "2026-11-08",
   );
@@ -1273,8 +1271,8 @@ test("跨日回前景更新今日與本週統計，保留表單草稿並以新�
   await form.getByLabel("備註", { exact: true }).fill("虛構週一新紀錄");
   await form.getByRole("button", { name: /儲存紀錄/ }).click();
   await expect(form).toHaveCount(0);
-  await expect(week).toHaveText(/30\s*分鐘/);
-  await expect(week.locator("..")).toContainText("課表 1/3 完成");
+  await expect(week).toHaveText(/^30\s*\/\s*\d+ 分/);
+  await expect(page.locator(".week-list [aria-checked=true]")).toHaveCount(1);
   const saved = await readData(page);
   expect(saved.metrics).toEqual(stored.metrics);
   expect(saved.workouts).toHaveLength(5);
@@ -1289,6 +1287,9 @@ test("跨日回前景更新今日與本週統計，保留表單草稿並以新�
 
 test("平滑曲線、缺值及數值清單保留真實零", async ({ page }) => {
   await page.goto("./");
+  await page
+    .getByRole("button", { name: "帳號與同步設定", exact: true })
+    .click();
   await page.getByRole("button", { name: "健康趨勢", exact: true }).click();
   await page.getByRole("combobox", { name: "趨勢時間範圍" }).selectOption("7");
   const chart = page.getByRole("application");
@@ -1323,6 +1324,9 @@ test("平滑曲線、缺值及數值清單保留真實零", async ({ page }) => 
 
 test("每日與每週數值限制高度，捲到底仍可直接收合", async ({ page }) => {
   await page.goto("./");
+  await page
+    .getByRole("button", { name: "帳號與同步設定", exact: true })
+    .click();
   await page.getByRole("button", { name: "健康趨勢", exact: true }).click();
   await page.getByRole("combobox", { name: "趨勢時間範圍" }).selectOption("90");
   const verify = async (label: string, rowCount: number) => {
@@ -1376,6 +1380,9 @@ test("每日與每週數值限制高度，捲到底仍可直接收合", async ({
 
 test("健康摘要分批閱讀，切換範圍後重設視窗", async ({ page }) => {
   await page.goto("./");
+  await page
+    .getByRole("button", { name: "帳號與同步設定", exact: true })
+    .click();
   await page.getByRole("button", { name: "健康趨勢", exact: true }).click();
   const history = page.getByRole("region", { name: "健康摘要", exact: true });
   const entries = history.getByRole("listitem");
@@ -1395,6 +1402,7 @@ test("健康摘要分批閱讀，切換範圍後重設視窗", async ({ page }) 
 
 test("50 段長表單關閉按鈕可見，焦點與取消正常", async ({ page }) => {
   await page.goto("./");
+  await page.getByRole("button", { name: "紀錄", exact: true }).click();
   const opener = workoutRow(page, longWorkout.note).getByRole("button", {
     name: "編輯運動",
     exact: true,
@@ -1444,6 +1452,7 @@ test("50 段長表單關閉按鈕可見，焦點與取消正常", async ({ page 
 
 test("再記一次保留原紀錄，離線重載仍可新增", async ({ page }) => {
   await page.goto("./");
+  await page.getByRole("button", { name: "紀錄", exact: true }).click();
   const source = workoutRow(page, sourceWorkout.note);
   await source.getByRole("button", { name: /再記一次/ }).click();
   const dialog = page.getByRole("dialog");
@@ -1497,6 +1506,9 @@ test("再記一次保留原紀錄，離線重載仍可新增", async ({ page }) 
 
 test("健康表單欄位字級與寬度適合手機，零步可儲存", async ({ page }) => {
   await page.goto("./");
+  await page
+    .getByRole("button", { name: "帳號與同步設定", exact: true })
+    .click();
   await page.getByRole("button", { name: "健康趨勢", exact: true }).click();
   await page.getByRole("button", { name: "新增健康數據", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "記錄健康數據" });
@@ -1699,7 +1711,7 @@ test("運動歷史可篩選與分批，保留全部資料並可再記一次", as
   );
   await page.reload();
   await page.getByRole("button", { name: "紀錄", exact: true }).click();
-  const history = page.getByRole("region", { name: "紀錄", exact: true });
+  const history = page.getByRole("region", { name: "運動紀錄", exact: true });
   const rows = history.locator(".log-wrap");
   await expect(rows).toHaveCount(12);
   await expect(history.getByRole("status")).toContainText(
@@ -1799,6 +1811,7 @@ test("本機舊分頁不覆蓋新紀錄，關閉草稿後可重新讀取並繼�
   await expect(page.getByText("本機資料已變更", { exact: true })).toHaveCount(
     0,
   );
+  await page.getByRole("button", { name: "紀錄", exact: true }).click();
   await expect(
     page.getByText("虛構 B 已儲存紀錄", { exact: true }),
   ).toBeVisible();

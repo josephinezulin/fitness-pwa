@@ -49,8 +49,11 @@ test("每週目標草稿暫緩真實介面更新，取消不寫入，儲存後�
     );
     await context.addInitScript(
       ({ key, data, origin }) => {
-        if (location.origin === origin && !localStorage.getItem(key))
+        if (location.origin !== origin) return;
+        if (!localStorage.getItem(key))
           localStorage.setItem(key, JSON.stringify(data));
+        if (!localStorage.getItem("daily-movement-entry-v1"))
+          localStorage.setItem("daily-movement-entry-v1", "local");
       },
       { key: STORAGE_KEY, data: fixtureData, origin: server.origin },
     );
@@ -161,8 +164,11 @@ test("回前景發現新介面，先保護草稿，再明確套用真實 Service
     );
     await context.addInitScript(
       ({ key, data, origin }) => {
-        if (location.origin === origin && !localStorage.getItem(key))
+        if (location.origin !== origin) return;
+        if (!localStorage.getItem(key))
           localStorage.setItem(key, JSON.stringify(data));
+        if (!localStorage.getItem("daily-movement-entry-v1"))
+          localStorage.setItem("daily-movement-entry-v1", "local");
       },
       { key: STORAGE_KEY, data: fixtureData, origin: server.origin },
     );
@@ -216,8 +222,11 @@ test("另一個分頁套用新版時保留目前草稿，準備好後才更新�
     );
     await context.addInitScript(
       ({ key, data, origin }) => {
-        if (location.origin === origin && !localStorage.getItem(key))
+        if (location.origin !== origin) return;
+        if (!localStorage.getItem(key))
           localStorage.setItem(key, JSON.stringify(data));
+        if (!localStorage.getItem("daily-movement-entry-v1"))
+          localStorage.setItem("daily-movement-entry-v1", "local");
       },
       { key: STORAGE_KEY, data: fixtureData, origin: server.origin },
     );
