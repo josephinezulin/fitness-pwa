@@ -283,6 +283,173 @@ describe("Google connection lifecycle", () => {
     await screen.findByText("虛構套用失敗");
     expect(readSelection(localStorage, "A")).toBeNull();
   });
+  it("applies and remembers a repaired first selection after explicit reinspection", async () => {
+    const good = { ...inspection(), source: testSource() };
+    mock.inspect
+      .mockResolvedValueOnce({
+        ...good,
+        report: { ...good.report, ok: false, errors: ["虛構待修正欄位"] },
+      })
+      .mockResolvedValueOnce(good);
+    const p = props();
+    render(<CloudPanel {...p} />);
+    await connect();
+    fireEvent.click(
+      screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+    );
+    await screen.findByText("格式尚未符合需求");
+    expect(p.onUseSnapshot).not.toHaveBeenCalled();
+    expect(readSelection(localStorage, "A")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "重新讀取這份試算表" }));
+    await screen.findByText("格式檢查通過");
+    expect(p.onUseSnapshot).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ spreadsheetId: good.id }),
+      good.data,
+      good.source,
+    );
+    expect(readSelection(localStorage, "A")).toEqual({
+      id: good.id,
+      title: good.title,
+    });
+    expect(mock.choose).toHaveBeenCalledOnce();
+    expect(
+      screen.queryByRole("button", { name: "在首頁查看這份雲端資料" }),
+    ).toBeNull();
+  });
+  it("switches from the active file to a repaired selected file only on explicit reinspection", async () => {
+    const p = props();
+    const view = render(<CloudPanel {...p} />);
+    await connect();
+    fireEvent.click(
+      screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+    );
+    await waitFor(() => expect(p.onUseSnapshot).toHaveBeenCalledOnce());
+    view.rerender(<CloudPanel {...p} activeSpreadsheetId="sheet-private-1" />);
+    const second = {
+      ...inspection(),
+      id: "sheet-private-2",
+      title: "修好的第二份表",
+    };
+    mock.choose.mockResolvedValueOnce({ id: second.id, title: second.title });
+    mock.inspect
+      .mockResolvedValueOnce({
+        ...second,
+        report: { ...second.report, ok: false, errors: ["虛構格式問題"] },
+      })
+      .mockResolvedValueOnce(second);
+    fireEvent.click(
+      screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+    );
+    await screen.findByText("格式尚未符合需求");
+    expect(readSelection(localStorage, "A")?.id).toBe("sheet-private-1");
+    fireEvent.click(screen.getByRole("button", { name: "重新讀取這份試算表" }));
+    await screen.findByText("格式檢查通過");
+    expect(p.onUseSnapshot).toHaveBeenCalledTimes(2);
+    expect(p.onUseSnapshot.mock.calls[1][0].spreadsheetId).toBe(second.id);
+    expect(readSelection(localStorage, "A")?.id).toBe(second.id);
+  });
+  it("keeps local mode and the remembered file if a pending selected-file reinspection finishes later", async () => {
+    const p = props();
+    const view = render(<CloudPanel {...p} />);
+    await connect();
+    fireEvent.click(
+      screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+    );
+    await waitFor(() => expect(p.onUseSnapshot).toHaveBeenCalledOnce());
+    view.rerender(<CloudPanel {...p} activeSpreadsheetId="sheet-private-1" />);
+    const second = {
+      ...inspection(),
+      id: "sheet-private-2",
+      title: "另一份表",
+    };
+    mock.choose.mockResolvedValueOnce({ id: second.id, title: second.title });
+    mock.inspect.mockResolvedValueOnce({
+      ...second,
+      report: { ...second.report, ok: false, errors: ["虛構格式問題"] },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+    );
+    await screen.findByText("格式尚未符合需求");
+    let finish!: (value: SheetInspection) => void;
+    mock.inspect.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "重新讀取這份試算表" }));
+    await waitFor(() => expect(mock.inspect).toHaveBeenCalledTimes(3));
+    view.rerender(<CloudPanel {...p} activeSpreadsheetId={null} />);
+    await act(async () => finish(second));
+    expect(p.onUseSnapshot).toHaveBeenCalledTimes(1);
+    expect(readSelection(localStorage, "A")?.id).toBe("sheet-private-1");
+    expect(
+      screen.getByText("資料來源已切換，這次讀取未套用；需要時請重新選擇。"),
+    ).toBeTruthy();
+  });
+  it.each(["format", "network"])(
+    "keeps the current file when a selected-file reinspection fails with %s",
+    async (reason) => {
+      const p = props();
+      const view = render(<CloudPanel {...p} />);
+      await connect();
+      fireEvent.click(
+        screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+      );
+      await waitFor(() => expect(p.onUseSnapshot).toHaveBeenCalledOnce());
+      view.rerender(
+        <CloudPanel {...p} activeSpreadsheetId="sheet-private-1" />,
+      );
+      const bad = {
+        ...inspection(),
+        id: "sheet-private-2",
+        report: { ...inspection().report, ok: false, errors: ["虛構格式問題"] },
+      };
+      mock.choose.mockResolvedValueOnce({ id: bad.id, title: bad.title });
+      mock.inspect.mockResolvedValueOnce(bad);
+      fireEvent.click(
+        screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+      );
+      await screen.findByText("格式尚未符合需求");
+      if (reason === "network")
+        mock.inspect.mockRejectedValueOnce(Error("offline"));
+      else mock.inspect.mockResolvedValueOnce(bad);
+      const retry = screen.getByRole("button", {
+        name: "重新讀取這份試算表",
+      }) as HTMLButtonElement;
+      fireEvent.click(retry);
+      await waitFor(() => expect(mock.inspect).toHaveBeenCalledTimes(3));
+      await waitFor(() => expect(retry.disabled).toBe(false));
+      expect(p.onUseSnapshot).toHaveBeenCalledTimes(1);
+      expect(readSelection(localStorage, "A")?.id).toBe("sheet-private-1");
+    },
+  );
+  it("keeps automatic and toolbar refresh limited to the active file after another selection fails", async () => {
+    const p = props();
+    const view = render(<CloudPanel {...p} />);
+    await connect();
+    fireEvent.click(
+      screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+    );
+    await waitFor(() => expect(p.onUseSnapshot).toHaveBeenCalledOnce());
+    view.rerender(<CloudPanel {...p} activeSpreadsheetId="sheet-private-1" />);
+    const bad = {
+      ...inspection(),
+      id: "sheet-private-2",
+      report: { ...inspection().report, ok: false, errors: ["虛構格式問題"] },
+    };
+    mock.choose.mockResolvedValueOnce({ id: bad.id, title: bad.title });
+    mock.inspect.mockResolvedValueOnce(bad);
+    fireEvent.click(
+      screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+    );
+    await screen.findByText("格式尚未符合需求");
+    act(() => window.dispatchEvent(new Event("daily-movement-refresh")));
+    await waitFor(() => expect(p.onUseSnapshot).toHaveBeenCalledTimes(2));
+    expect(mock.inspect.mock.calls[2][0]).toBe("sheet-private-1");
+    expect(readSelection(localStorage, "A")?.id).toBe("sheet-private-1");
+  });
   it("restores only the selected file belonging to the authenticated account", async () => {
     rememberSelection(localStorage, "A", {
       id: "sheet-private-1",
