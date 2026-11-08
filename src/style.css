@@ -2016,6 +2016,9 @@ button.video-link {
   font-size: 32px;
   color: #385c3e;
 }
+.weekly-goal .section-head > .text-button {
+  min-height: 44px;
+}
 .goal-total span {
   font-size: 12px;
 }

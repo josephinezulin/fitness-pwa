@@ -74,8 +74,9 @@ export function App() {
     );
   const [planDraftOpen, setPlanDraftOpen] = useState(false);
   const [videoDraftOpen, setVideoDraftOpen] = useState(false);
+  const [goalDraftOpen, setGoalDraftOpen] = useState(false);
   const [workoutDraft, setWorkoutDraft] = useState<WorkoutDraft | null>(null);
-  const draftOpen = !!modal || planDraftOpen || videoDraftOpen;
+  const draftOpen = !!modal || planDraftOpen || videoDraftOpen || goalDraftOpen;
   const preferences = usePreferences(
     preferenceKey(workspace.cloud),
     setMessage,
@@ -482,6 +483,7 @@ export function App() {
               onGoalChange={(weeklyGoal) =>
                 preferences.update((p) => ({ ...p, weeklyGoal }))
               }
+              onGoalDraftChange={setGoalDraftOpen}
               onSchedule={() => setPage("本週課表")}
             />
           )}

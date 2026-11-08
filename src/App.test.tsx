@@ -14,6 +14,7 @@ import { today, type Workout } from "./model";
 import { testInspection } from "./test-fixtures";
 import { readOutbox } from "./outbox";
 import { LOCAL_KEY } from "./workspace";
+import { preferenceKey } from "./preferences";
 const lifecycle = vi.hoisted(() => ({ mounts: 0, unmounts: 0 }));
 vi.mock("./pages/HealthChart", () => ({
   HealthChart: () => <div>健康圖表</div>,
@@ -95,6 +96,61 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
   vi.unstubAllGlobals();
+});
+it("blocks interface updates while a weekly-goal draft is open and releases after save or navigation", () => {
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "調整目標" }));
+  fireEvent.change(
+    screen.getByRole("spinbutton", { name: "每週目標（分鐘）" }),
+    { target: { value: "180" } },
+  );
+  expect(screen.getByRole("button", { name: "測試更新版本" })).toHaveProperty(
+    "disabled",
+    true,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "記錄運動" }));
+  fireEvent.click(screen.getByRole("button", { name: "關閉" }));
+  expect(screen.getByRole("button", { name: "測試更新版本" })).toHaveProperty(
+    "disabled",
+    true,
+  );
+  expect(
+    screen.getByRole("spinbutton", { name: "每週目標（分鐘）" }),
+  ).toHaveProperty("value", "180");
+  fireEvent.click(screen.getByRole("button", { name: "儲存目標" }));
+  expect(screen.getByRole("button", { name: "測試更新版本" })).toHaveProperty(
+    "disabled",
+    false,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "調整目標" }));
+  fireEvent.click(screen.getByRole("button", { name: "運動影片" }));
+  expect(screen.getByRole("button", { name: "測試更新版本" })).toHaveProperty(
+    "disabled",
+    false,
+  );
+});
+it("clears the goal draft and its update lock when the existing workspace key changes", async () => {
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "調整目標" }));
+  fireEvent.change(
+    screen.getByRole("spinbutton", { name: "每週目標（分鐘）" }),
+    { target: { value: "180" } },
+  );
+  await act(async () => {
+    fireEvent.click(screen.getByText("連線測試帳號A"));
+  });
+  expect(
+    screen.queryByRole("spinbutton", { name: "每週目標（分鐘）" }),
+  ).toBeNull();
+  expect(screen.getByRole("button", { name: "測試更新版本" })).toHaveProperty(
+    "disabled",
+    false,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "調整目標" }));
+  expect(
+    screen.getByRole("spinbutton", { name: "每週目標（分鐘）" }),
+  ).toHaveProperty("value", "150");
+  expect(localStorage.getItem(preferenceKey())).toBeNull();
 });
 it("protects a video draft from interface updates while searching and releases the lock on close or navigation", () => {
   render(<App />);

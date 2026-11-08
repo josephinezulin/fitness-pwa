@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -23,14 +23,21 @@ export function WeeklyGoal({
   minutes,
   goal,
   onChange,
+  onDraftChange,
 }: {
   minutes: number;
   goal: number;
   onChange: (goal: number) => boolean;
+  onDraftChange?: (open: boolean) => void;
 }) {
   const id = useId();
   const [editing, setEditing] = useState(false),
     [error, setError] = useState("");
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  useLayoutEffect(() => {
+    onDraftChange?.(editing);
+    return () => onDraftChange?.(false);
+  }, [editing, onDraftChange]);
   const left = Math.max(0, Math.round((goal - minutes) * 10) / 10);
   return (
     <section className="card weekly-goal">
@@ -39,8 +46,17 @@ export function WeeklyGoal({
           <span className="eyebrow">一點一點，累積自己的節奏</span>
           <h2>本週累積運動</h2>
         </div>
-        <button className="text-button" onClick={() => setEditing((v) => !v)}>
-          調整目標
+        <button
+          ref={toggleRef}
+          className="text-button"
+          aria-expanded={editing}
+          aria-controls={editing ? `${id}-editor` : undefined}
+          onClick={() => {
+            setError("");
+            setEditing((value) => !value);
+          }}
+        >
+          {editing ? "取消調整" : "調整目標"}
         </button>
       </div>
       <p className="goal-total">
@@ -58,6 +74,8 @@ export function WeeklyGoal({
       </p>
       {editing && (
         <form
+          id={`${id}-editor`}
+          aria-label="每週運動目標"
           className="goal-editor"
           onSubmit={(e) => {
             e.preventDefault();
@@ -69,12 +87,14 @@ export function WeeklyGoal({
             if (onChange(n)) {
               setEditing(false);
               setError("");
+              toggleRef.current?.focus();
             }
           }}
         >
           <label htmlFor={id}>每週目標（分鐘）</label>
           <input
             id={id}
+            autoFocus
             name="goal"
             type="number"
             min="10"

@@ -20,6 +20,7 @@ export function OverviewPage({
   schedule,
   logs,
   onGoalChange,
+  onGoalDraftChange,
   onSchedule,
 }: {
   metrics: Metric[];
@@ -32,6 +33,7 @@ export function OverviewPage({
   schedule: ReactNode;
   logs: ReactNode;
   onGoalChange: (goal: number) => boolean;
+  onGoalDraftChange?: (open: boolean) => void;
   onSchedule: () => void;
 }) {
   const latest = (field: keyof Metric) =>
@@ -97,6 +99,7 @@ export function OverviewPage({
         minutes={weekMinutes}
         goal={weeklyGoal}
         onChange={onGoalChange}
+        onDraftChange={onGoalDraftChange}
       />
       <div className="two-column">
         {chart}
