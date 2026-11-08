@@ -226,6 +226,36 @@ export function addVideo(
   if (input.minutes) video.minutes = input.minutes;
   return validateLibrary({ ...lib, custom: [...lib.custom, video] });
 }
+/** Replace a custom record in place; built-ins and source order are unchanged. */
+export function editVideo(
+  lib: VideoLibrary,
+  id: string,
+  input: Parameters<typeof addVideo>[1],
+): VideoLibrary {
+  const current = lib.custom.find((video) => video.id === id);
+  if (!current) throw Error("找不到這部自訂影片，請重新讀取影片清單。");
+  const youtubeId = parseYouTubeId(input.url);
+  if (!youtubeId) throw Error("無法辨識 YouTube 網址，請貼上影片連結。");
+  if (
+    youtubeId !== current.youtubeId &&
+    visibleVideos({
+      ...lib,
+      custom: lib.custom.filter((video) => video.id !== id),
+    }).some((video) => video.youtubeId === youtubeId)
+  )
+    throw Error("這部影片已在清單中。");
+  const replacement: Video = {
+    id,
+    youtubeId,
+    title: input.title.trim() || "我的運動影片",
+    category: input.category,
+    ...(input.minutes !== undefined ? { minutes: input.minutes } : {}),
+  };
+  return validateLibrary({
+    ...lib,
+    custom: lib.custom.map((video) => (video.id === id ? replacement : video)),
+  });
+}
 export function removeVideo(lib: VideoLibrary, id: string): VideoLibrary {
   if (lib.custom.some((x) => x.id === id))
     return { ...lib, custom: lib.custom.filter((x) => x.id !== id) };

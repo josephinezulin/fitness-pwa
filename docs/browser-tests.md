@@ -19,7 +19,7 @@ Linux CI 使用官方 `npx playwright install --with-deps chromium` 安裝 Chrom
 
 ## 範圍
 
-十五個使用情境，各在 320×852、390×844、844×390 執行，共 45 個案例：
+十六個使用情境，各在 320×852、390×844、844×390 執行，共 48 個案例：
 
 - 平滑曲線、相鄰量測、缺日斷線、真實零及鍵盤 Tooltip，並與每日數值表比對。
 - 每日／每週清單最大高度、內部鍵盤捲動、固定欄名，以及捲到底後直接收合。
@@ -38,6 +38,8 @@ Linux CI 使用官方 `npx playwright install --with-deps chromium` 安裝 Chrom
 - 25 部虛構影片的搜尋／長度／分類／收藏交集、12 部分批與首筆新增標題焦點、16px／44px 控制項、零結果時保留 iframe 節點、明確標記看過及預填運動後取消。離線查找未標示長度、下載 JSON 仍包含全部影片，離線重開重設搜尋且資料完整。外部影片與縮圖請求被阻擋，不把 DOM 節點保留當成實際 YouTube 播放驗收。
 
 - 影片庫真實雙分頁：B 頁先新增影片，A 頁保留影片草稿與同一 iframe，停用加入及重新讀取；關閉草稿並明確讀取後保留搜尋，新增 A 的影片不覆蓋 B 的影片。原運動／健康 raw 不變，離線重開後三支虛構影片完整且無水平溢出。
+
+- 本機 25 部自訂影片：從搜尋開編輯後 URL 聚焦、取消不寫入、拒絕重複連結、移除選填長度，保留 ID／原順序並展開到第 25 部的更新標題與焦點。更換網址／分類／長度後仍維持同一 iframe，收藏／看過原始字串及運動／健康 raw 不變，真正下載的備份完整，離線重開可查到新資料。
 
 每個案例使用新的瀏覽器 context，僅填入 e2e/fixtures.ts 的虛構 localStorage 資料。Date 固定為 2026-11-07，避免 CI 跨午夜造成日期漂移，計時器與繪圖仍正常執行。請求以 loopback origin 過濾，不進行 Google 登入、Picker、私人 Sheets、健康 API 或真實 YouTube 播放，也沒有 storageState、Token 或真實帳號 fixture。離線案例明確等待 Service Worker 就緒與控制頁面後才切斷網路。
 
@@ -64,4 +66,6 @@ E16 的 PR #23 與 Pages 已通過 277 項 Vitest、8 項 Python 與 33 個 Play
 - https://playwright.dev/docs/service-workers
 - https://github.com/actions/upload-artifact/tree/cf430e030ddbb5b0abf93d22962f4752f3646cd9
 
-E20 本機完整檢查通過 334 項 Vitest（42 檔）、8 項 Python、正式建置及 45 個 Playwright 案例；增加的影片庫雙分頁案例使用相同 context 的兩頁及真實 localStorage 事件。只驗證先後修改，不宣稱真正同時寫入已原子化；CI／Pages 結果見本輪 PR。
+E20 的 PR #27 與 Pages 完整檢查通過 334 項 Vitest（42 檔）、8 項 Python、正式建置及 45 個 Playwright 案例；增加的影片庫雙分頁案例使用相同 context 的兩頁及真實 localStorage 事件。只驗證先後修改，不宣稱真正同時寫入已原子化；CI／Pages 及正式資產驗證見 PR #27。
+
+E21 本機通過 342 項 Vitest（42 檔）、8 項 Python、正式建置及 48 個 Playwright 案例（2.1 分鐘）。新案例包含實際下載備份及離線重開，僅驗證頁面 DOM 與虛構 localStorage，CI／Pages 結果見本輪 PR。

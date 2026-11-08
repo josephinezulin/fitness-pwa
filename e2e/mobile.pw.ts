@@ -2,6 +2,7 @@ import {
   test,
   expect,
   TODAY,
+  ORIGIN,
   fixtureData,
   STORAGE_KEY,
   sourceWorkout,
@@ -13,6 +14,190 @@ import {
 } from "./fixtures";
 import { readFile } from "node:fs/promises";
 import { BUILT_IN_VIDEOS, VIDEO_KEY } from "../src/videos";
+import { preferenceKey } from "../src/preferences";
+
+test("本機自訂影片可取消或編輯，保留原 ID、排序、播放與偏好，離線和備份仍完整", async ({
+  page,
+}) => {
+  const custom = Array.from({ length: 25 }, (_, index) => ({
+    id: `fictional-edit-${index}`,
+    youtubeId: `F${String(index).padStart(10, "0")}`,
+    title: `虛構自訂影片 ${index + 1}`,
+    category: "瑜伽",
+    minutes: 20,
+  }));
+  const original = {
+    version: 1,
+    custom,
+    hidden: BUILT_IN_VIDEOS.map((v) => v.id),
+  };
+  const preferences = {
+    version: 1,
+    weeklyGoal: 150,
+    favorites: [custom[0].youtubeId],
+    seen: { [custom[0].youtubeId]: 2 },
+  };
+  await page.addInitScript(
+    ({ videoKey, preferencesKey, library, preferences, origin }) => {
+      if (location.origin !== origin) return;
+      if (!localStorage.getItem(videoKey))
+        localStorage.setItem(videoKey, JSON.stringify(library));
+      if (!localStorage.getItem(preferencesKey))
+        localStorage.setItem(preferencesKey, JSON.stringify(preferences));
+    },
+    {
+      videoKey: VIDEO_KEY,
+      preferencesKey: preferenceKey(),
+      library: original,
+      preferences,
+      origin: ORIGIN,
+    },
+  );
+  await page.goto("./");
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+  });
+  const raw = await page.evaluate(
+    (key) => localStorage.getItem(key),
+    VIDEO_KEY,
+  );
+  const healthRaw = await page.evaluate(
+    (key) => localStorage.getItem(key),
+    STORAGE_KEY,
+  );
+  const preferencesRaw = await page.evaluate(
+    (key) => localStorage.getItem(key),
+    preferenceKey(),
+  );
+  await page.getByRole("button", { name: "運動影片", exact: true }).click();
+  const toast = page.getByRole("button", { name: "關閉離線通知", exact: true });
+  if (await toast.isVisible()) await toast.click();
+  const library = page.locator(".video-library");
+  await library.getByRole("searchbox").fill(custom[0].youtubeId);
+  await library
+    .getByRole("button", { name: `播放：${custom[0].title}` })
+    .click();
+  const iframe = library.locator("iframe"),
+    frame = (await iframe.elementHandle())!;
+  const edit = library.getByRole("button", {
+    name: `編輯影片：${custom[0].title}`,
+  });
+  expect((await edit.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await edit.click();
+  const form = library.locator(".video-form");
+  const url = form.getByRole("textbox", { name: "YouTube 網址" });
+  await expect(url).toBeFocused();
+  await expect(url).toHaveValue(
+    `https://www.youtube.com/watch?v=${custom[0].youtubeId}`,
+  );
+  await form
+    .getByRole("textbox", { name: "名稱", exact: true })
+    .fill("虛構取消修改");
+  await expectNoOverflow(page);
+  await library.getByRole("button", { name: "取消", exact: true }).click();
+  expect(
+    await page.evaluate((key) => localStorage.getItem(key), VIDEO_KEY),
+  ).toBe(raw);
+  await edit.click();
+  await url.fill(custom[1].youtubeId);
+  await form.getByRole("button", { name: "儲存影片" }).click();
+  await expect(
+    library.getByText("這部影片已在清單中。", { exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate((key) => localStorage.getItem(key), VIDEO_KEY),
+  ).toBe(raw);
+  await url.fill(custom[0].youtubeId);
+  await form
+    .getByRole("textbox", { name: "名稱", exact: true })
+    .fill("虛構修正版影片");
+  await form.getByRole("spinbutton").fill("");
+  await form.getByRole("button", { name: "儲存影片" }).click();
+  await expect(library.getByRole("article")).toHaveCount(25);
+  await expect(
+    library.getByRole("heading", { name: "虛構修正版影片", exact: true }),
+  ).toBeFocused();
+  let stored = await page.evaluate(
+    (key) => JSON.parse(localStorage.getItem(key)!),
+    VIDEO_KEY,
+  );
+  expect(stored.custom.map((v: { id: string }) => v.id)).toEqual(
+    custom.map((v) => v.id),
+  );
+  expect(stored.custom[0]).toEqual({
+    id: custom[0].id,
+    youtubeId: custom[0].youtubeId,
+    title: "虛構修正版影片",
+    category: "瑜伽",
+  });
+  expect(stored.custom.slice(1)).toEqual(custom.slice(1));
+  expect(stored.hidden).toEqual(original.hidden);
+  await expect(
+    library.getByRole("button", { name: "收藏影片：虛構修正版影片" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  expect(
+    await iframe.evaluate((node, original) => node === original, frame),
+  ).toBe(true);
+  await library
+    .getByRole("button", { name: "編輯影片：虛構修正版影片" })
+    .click();
+  await url.fill("https://youtu.be/N0000000001");
+  await form
+    .getByRole("combobox", { name: "分類", exact: true })
+    .selectOption("伸展放鬆");
+  await form.getByRole("spinbutton").fill("15");
+  await form.getByRole("button", { name: "儲存影片" }).click();
+  stored = await page.evaluate(
+    (key) => JSON.parse(localStorage.getItem(key)!),
+    VIDEO_KEY,
+  );
+  expect(stored.custom[0]).toEqual({
+    id: custom[0].id,
+    youtubeId: "N0000000001",
+    title: "虛構修正版影片",
+    category: "伸展放鬆",
+    minutes: 15,
+  });
+  expect(stored.custom.slice(1)).toEqual(custom.slice(1));
+  expect(
+    await iframe.evaluate((node, original) => node === original, frame),
+  ).toBe(true);
+  await expect(iframe).toHaveAttribute("src", /embed\/F0000000000/);
+  await expect(
+    library.getByRole("button", { name: "收藏影片：虛構修正版影片" }),
+  ).toHaveAttribute("aria-pressed", "false");
+  expect(
+    await page.evaluate((key) => localStorage.getItem(key), preferenceKey()),
+  ).toBe(preferencesRaw);
+  expect(
+    await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY),
+  ).toBe(healthRaw);
+  await expectNoOverflow(page);
+  await page.getByRole("button", { name: "設定與備份", exact: true }).click();
+  const ready = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "匯出 JSON 備份", exact: true })
+    .click();
+  const backup = JSON.parse(
+    await readFile((await (await ready).path())!, "utf8"),
+  );
+  expect(backup.videoLibrary).toEqual(stored);
+  await page.context().setOffline(true);
+  await page.reload();
+  await page.getByRole("button", { name: "運動影片", exact: true }).click();
+  await library.getByRole("searchbox").fill("N0000000001");
+  await expect(
+    library.getByRole("heading", { name: "虛構修正版影片", exact: true }),
+  ).toBeVisible();
+  await expect(library.getByText("15 分", { exact: true })).toBeVisible();
+  expect(
+    await page.evaluate(
+      (key) => JSON.parse(localStorage.getItem(key)!),
+      VIDEO_KEY,
+    ),
+  ).toEqual(stored);
+  await expectNoOverflow(page);
+});
 
 test("影片庫雙分頁保留草稿與播放器，明確重新讀取後新增不覆蓋另一頁影片", async ({
   page,

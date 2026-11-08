@@ -40,6 +40,118 @@ const catalog = () =>
 const search = () => screen.getByRole("searchbox", { name: "搜尋運動影片" });
 const length = () => screen.getByRole("combobox", { name: "影片長度" });
 
+it("edits a local custom video in place and can clear its optional duration", () => {
+  storeLibrary(localStorage, { version: 1, custom: [video], hidden: [] });
+  render(<VideoLibrary online={false} />);
+  fireEvent.click(
+    screen.getByRole("button", { name: `編輯影片：${video.title}` }),
+  );
+  expect(screen.getByRole("textbox", { name: "YouTube 網址" })).toHaveProperty(
+    "value",
+    `https://www.youtube.com/watch?v=${video.youtubeId}`,
+  );
+  fireEvent.change(screen.getByRole("textbox", { name: "名稱" }), {
+    target: { value: "虛構編輯後影片" },
+  });
+  fireEvent.change(
+    screen.getByRole("spinbutton", { name: "長度（分鐘，選填）" }),
+    { target: { value: "" } },
+  );
+  fireEvent.click(screen.getByRole("button", { name: "儲存影片" }));
+  const saved = JSON.parse(localStorage.getItem(VIDEO_KEY)!);
+  expect(saved.custom).toEqual([
+    {
+      id: video.id,
+      youtubeId: video.youtubeId,
+      title: "虛構編輯後影片",
+      category: video.category,
+    },
+  ]);
+  expect(screen.getByRole("heading", { name: "虛構編輯後影片" })).toBeTruthy();
+});
+
+it("cancels local edits without writes and never offers built-in editing", () => {
+  storeLibrary(localStorage, { version: 1, custom: [video], hidden: [] });
+  const raw = localStorage.getItem(VIDEO_KEY);
+  render(<VideoLibrary online />);
+  expect(screen.getAllByRole("button", { name: /^編輯影片：/ })).toHaveLength(
+    1,
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: `編輯影片：${video.title}` }),
+  );
+  expect(document.activeElement).toBe(
+    screen.getByRole("textbox", { name: "YouTube 網址" }),
+  );
+  fireEvent.change(screen.getByRole("textbox", { name: "名稱" }), {
+    target: { value: "未儲存修改" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "取消" }));
+  expect(localStorage.getItem(VIDEO_KEY)).toBe(raw);
+});
+
+it("shows and focuses an edited local video outside the first batch without reordering records", () => {
+  const custom = catalog();
+  storeLibrary(localStorage, {
+    version: 1,
+    custom,
+    hidden: BUILT_IN_VIDEOS.map((v) => v.id),
+  });
+  render(<VideoLibrary online />);
+  fireEvent.change(search(), { target: { value: custom[0].youtubeId } });
+  fireEvent.click(
+    screen.getByRole("button", { name: `編輯影片：${custom[0].title}` }),
+  );
+  fireEvent.change(screen.getByRole("textbox", { name: "名稱" }), {
+    target: { value: "虛構更新最舊影片" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "儲存影片" }));
+  expect(screen.getAllByRole("article")).toHaveLength(25);
+  expect(document.activeElement).toBe(
+    screen.getByRole("heading", { name: "虛構更新最舊影片" }),
+  );
+  const saved = JSON.parse(localStorage.getItem(VIDEO_KEY)!);
+  expect(saved.custom.map((v: { id: string }) => v.id)).toEqual(
+    custom.map((v) => v.id),
+  );
+});
+
+it("keeps a failed or stale local edit draft without replacing data or changing the current player", () => {
+  vi.stubGlobal(
+    "requestAnimationFrame",
+    vi.fn(() => 0),
+  );
+  storeLibrary(localStorage, { version: 1, custom: [video], hidden: [] });
+  render(<VideoLibrary online />);
+  fireEvent.click(screen.getByRole("button", { name: `播放：${video.title}` }));
+  const frame = screen.getByTitle(video.title);
+  fireEvent.click(
+    screen.getByRole("button", { name: `編輯影片：${video.title}` }),
+  );
+  fireEvent.change(screen.getByRole("textbox", { name: "YouTube 網址" }), {
+    target: { value: "invalid" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "儲存影片" }));
+  expect(screen.getByText(/無法辨識 YouTube/)).toBeTruthy();
+  fireEvent.change(screen.getByRole("textbox", { name: "YouTube 網址" }), {
+    target: { value: video.youtubeId },
+  });
+  const other = {
+    version: 1 as const,
+    custom: [video, { ...video, id: "other", youtubeId: "N0000000001" }],
+    hidden: [],
+  };
+  storeLibrary(localStorage, other);
+  const raw = localStorage.getItem(VIDEO_KEY);
+  fireEvent.click(screen.getByRole("button", { name: "儲存影片" }));
+  expect(localStorage.getItem(VIDEO_KEY)).toBe(raw);
+  expect(screen.getByRole("button", { name: "儲存影片" })).toHaveProperty(
+    "disabled",
+    true,
+  );
+  expect(screen.getByTitle(video.title)).toBe(frame);
+});
+
 const fillLocalDraft = () => {
   fireEvent.click(screen.getByRole("button", { name: "新增影片" }));
   fireEvent.change(screen.getByRole("textbox", { name: "YouTube 網址" }), {
