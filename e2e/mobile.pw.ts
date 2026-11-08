@@ -536,10 +536,10 @@ test("跑步機分段在切換類型與模式時保留，取消不寫入，離�
   expect((await readData(page)).workouts).toEqual(fixtureData.workouts);
   await expectNoOverflow(page);
   await form
-    .getByRole("button", { name: "平地健走 20 分", exact: true })
+    .getByRole("button", { name: "我的上坡快走 55 分", exact: true })
     .click();
   await expect(count()).toHaveCount(3);
-  await expect(form.getByLabel("分鐘數", { exact: true })).toHaveValue("20");
+  await expect(form.getByLabel("分鐘數", { exact: true })).toHaveValue("55");
   await form.getByRole("button", { name: "關閉", exact: true }).click();
   expect((await readData(page)).workouts).toEqual(fixtureData.workouts);
   await source.getByRole("button", { name: /再記一次/ }).click();

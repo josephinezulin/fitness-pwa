@@ -6,7 +6,7 @@
 function createFitnessTemplate() {
   const updatedAt = new Date().toISOString();
   const workoutTypes = ['home', 'strength', 'jumprope', 'walk', 'run', 'cycling', 'swim', 'hike', 'yoga', 'pilates', 'stretch', 'ball', 'other'];
-  const videoCategories = ['暖身', '居家徒手', '快走／跑步機', '跑步', '重量訓練', '瑜伽', '皮拉提斯', '伸展放鬆', '飛輪／騎車', '跳繩', '其他'];
+  const videoCategories = ['床上運動', '坐姿運動', '減脂燃脂', '暖身', '居家徒手', '快走／跑步機', '跑步', '重量訓練', '瑜伽', '皮拉提斯', '伸展放鬆', '飛輪／騎車', '跳繩', '其他'];
   const tutorialUrl = 'https://www.youtube.com/results?search_query=初學者+徒手全身訓練+低衝擊+20分鐘';
   const specifications = [
     {

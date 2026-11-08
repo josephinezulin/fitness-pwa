@@ -8,7 +8,7 @@ function upgradeFitnessTemplate() {
   const url = '貼上你的試算表網址';
   if (url === '貼上你的試算表網址') throw new Error('請先填入試算表網址');
   const workoutTypes = ['home', 'strength', 'jumprope', 'walk', 'run', 'cycling', 'swim', 'hike', 'yoga', 'pilates', 'stretch', 'ball', 'other'];
-  const videoCategories = ['暖身', '居家徒手', '快走／跑步機', '跑步', '重量訓練', '瑜伽', '皮拉提斯', '伸展放鬆', '飛輪／騎車', '跳繩', '其他'];
+  const videoCategories = ['床上運動', '坐姿運動', '減脂燃脂', '暖身', '居家徒手', '快走／跑步機', '跑步', '重量訓練', '瑜伽', '皮拉提斯', '伸展放鬆', '飛輪／騎車', '跳繩', '其他'];
   const core = {
     // WorkoutPlans stays v1: customized/disabled plans must never be reseeded by an upgrade.
     HealthMetrics: ['id', 'sampleKey', 'measuredAt', 'date', 'timezone', 'metricType', 'value', 'unit', 'source', 'deviceId', 'updatedAt', 'deletedAt'],
@@ -88,8 +88,16 @@ function upgradeFitnessTemplate() {
   });
 
   optional.forEach(spec => {
-    if (ss.getSheetByName(spec.name)) {
-      changes.push(spec.name + ' 已存在，未修改');
+    const existing = ss.getSheetByName(spec.name);
+    if (existing) {
+      // Refresh dropdown lists only (e.g. new video categories); cell values stay untouched.
+      Object.keys(spec.lists).forEach(name => {
+        const col = spec.headers.indexOf(name) + 1;
+        existing.getRange(2, col, existing.getMaxRows() - 1, 1).setDataValidation(
+          SpreadsheetApp.newDataValidation().requireValueInList(spec.lists[name], true).setAllowInvalid(false).build()
+        );
+      });
+      changes.push(spec.name + ' 已存在，資料未修改' + (Object.keys(spec.lists).length ? '，下拉選單已更新' : ''));
       return;
     }
     const sheet = ss.insertSheet(spec.name);

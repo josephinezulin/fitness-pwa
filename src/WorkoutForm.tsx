@@ -203,9 +203,27 @@ export function WorkoutForm({
     >
       {!editing && initialDraft?.fromDate && (
         <p className="workout-draft-note">
-          已帶入 {initialDraft.fromDate} 的運動設定，請確認這次日期與時長。
-          本次熱量請重新填寫或估算。
+          已帶入 {initialDraft.fromDate} 的設定
         </p>
+      )}
+      {!editing && (
+        <div className="preset-list quick" aria-label="跑步機範本">
+          {TREADMILL_PRESETS.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              className={"preset-chip" + (p.type === "run" ? " run" : "")}
+              onClick={() => {
+                setType(p.type);
+                setUseTreadmill(true);
+                setDurationNotice("");
+                changeSegments(p.segments.map(toDraft));
+              }}
+            >
+              {p.title}
+            </button>
+          ))}
+        </div>
       )}
       <label>
         日期
@@ -263,26 +281,6 @@ export function WorkoutForm({
       {treadmill && (
         <fieldset className="segments">
           <legend>跑步機分段</legend>
-          <div className="preset-list" aria-label="跑步機範本">
-            {TREADMILL_PRESETS.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                className="secondary"
-                onClick={() => {
-                  setType(p.type);
-                  setUseTreadmill(true);
-                  setDurationNotice("");
-                  changeSegments(p.segments.map(toDraft));
-                }}
-              >
-                {p.title}
-              </button>
-            ))}
-          </div>
-          <p className="tiny muted">
-            套用範本會取代目前分段，可依實際機台設定修改；切換類型時會保留已修改或帶入的分段。
-          </p>
           <div className="segment-head" aria-hidden="true">
             <span>#</span>
             <span>分鐘</span>

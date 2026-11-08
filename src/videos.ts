@@ -1,5 +1,8 @@
 /** Tutorial video library. Not health data: kept apart from the workspace so it works in cloud read-only mode too. */
 export const VIDEO_CATEGORIES = [
+  "床上運動",
+  "坐姿運動",
+  "減脂燃脂",
   "暖身",
   "居家徒手",
   "快走／跑步機",
@@ -12,6 +15,12 @@ export const VIDEO_CATEGORIES = [
   "跳繩",
   "其他",
 ] as const;
+/** Short, low-effort categories used for the home page "nothing scheduled" suggestion. */
+export const LIGHT_CATEGORIES: readonly VideoCategory[] = [
+  "床上運動",
+  "伸展放鬆",
+  "坐姿運動",
+];
 export type VideoCategory = (typeof VIDEO_CATEGORIES)[number];
 export type Video = {
   id: string;
@@ -20,6 +29,8 @@ export type Video = {
   category: VideoCategory;
   minutes?: number;
   builtIn?: boolean;
+  /** Set only for built-in videos taught in Simplified Chinese. */
+  simplified?: boolean;
   /** UI IDs are namespaced; this is the original record ID used for cloud writes. */
   sheetRecordId?: string;
   fromSheet?: boolean;
@@ -37,6 +48,7 @@ const v = (
   category: VideoCategory,
   title: string,
   minutes?: number,
+  simplified = false,
 ): Video => ({
   id: `builtin-${youtubeId}`,
   youtubeId,
@@ -44,43 +56,112 @@ const v = (
   title,
   minutes,
   builtIn: true,
+  ...(simplified ? { simplified: true } : {}),
 });
-/** Curated starter list; users can hide any of these or add their own. */
+const SC = true;
+/** Curated starter list (mostly Traditional Chinese); users can hide any of these or add their own. */
 export const BUILT_IN_VIDEOS: Video[] = [
-  v("jwc5D73hn88", "暖身", "5 分鐘快速暖身｜健身前暖身", 5),
-  v("2cx_BwtXokE", "暖身", "5 分鐘暖身｜啟動全身關節（跑步、重訓、有氧）", 5),
-  v("-fI2BPfeTHI", "暖身", "跑前暖身 5 分鐘跟著做｜降低跑後疼痛", 5),
-  v("Wmnp7qSnbWE", "居家徒手", "【初階】20 分新手全身訓練｜不跳躍、不傷膝", 20),
-  v("UMF-BoOd_5A", "居家徒手", "【初階】20 分鐘站立式燃脂｜無跳躍、不傷膝", 20),
-  v("Z1u5wYKZ9DQ", "居家徒手", "20 分鐘居家全身徒手訓練｜無跳躍、無裝備", 20),
-  v("qMBvQfmRQ1c", "居家徒手", "20 分鐘徒手臀腿訓練｜無跳躍、對膝友善", 20),
-  v("GeJcn-2YBW0", "快走／跑步機", "20 分鐘居家走路運動｜低衝擊、新手友善", 20),
-  v(
-    "M0P64m0SXH4",
-    "快走／跑步機",
-    "30 分鐘跑步機快走（新手跟練，坡度 1%）",
-    30,
-  ),
-  v("8t2rLG0RL34", "快走／跑步機", "30 分鐘跑步機上坡快走", 30),
-  v("A4yoEbyy_ms", "快走／跑步機", "跑步機爬坡快走（三段爬坡至 12%）", 30),
-  v("TtbrOIUYtGw", "跑步", "30 分鐘超慢跑｜180 BPM｜含暖身與伸展", 30),
-  v("kXddU6wz3Qo", "跑步", "跑步機超慢跑｜180 BPM 30 分鐘", 30),
-  v("HgWitrJSpHY", "跑步", "30 分鐘跑步機走跑間歇（坡度 1–9%）", 30),
-  v("rfUSBVFDTnY", "重量訓練", "20 分鐘全身啞鈴訓練（全站姿）", 20),
-  v("WSwPpxnfFvg", "重量訓練", "25 分鐘居家全身訓練｜可持啞鈴、膝蓋友善", 25),
-  v("GY1JhB9BEkk", "重量訓練", "30 分鐘新手全身啞鈴訓練（含替代動作）", 30),
-  v("v7AYKMP6rOE", "瑜伽", "Yoga For Complete Beginners｜20 分鐘新手瑜伽", 20),
-  v("GnHTeHAZQhM", "瑜伽", "Morning Yoga for Beginners｜溫和晨間瑜伽", 20),
-  v("v7SN-d4qXx0", "瑜伽", "Bedtime Yoga｜睡前放鬆瑜伽", 20),
-  v("RtLBFh9rPmw", "皮拉提斯", "20 分鐘新手全身皮拉提斯（居家墊上）", 20),
-  v("7t_jx6_9fyc", "皮拉提斯", "20 分鐘 BASI 皮拉提斯全身墊上動作", 20),
-  v("4AfbzGBo8aI", "伸展放鬆", "10 分鐘全身伸展｜開髖、拉筋、提升活動度", 10),
-  v("RqxODBtCfhc", "伸展放鬆", "10 分鐘打開身體｜髖關節、腿後側、下背", 10),
-  v("dzhNuh2KW7Y", "伸展放鬆", "10 Min Full Body Stretch｜運動後收操", 10),
-  v("jeEWXhraU90", "飛輪／騎車", "20 分鐘新手飛輪課", 20),
-  v("1l0HduR1G7M", "飛輪／騎車", "Beginner Rhythm Ride｜飛輪基本姿勢", 20),
-  v("JuNh_yb-DiI", "跳繩", "10 分鐘新手跳繩跟練", 10),
-  v("s7cz9AMmR7A", "跳繩", "10 分鐘新手跳繩（無繩也可做）", 10),
+  // 床上運動
+  v("4KaPtQLW7Tw", "床上運動", "床上運動｜4 分鐘燃脂、瘦全身", 4),
+  v("6EDuWA56UwM", "床上運動", "瘦小腹 5 分鐘床上運動", 5),
+  v("scevnZd5gyo", "床上運動", "5 分鐘早晨拉伸｜床上全身放鬆", 5),
+  v("Si0LTuVCva0", "床上運動", "床上小運動｜簡單 5 招瘦全身"),
+  v("rqTK1zqqpOY", "床上運動", "懶人床上運動｜翹臀與腹肌"),
+  v("4b94Ko9_Vkw", "床上運動", "躺在床上練腹肌"),
+  v("OqhDMWjLTqc", "床上運動", "躺床可練的核心訓練", 10),
+  v("FnvmlKzSyMU", "床上運動", "醫師教你躺床就能做的核心訓練", 10),
+  v("R_z0Px5FMBc", "床上運動", "十種臀橋變化，全程躺著"),
+  v("SQLPfhS0Sk4", "床上運動", "十分鐘躺姿髖部與臀腿肌力", 10),
+  v("6vkGEXsTrNY", "床上運動", "躺著練橋式｜改善久坐腰痛"),
+  v("NoPG0MeI62E", "床上運動", "躺著訓練核心與腿力"),
+  v("OVCNG4ZbnCE", "床上運動", "起床、睡前的肌筋膜動態伸展"),
+  v("ladfE0xXm50", "床上運動", "20 分鐘睡前瑜珈｜可在床上做", 20),
+  v("f4ff_yBqptQ", "床上運動", "15 分鐘睡前瑜伽｜全程躺著", 15),
+  v("sxifT8ncKCU", "床上運動", "簡單睡前瑜珈｜安定自律神經", 8),
+  v("Jp7040Ob-zA", "床上運動", "睡前舒緩運動｜床上或墊上"),
+  v("m_tb0vGEpG4", "床上運動", "15 分鐘床上運動｜瘦腿提臀", 15, SC),
+  v("opKm3fyrWz8", "床上運動", "床上運動第 2 彈｜5 分鐘燃脂", 5, SC),
+  v("my-2Ji8BDCU", "床上運動", "睡前躺床運動｜10 分鐘瘦腿瘦腰", 10, SC),
+  v("mISlfSZIS78", "床上運動", "清晨 5 分鐘拉伸", 5, SC),
+  v("kjgUgaKUqXo", "床上運動", "15 分鐘晚間瑜伽", 15, SC),
+  v("6vXDkG4hgVI", "床上運動", "15 分鐘睡前床上陰瑜伽", 15, SC),
+  // 坐姿運動
+  v("SfuEXk51yRs", "坐姿運動", "十分鐘椅子瑜珈", 10),
+  v("VPa-SA0dAw0", "坐姿運動", "10 分鐘坐姿伸展｜久坐放鬆", 10),
+  v("7rZITKjjZYg", "坐姿運動", "10 分鐘坐姿柔軟操", 10),
+  v("a3iguKFPl90", "坐姿運動", "坐姿有氧｜坐著練心肺", 10),
+  v("VaH4gfvgr5c", "坐姿運動", "坐著做超慢跑 150bpm", 10),
+  // 減脂燃脂
+  v("PLqkCglqr5E", "減脂燃脂", "10 分鐘低難度有氧舞蹈", 10),
+  v("2dhLux5VkBY", "減脂燃脂", "15 分鐘有氧燃脂｜K-POP 節奏、全站立", 15),
+  v("ntCOSg6E7nU", "減脂燃脂", "【初階】15 分鐘無跳躍全身燃脂", 15),
+  v("lKQ4RARYesY", "減脂燃脂", "15 分鐘簡易循環有氧舞蹈", 15),
+  v("tXLPKCt_c3g", "減脂燃脂", "20 分鐘減脂韻律操｜全站立", 20),
+  v("LmrKejHOaG4", "減脂燃脂", "20 分鐘站立式全身燃脂｜不跳躍", 20),
+  v("oHqgYrpf6pI", "減脂燃脂", "20 分鐘居家全身燃脂課表", 20),
+  v("OooRvDf9Pm8", "減脂燃脂", "【中階】20 分鐘燃脂 HIIT", 20),
+  v("-6er2bZ0QJs", "減脂燃脂", "【初階】25 分鐘全身燃脂｜無跳躍", 25),
+  v("56A-3qmJFjs", "減脂燃脂", "30 分鐘站立式燃脂｜不傷膝", 30),
+  v("fIe_q2wSGHc", "減脂燃脂", "20 分鐘無跳動有氧燃脂", 20, SC),
+  v("sf4V6lrRs4I", "減脂燃脂", "20 分鐘全程站立燃脂有氧", 20, SC),
+  // 暖身
+  v("jwc5D73hn88", "暖身", "5 分鐘快速暖身", 5),
+  v("2cx_BwtXokE", "暖身", "5 分鐘暖身｜啟動全身關節", 5),
+  v("-fI2BPfeTHI", "暖身", "跑前暖身 5 分鐘", 5),
+  v("6kiCiYAIGHQ", "暖身", "上半身暖身｜重訓前 4 招", 5),
+  // 居家徒手
+  v("Wmnp7qSnbWE", "居家徒手", "【初階】20 分新手全身訓練｜不傷膝", 20),
+  v("UMF-BoOd_5A", "居家徒手", "【初階】20 分鐘站立式燃脂", 20),
+  v("Alt4IBW5I6s", "居家徒手", "【初階】20 分鐘瘦腰腹｜全程站立", 20),
+  v("csUIfpDQMno", "居家徒手", "【初階】30 分鐘無跳躍 HIIT", 30),
+  v("Z1u5wYKZ9DQ", "居家徒手", "20 分鐘居家全身徒手訓練", 20),
+  v("qMBvQfmRQ1c", "居家徒手", "20 分鐘徒手臀腿訓練", 20),
+  v("tERf66tnWS4", "居家徒手", "15 分鐘腿部運動", 15),
+  // 快走／跑步機
+  v("GeJcn-2YBW0", "快走／跑步機", "20 分鐘居家走路運動", 20),
+  v("_VekjuQ3Z7c", "快走／跑步機", "原地走路 10 分鐘", 10),
+  v("LToadLp3uCo", "快走／跑步機", "健身房跑步機簡介｜上坡快走、間歇"),
+  v("q8X0PlnDFxI", "快走／跑步機", "跑步機走路也能燃脂"),
+  v("z64MdJOVK_s", "快走／跑步機", "國手教你跑步機上下坡"),
+  // 跑步
+  v("TLCTEUL_-Cs", "跑步", "20 分鐘超慢跑｜初階 180BPM", 20),
+  v("TtbrOIUYtGw", "跑步", "30 分鐘超慢跑｜含暖身伸展", 30),
+  v("kXddU6wz3Qo", "跑步", "跑步機超慢跑 30 分鐘", 30),
+  v("YQGfUEv2ewo", "跑步", "節拍超慢跑 180bpm 30 分鐘", 30),
+  v("mefKVeD9Gb0", "跑步", "跑步機間歇訓練"),
+  // 重量訓練
+  v("l4OAWAiDd8I", "重量訓練", "【初階】10 分鐘啞鈴全身", 10),
+  v("lU2VUYN-5bQ", "重量訓練", "10 分鐘初階無跳躍啞鈴全身", 10),
+  v("WSwPpxnfFvg", "重量訓練", "25 分鐘全身訓練｜可持啞鈴", 25),
+  v("iq_oyMFkrAI", "重量訓練", "居家啞鈴 18 動作與三天課表"),
+  // 瑜伽
+  v("XKlqbwVTAsk", "瑜伽", "哈達瑜伽｜20 分鐘初學者", 20),
+  v("kM_o-C8IXP0", "瑜伽", "20 分鐘學會拜日式", 20),
+  v("DDjJKQ8Hbl4", "瑜伽", "下班後瑜伽 10 分鐘", 10),
+  // 皮拉提斯
+  v("XsxEwgxzrL0", "皮拉提斯", "15 分鐘新手 18 式｜核心與下肢", 15),
+  v("BzUBFJ1Q6Wo", "皮拉提斯", "15 分鐘 20 式｜喚醒核心", 15),
+  v("Og46GlsIVXg", "皮拉提斯", "20 分鐘新手 24 式", 20),
+  v("5dReS4zm4ng", "皮拉提斯", "20 分鐘全身 Level 1", 20),
+  v("6laqRz2heUg", "皮拉提斯", "20 分鐘上肢訓練", 20),
+  v("Dc1zuUIcCkM", "皮拉提斯", "20 分鐘核心與下腹", 20),
+  v("KtYCt2bOZOM", "皮拉提斯", "30 分鐘初學者｜核心與下半身", 30),
+  // 伸展放鬆
+  v("4AfbzGBo8aI", "伸展放鬆", "10 分鐘全身伸展｜開髖、拉筋", 10),
+  v("RqxODBtCfhc", "伸展放鬆", "10 分鐘打開身體｜髖、腿後、下背", 10),
+  v("thYCbxEBdrw", "伸展放鬆", "10 分鐘睡前拉伸", 10),
+  v("KUYuT0OYj_4", "伸展放鬆", "10 分鐘睡前皮拉提斯", 10),
+  v("DVJuWf212T0", "伸展放鬆", "睡前放鬆伸展"),
+  // 飛輪／騎車
+  v("_yHFIM8IDUo", "飛輪／騎車", "10 分鐘飛輪｜新手", 10),
+  v("0dyWm7yR-IM", "飛輪／騎車", "26 分鐘飛輪燃脂間歇", 26),
+  v("4kBz0awTqSI", "飛輪／騎車", "基礎有氧｜單車飛輪"),
+  // 跳繩
+  v("2nUJS6WOVxo", "跳繩", "初學者跳繩｜正確姿勢 5 關鍵"),
+  v("GzyCO_IQO1A", "跳繩", "跳繩不傷膝｜4 分鐘跟練", 4),
+  v("Hg9tdz_5Dnw", "跳繩", "從側甩開始｜15 分鐘入門", 15),
+  v("n96JYmyvzvo", "跳繩", "15 分鐘初學者跳繩跟練", 15),
+  v("Ry1sbxNNWG0", "跳繩", "跳繩新手必看"),
 ];
 
 const ID = /^[\w-]{11}$/;
