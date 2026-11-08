@@ -16,6 +16,87 @@ import { readFile } from "node:fs/promises";
 import { BUILT_IN_VIDEOS, VIDEO_KEY } from "../src/videos";
 import { preferenceKey } from "../src/preferences";
 import { defaultPlans } from "../src/model";
+import { installGoogleSelectionFixture } from "./google-selection-fixture";
+
+test("首次選表通過就套用並記住，重開登入自動讀取且不需首頁確認", async ({
+  page,
+}) => {
+  const fake = await installGoogleSelectionFixture(page);
+  await page.goto("./");
+  await page.getByRole("button", { name: "設定與備份", exact: true }).click();
+  await page
+    .getByRole("button", { name: "使用 Google 登入", exact: true })
+    .click();
+  await expect(
+    page.getByText("owner-a@example.com", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "選擇自己的副本並驗收", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "格式檢查通過", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "在首頁查看這份雲端資料", exact: true }),
+  ).toHaveCount(0);
+  const key = `daily-movement-selection-v1:${encodeURIComponent(fake.subject)}`;
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (key) => JSON.parse(localStorage.getItem(key) || "null"),
+        key,
+      ),
+    )
+    .toEqual({ subject: fake.subject, id: fake.id, title: "虛構私人健身表" });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.dataset.fictionalPickerCount,
+    ),
+  ).toBe("1");
+  await page.getByRole("button", { name: "總覽", exact: true }).click();
+  await expect(page.locator(".goal-total strong")).toHaveText("37");
+  await expect(
+    page.getByText("虛構雲端選表紀錄", { exact: true }),
+  ).toBeVisible();
+  expect(await readData(page)).toEqual(fixtureData);
+  await expectNoOverflow(page);
+  await page.reload();
+  // A reload must not show another account's cloud cache before authentication.
+  await expect(page.locator(".goal-total strong")).not.toHaveText("37");
+  await page.getByRole("button", { name: "設定與備份", exact: true }).click();
+  await page
+    .getByRole("button", { name: "使用 Google 登入", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "格式檢查通過", exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.dataset.fictionalPickerCount,
+    ),
+  ).toBe("0");
+  await page.getByRole("button", { name: "總覽", exact: true }).click();
+  await expect(page.locator(".goal-total strong")).toHaveText("37");
+  expect(
+    fake.calls.filter(
+      (call) =>
+        new URL(call.url).searchParams.get("includeGridData") === "true",
+    ),
+  ).toHaveLength(2);
+  expect(fake.calls.every((call) => call.method === "GET")).toBe(true);
+  const storage = await page.evaluate(() =>
+    [localStorage, sessionStorage]
+      .map((store) =>
+        Array.from({ length: store.length }, (_, i) =>
+          store.getItem(store.key(i)!),
+        ).join(""),
+      )
+      .join(""),
+  );
+  expect(storage).not.toContain(fake.token);
+  expect(await readData(page)).toEqual(fixtureData);
+  await expectNoOverflow(page);
+});
 
 test("偏好在雙分頁更新，保留影片與目標草稿、播放器及離線備份", async ({
   page,

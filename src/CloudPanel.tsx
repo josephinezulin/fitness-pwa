@@ -277,6 +277,7 @@ export function CloudPanel({
   }, [session, activeSpreadsheetId, busy]);
   async function pick() {
     if (!session || !config) return;
+    const viewAtStart = currentViewId.current;
     const version = ++epoch.current;
     request.current?.abort();
     const controller = new AbortController();
@@ -296,7 +297,13 @@ export function CloudPanel({
         session,
         controller.signal,
       );
-      if (valid(version)) setInspection(result);
+      if (!valid(version)) return;
+      setInspection(result);
+      if (currentViewId.current !== viewAtStart) {
+        setNotice("資料來源已切換，這次選表未套用；需要時請重新選擇。");
+        return;
+      }
+      if (result.report.ok && result.data) useSnapshot(result, session);
     } catch (error) {
       if (!valid(version)) return;
       if (error instanceof GoogleAccessError && error.status === 401) {
@@ -322,7 +329,7 @@ export function CloudPanel({
         <span className="pill">私人雲端資料</span>
       </div>
       <p className="guide">
-        連線到你自己的私人試算表。格式檢查本身只讀取資料；選擇使用後，可新增、編輯及刪除雲端運動與影片。健康資料由
+        連線到你自己的私人試算表。選取後會先檢查格式，通過後立即套用並記住檔案，可新增、編輯及刪除雲端運動與影片。健康資料由
         Apple 健康同步，本機紀錄不會自動上傳或混入。
       </p>
       {configLoaded && !config && (
@@ -429,17 +436,6 @@ export function CloudPanel({
               ))}
             </ul>
           )}
-          {inspection.report.ok && inspection.data && session && (
-            <button
-              className="secondary"
-              onClick={() => {
-                useSnapshot(inspection, session);
-                setNotice("已切換為雲端模式，可查看健康趨勢及記錄運動。");
-              }}
-            >
-              在首頁查看這份雲端資料
-            </button>
-          )}
           <a
             className="text-button"
             href={`https://docs.google.com/spreadsheets/d/${encodeURIComponent(inspection.id)}/edit`}
@@ -458,8 +454,7 @@ export function CloudPanel({
             </button>
           )}
           <p className="tiny muted">
-            選擇在首頁查看後，下次登入同一個 Google
-            帳號會自動讀取這份檔案。也可隨時重新選檔。
+            下次登入同一個 Google 帳號會自動讀取已記住的檔案，也可隨時重新選檔。
           </p>
           <p className="tiny muted">
             通過僅代表目前版本及資料格式相容；不代表已啟用同步、iOS 捷徑或完成

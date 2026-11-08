@@ -522,3 +522,28 @@ usePreferences 的寫入原本已先讀最新儲存內容，但畫面只在目�
 完整瀏覽器驗證：69 個 Playwright 案例通過（3.1 分鐘）。新增三種尺寸的真實雙分頁流程，B 收藏／看過後 A 更新星號與次數，同時保留新增影片草稿值、焦點、搜尋與同一 iframe；B 儲存 240 分目標時，A 的 175 分草稿保留，取消後原始偏好字串不變。A 再標記看過，B 讀回 2 次，目標及收藏保持；離線下載 JSON 的 experience 與完整偏好相同，重開仍有 240 分、收藏及 2 次，原影片庫與運動／健康資料完整，整頁無水平溢出。
 
 全部使用隔離 context／虛構資料，外部影片與 Google 請求阻擋，沒有登入 Google 或寫私人 Sheet。這輪沒有 CSS／外觀調整；iframe DOM 保留不代表真實 YouTube 播放。Prettier 與 git diff --check 通過。CI／合併／Pages 與正式資產證據追加於本次 PR。
+
+## E29：首次選表通過立即套用及記住
+
+使用者回報試算表未自動載入，要求移除多餘的首頁確認。根因是 pick 只設定 inspection；既有 useSnapshot 負責套用資料並呼叫 rememberSelection，卻只在額外的「在首頁查看這份雲端資料」按鈕及已記住檔案的登入／刷新路徑使用。第一次雖顯示格式通過，若沒再按確認，就沒有切換資料或記住選擇。
+
+Picker 回傳後沿用 inspectSpreadsheet 的私人檔案、擁有權、可編輯、版本、型別及公式檢查。結果仍屬於有效請求、通過檢查且有 data 時，立即呼叫既有 useSnapshot，將同一份 source／data 套用工作區並記住該帳號的 ID／標題；移除額外首頁確認按鈕，調整說明。既有下次登入自動讀取同帳號檔案的流程不變，選取與檢查本身仍只讀 Google API，不上傳或混入本機紀錄。
+
+保留 epoch、abort、目前帳號與過期時間驗證；取消、格式不符／缺 data、登出後回應及過期結果不套用也不記住。另先重現自動套用帶來的晚到選表回應：讀取期間若從既有雲端切回本機，會再次切回雲端。補上起始資料來源比對，檢視已切換則保留目前畫面與原選擇、提示重新選表。原有刷新完成後不切回雲端的案例保留。記住檔案的儲存失敗會說明下次需重選，本次有效資料仍已套用；套用本身拋錯時不記住。
+
+官方依據（2026-11-08 實際讀取）：Google Picker web API 使用 PickerBuilder 與登入後的 OAuth 權限，保留現有 drive.file 最小範圍及原登入手勢；Token model 的 access token 有短效期限，到期須由使用者動作取得新 Token。本輪只簡化已授權檔案的應用流程，不改 scope、共用權限、記憶體 Token 模型、Sheet schema、API、依賴或 CSS。
+
+- https://developers.google.com/drive/picker/guides/overview
+- https://developers.google.com/identity/oauth2/web/guides/use-token-model
+
+測試先重現首次選表 onUseSnapshot 呼叫次數為 0，以及舊產物仍有首頁確認按鈕；修正後單元覆蓋首選即套用／記住與再登入還原、兩種無效結果、取消選檔、換帳號後的晚到回應、到期結果、記住失敗、套用失敗及選表中切回本機。Google 操作文件同步修正首次選表及重登入步驟，原有登入前不顯示雲端快取、帳號分區與安全檢查保留。
+
+手動方式：更新介面後，以原 Google 帳號登入並重新選一次自己的私人試算表。看見格式檢查通過後直接回總覽，應已是該檔的資料，不需再按首頁確認。重開網站先看到本機畫面，再登入同帳號，應不用重選就自動讀取。若瀏覽器不允許記住檔案，依提示下次重選；格式錯誤、取消或讀取中切回本機都不應偷偷套用新檔案。不需要新 API Key、scope 或試算表欄位。
+
+限制：新增瀏覽器流程使用本機模擬 SDK／Google GET 回應與虛構資料，不是真實 Google consent、Picker popup、CORS 或本人 Safari 授權驗收。重開仍須登入，這不是永久登入；舊版未保存選擇者需再選一次。Apple 健康捷徑部署及本人實機同步待辦不變。
+
+最終本機檢查：npm ci、381 項 Vitest（42 檔）、8 項 Python、TypeScript／Vite／Service Worker 正式建置、瀏覽器型別檢查、Prettier 與 git diff --check 通過。CloudPanel 從 7 增至 16 項測試，九項新增情境與既有刷新／會話生命週期共同覆蓋自動套用邊界。
+
+包含晚到選表保護的最終產物完整通過 72 個 Playwright 案例（3.3 分鐘）。新增三種尺寸，以測試路由本機提供虛構 Google SDK／Picker、userinfo、Drive 及 Sheets GET 回應，真正執行應用內的登入處理、擁有權／私人檔案及 typed grid 格式驗證、投影與工作區套用。首次選表後總覽顯示虛構 37 分鐘，選擇資料已記住且沒有確認按鈕；重載先顯示本機資料，再登入同一模擬帳號即自動重讀，選檔器未再開啟。空 outbox 情境全部 API 請求為 GET，localStorage／sessionStorage 沒有模擬 Token，本機原資料完整不變、各尺寸沒有水平溢出。
+
+測試全為隔離 context／虛構資料；指定外部 URL 的回應由 page.route 本機提供，其他外部請求阻擋，未登入真實 Google 或讀寫私人 Sheet。已檢查正式 JS 不含模擬 SDK／Token 標記與移除的按鈕文字；沒有新增正式測試入口、依賴或資料格式。CI／合併／Pages 與正式資產證據追加於本次 PR。
