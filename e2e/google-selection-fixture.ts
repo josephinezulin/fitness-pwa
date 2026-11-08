@@ -9,12 +9,18 @@ import { testSource, TEST_TIME, TEST_ZONE } from "../src/test-fixtures";
 import { TODAY } from "./fixtures";
 
 // Fake SDK and read-only HTTP responses only. No real OAuth, Picker or private files.
-export async function installGoogleSelectionFixture(page: Page) {
+export async function installGoogleSelectionFixture(
+  page: Page,
+  options: { invalidHeader?: boolean } = {},
+) {
   const id = "fictional-fitness-sheet-A";
   const subject = "fictional-owner-A";
   const token = "fictional-browser-oauth-token-not-real";
   const calls: { method: string; url: string }[] = [];
   const source = testSource();
+  const originalHeader = source.grids.WorkoutLogs[0][0];
+  if (options.invalidHeader)
+    source.grids.WorkoutLogs[0][0] = "fictional-invalid-header";
   const workout: Record<string, string | number> = {
     id: "fictional-cloud-workout",
     date: TODAY,
@@ -156,5 +162,13 @@ export async function installGoogleSelectionFixture(page: Page) {
       });
     },
   );
-  return { id, subject, token, calls };
+  return {
+    id,
+    subject,
+    token,
+    calls,
+    repairHeader: () => {
+      source.grids.WorkoutLogs[0][0] = originalHeader;
+    },
+  };
 }

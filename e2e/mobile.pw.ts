@@ -18,6 +18,99 @@ import { preferenceKey } from "../src/preferences";
 import { defaultPlans } from "../src/model";
 import { installGoogleSelectionFixture } from "./google-selection-fixture";
 
+test("首次格式失敗修好後重新讀取就套用，記住檔案並可下次登入還原", async ({
+  page,
+}) => {
+  const fake = await installGoogleSelectionFixture(page, {
+    invalidHeader: true,
+  });
+  await page.goto("./");
+  await page.getByRole("button", { name: "設定與備份", exact: true }).click();
+  await page
+    .getByRole("button", { name: "使用 Google 登入", exact: true })
+    .click();
+  await expect(
+    page.getByText("owner-a@example.com", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "選擇自己的副本並驗收", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "格式尚未符合需求", exact: true }),
+  ).toBeVisible();
+  const key = `daily-movement-selection-v1:${encodeURIComponent(fake.subject)}`;
+  expect(
+    await page.evaluate((key) => localStorage.getItem(key), key),
+  ).toBeNull();
+  expect(await readData(page)).toEqual(fixtureData);
+  fake.repairHeader();
+  await page
+    .getByRole("button", { name: "重新讀取這份試算表", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "格式檢查通過", exact: true }),
+  ).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (key) => JSON.parse(localStorage.getItem(key) || "null"),
+        key,
+      ),
+    )
+    .toEqual({ subject: fake.subject, id: fake.id, title: "虛構私人健身表" });
+  await expect(
+    page.getByRole("button", { name: "在首頁查看這份雲端資料", exact: true }),
+  ).toHaveCount(0);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.dataset.fictionalPickerCount,
+    ),
+  ).toBe("1");
+  await page.getByRole("button", { name: "總覽", exact: true }).click();
+  await expect(page.locator(".goal-total strong")).toHaveText("37");
+  await expect(
+    page.getByText("虛構雲端選表紀錄", { exact: true }),
+  ).toBeVisible();
+  expect(await readData(page)).toEqual(fixtureData);
+  await expectNoOverflow(page);
+  await page.reload();
+  await expect(page.locator(".goal-total strong")).not.toHaveText("37");
+  await page.getByRole("button", { name: "設定與備份", exact: true }).click();
+  await page
+    .getByRole("button", { name: "使用 Google 登入", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "格式檢查通過", exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.dataset.fictionalPickerCount,
+    ),
+  ).toBe("0");
+  await page.getByRole("button", { name: "總覽", exact: true }).click();
+  await expect(page.locator(".goal-total strong")).toHaveText("37");
+  expect(
+    fake.calls.filter(
+      (call) =>
+        new URL(call.url).searchParams.get("includeGridData") === "true",
+    ),
+  ).toHaveLength(3);
+  expect(fake.calls.every((call) => call.method === "GET")).toBe(true);
+  expect(
+    await page.evaluate(() =>
+      [localStorage, sessionStorage]
+        .map((store) =>
+          Array.from({ length: store.length }, (_, i) =>
+            store.getItem(store.key(i)!),
+          ).join(""),
+        )
+        .join(""),
+    ),
+  ).not.toContain(fake.token);
+  expect(await readData(page)).toEqual(fixtureData);
+  await expectNoOverflow(page);
+});
+
 test("首次選表通過就套用並記住，重開登入自動讀取且不需首頁確認", async ({
   page,
 }) => {
