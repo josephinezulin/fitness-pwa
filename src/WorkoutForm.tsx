@@ -125,6 +125,8 @@ export function WorkoutForm({
   const [minutes, setMinutes] = useState(
     String(editing?.minutes || initialDraft?.minutes || 30),
   );
+  const [durationNotice, setDurationNotice] = useState("");
+  const durationNoticeId = useId();
   const treadmill = WORKOUT_TYPES[type].treadmill && useTreadmill;
   const parsed: Segment[] = segments.map((d) => ({
     minutes: d.minutes === "" ? NaN : Number(d.minutes),
@@ -154,14 +156,26 @@ export function WorkoutForm({
   const signature = JSON.stringify([
     date,
     type,
-    minutes,
     treadmill,
-    segments,
+    treadmill ? segments : minutes,
     weight,
   ]);
   const changeSegments = (next: Draft[] | ((all: Draft[]) => Draft[])) => {
     setSegmentsModified(true);
     setSegments(next);
+  };
+  const carryTreadmillMinutes = () => {
+    if (!complete || errors.length || total.minutes < 1) {
+      setDurationNotice("分段尚未完成或超出範圍，未帶入總時間；請確認分鐘數。");
+      return;
+    }
+    const wholeMinutes = Math.round(total.minutes);
+    setMinutes(String(wholeMinutes));
+    setDurationNotice(
+      wholeMinutes === total.minutes
+        ? `已帶入分段總時間 ${wholeMinutes} 分鐘，可自行調整。`
+        : `分段共 ${total.minutes} 分鐘；未使用分段時以整數 ${wholeMinutes} 分鐘記錄，可自行調整。`,
+    );
   };
   const update = (i: number, field: keyof Draft, value: string) =>
     changeSegments((all) =>
@@ -211,6 +225,9 @@ export function WorkoutForm({
           value={type}
           onChange={(e) => {
             const next = e.target.value as WorkoutType;
+            setDurationNotice("");
+            if (treadmill && !WORKOUT_TYPES[next].treadmill)
+              carryTreadmillMinutes();
             setType(next);
             if (!editing) setUseTreadmill(next === "walk" || next === "run");
             if (!segmentsModified) setSegments([defaultSegment(next)]);
@@ -234,7 +251,11 @@ export function WorkoutForm({
           <input
             type="checkbox"
             checked={useTreadmill}
-            onChange={(e) => setUseTreadmill(e.target.checked)}
+            onChange={(e) => {
+              setDurationNotice("");
+              if (!e.target.checked) carryTreadmillMinutes();
+              setUseTreadmill(e.target.checked);
+            }}
           />
           使用跑步機：分段記錄速度與坡度
         </label>
@@ -251,6 +272,7 @@ export function WorkoutForm({
                 onClick={() => {
                   setType(p.type);
                   setUseTreadmill(true);
+                  setDurationNotice("");
                   changeSegments(p.segments.map(toDraft));
                 }}
               >
@@ -377,8 +399,14 @@ export function WorkoutForm({
             step={treadmill ? "0.1" : "1"}
             required
             readOnly={treadmill}
+            aria-describedby={
+              !treadmill && durationNotice ? durationNoticeId : undefined
+            }
             value={treadmill ? total.minutes || "" : minutes}
-            onChange={(e) => setMinutes(e.target.value)}
+            onChange={(e) => {
+              setMinutes(e.target.value);
+              setDurationNotice("");
+            }}
           />
         </label>
         <label>
@@ -397,6 +425,11 @@ export function WorkoutForm({
           />
         </label>
       </div>
+      {!treadmill && durationNotice && (
+        <p id={durationNoticeId} className="workout-draft-note" role="status">
+          {durationNotice}
+        </p>
+      )}
       <details className="energy-helper">
         <summary>幫我估算熱量</summary>
         <label>

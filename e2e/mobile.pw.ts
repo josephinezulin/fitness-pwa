@@ -16,6 +16,95 @@ import { readFile } from "node:fs/promises";
 import { BUILT_IN_VIDEOS, VIDEO_KEY } from "../src/videos";
 import { preferenceKey } from "../src/preferences";
 
+test("離開跑步機時帶入總分鐘並說明小數轉換，可修改後離線儲存整數紀錄", async ({
+  page,
+}) => {
+  await page.goto("./");
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+  });
+  await page.getByRole("button", { name: "記錄運動", exact: true }).click();
+  const form = page.getByRole("dialog");
+  const type = form.getByRole("combobox", { name: "運動類型", exact: true });
+  const minutes = form.getByLabel("分鐘數", { exact: true });
+  await type.selectOption("walk");
+  await form.getByLabel("第 1 段分鐘", { exact: true }).fill("45.5");
+  await form.getByLabel("消耗熱量（kcal）", { exact: true }).fill("123");
+  await form
+    .getByRole("textbox", { name: "備註", exact: true })
+    .fill("虛構帶出分段時間");
+  await type.selectOption("cycling");
+  await expect(minutes).toHaveValue("46");
+  const notice = form.getByText(
+    "分段共 45.5 分鐘；未使用分段時以整數 46 分鐘記錄，可自行調整。",
+    { exact: true },
+  );
+  await expect(notice).toBeVisible();
+  await expect(minutes).toHaveAttribute(
+    "aria-describedby",
+    (await notice.getAttribute("id"))!,
+  );
+  expect(
+    await minutes.evaluate(
+      (node) => (node as HTMLInputElement).validity.stepMismatch,
+    ),
+  ).toBe(false);
+  await minutes.fill("44");
+  await expect(notice).toHaveCount(0);
+  await type.selectOption("yoga");
+  await expect(minutes).toHaveValue("44");
+  await type.selectOption("walk");
+  await expect(form.getByLabel("第 1 段分鐘", { exact: true })).toHaveValue(
+    "45.5",
+  );
+  await expect(minutes).toHaveValue("45.5");
+  await form.getByRole("checkbox").uncheck();
+  await expect(minutes).toHaveValue("46");
+  await expect(notice).toBeVisible();
+  await form.getByRole("checkbox").check();
+  await expect(form.getByLabel("第 1 段分鐘", { exact: true })).toHaveValue(
+    "45.5",
+  );
+  await form.getByRole("checkbox").uncheck();
+  await expect(minutes).toHaveValue("46");
+  await expect(
+    form.getByLabel("消耗熱量（kcal）", { exact: true }),
+  ).toHaveValue("123");
+  await expect(form.getByLabel("日期", { exact: true })).toHaveValue(TODAY);
+  expect(await readData(page)).toEqual(fixtureData);
+  await expectNoOverflow(page);
+  await page.context().setOffline(true);
+  await form.getByRole("button", { name: /儲存紀錄/ }).click();
+  await expect(form).toHaveCount(0);
+  const saved = await readData(page);
+  const fresh = saved.workouts.find(
+    (row) => !fixtureData.workouts.some((old) => old.id === row.id),
+  )!;
+  expect(fresh).toMatchObject({
+    type: "walk",
+    minutes: 46,
+    calories: 123,
+    date: TODAY,
+    note: "虛構帶出分段時間",
+  });
+  expect(fresh).not.toHaveProperty("segments");
+  expect(saved.workouts).toHaveLength(fixtureData.workouts.length + 1);
+  expect(saved.workouts.filter((row) => row.id !== fresh.id)).toEqual(
+    fixtureData.workouts,
+  );
+  expect(saved.metrics).toEqual(fixtureData.metrics);
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "運動紀錄", exact: true }).click();
+  await workoutRow(page, fresh.note)
+    .getByRole("button", { name: "編輯運動", exact: true })
+    .click();
+  await expect(minutes).toHaveValue("46");
+  await expect(form.getByRole("checkbox")).not.toBeChecked();
+  await form.getByRole("button", { name: "關閉", exact: true }).click();
+  expect(await readData(page)).toEqual(saved);
+  await expectNoOverflow(page);
+});
+
 test("跑步機分段在切換類型與模式時保留，取消不寫入，離線儲存與重開仍完整", async ({
   page,
 }) => {
