@@ -19,6 +19,134 @@ import { defaultPlans } from "../src/model";
 import { installGoogleSelectionFixture } from "./google-selection-fixture";
 
 for (const change of ["updated", "deleted"] as const) {
+  test(`編輯中雲端影片${change === "updated" ? "更新" : "刪除"}保留草稿與播放器，不加入待同步修改`, async ({
+    page,
+  }) => {
+    const fake = await installGoogleSelectionFixture(page, { video: true });
+    await page.goto("./");
+    await page.getByRole("button", { name: "設定與備份", exact: true }).click();
+    await page
+      .getByRole("button", { name: "使用 Google 登入", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "選擇自己的副本並驗收", exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "格式檢查通過", exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "運動影片", exact: true }).click();
+    await page
+      .getByRole("searchbox", { name: "搜尋運動影片", exact: true })
+      .fill("虛構雲端");
+    await page
+      .getByRole("button", { name: "播放：虛構雲端原影片", exact: true })
+      .click();
+    const frame = await page.locator(".player iframe").elementHandle();
+    await page
+      .getByRole("button", { name: "編輯影片：虛構雲端原影片", exact: true })
+      .click();
+    const form = page.locator(".video-form");
+    await form
+      .getByRole("textbox", { name: "名稱", exact: true })
+      .fill("虛構保留的影片草稿");
+    await form
+      .getByRole("textbox", { name: "YouTube 網址", exact: true })
+      .fill("https://youtu.be/aaaaaaaaaaa");
+    await form
+      .getByRole("combobox", { name: "分類", exact: true })
+      .selectOption("伸展放鬆");
+    await form
+      .getByRole("spinbutton", { name: "長度（分鐘，選填）", exact: true })
+      .fill("23");
+    fake.updateVideo(
+      change === "deleted"
+        ? null
+        : { title: "虛構雲端最新影片", youtubeId: "bbbbbbbbbbb", minutes: 35 },
+    );
+    await page.clock.setFixedTime(new Date(`${TODAY}T04:00:31Z`));
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(form.getByRole("alert")).toContainText("影片已更新或刪除");
+    await expect(
+      form.getByRole("textbox", { name: "名稱", exact: true }),
+    ).toHaveValue("虛構保留的影片草稿");
+    await expect(
+      form.getByRole("textbox", { name: "YouTube 網址", exact: true }),
+    ).toHaveValue("https://youtu.be/aaaaaaaaaaa");
+    await expect(
+      form.getByRole("combobox", { name: "分類", exact: true }),
+    ).toHaveValue("伸展放鬆");
+    await expect(
+      form.getByRole("spinbutton", { name: "長度（分鐘，選填）", exact: true }),
+    ).toHaveValue("23");
+    await expect(
+      form.getByRole("button", { name: "儲存影片", exact: true }),
+    ).toBeDisabled();
+    await form.evaluate((node) =>
+      node.dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true }),
+      ),
+    );
+    await expect(form).toBeVisible();
+    expect(
+      await frame!.evaluate(
+        (node) =>
+          node.isConnected && node === document.querySelector(".player iframe"),
+      ),
+    ).toBe(true);
+    await expect(
+      page.getByRole("searchbox", { name: "搜尋運動影片", exact: true }),
+    ).toHaveValue("虛構雲端");
+    await expectNoOverflow(page);
+    await page.getByRole("button", { name: "取消", exact: true }).click();
+    await expect(form).toHaveCount(0);
+    if (change === "updated") {
+      await page
+        .getByRole("button", {
+          name: "編輯影片：虛構雲端最新影片",
+          exact: true,
+        })
+        .click();
+      await expect(form.getByRole("alert")).toHaveCount(0);
+      await expect(
+        form.getByRole("textbox", { name: "名稱", exact: true }),
+      ).toHaveValue("虛構雲端最新影片");
+      await expect(
+        form.getByRole("textbox", { name: "YouTube 網址", exact: true }),
+      ).toHaveValue("https://www.youtube.com/watch?v=bbbbbbbbbbb");
+      await expect(
+        form.getByRole("spinbutton", {
+          name: "長度（分鐘，選填）",
+          exact: true,
+        }),
+      ).toHaveValue("35");
+      await expect(
+        form.getByRole("button", { name: "儲存影片", exact: true }),
+      ).toBeEnabled();
+      await page.getByRole("button", { name: "取消", exact: true }).click();
+    } else
+      await expect(
+        page.getByRole("button", {
+          name: "編輯影片：虛構雲端原影片",
+          exact: true,
+        }),
+      ).toHaveCount(0);
+    expect(fake.calls.every((call) => call.method === "GET")).toBe(true);
+    expect(
+      await page.evaluate(() =>
+        Object.keys(localStorage)
+          .filter((key) => key.startsWith("daily-movement-outbox-v1:"))
+          .map((key) => JSON.parse(localStorage.getItem(key)!)),
+      ),
+    ).toEqual([]);
+    expect(await readData(page)).toEqual(fixtureData);
+    expect(
+      await page.evaluate((key) => localStorage.getItem(key), VIDEO_KEY),
+    ).toBeNull();
+    await expectNoOverflow(page);
+  });
+}
+
+for (const change of ["updated", "deleted"] as const) {
   test(`編輯中雲端運動${change === "updated" ? "更新" : "刪除"}保留草稿但不覆寫，關閉後使用最新紀錄`, async ({
     page,
   }) => {

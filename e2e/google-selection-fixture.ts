@@ -11,7 +11,7 @@ import { TODAY } from "./fixtures";
 // Fake SDK and read-only HTTP responses only. No real OAuth, Picker or private files.
 export async function installGoogleSelectionFixture(
   page: Page,
-  options: { invalidHeader?: boolean } = {},
+  options: { invalidHeader?: boolean; video?: boolean } = {},
 ) {
   const id = "fictional-fitness-sheet-A";
   const subject = "fictional-owner-A";
@@ -37,6 +37,17 @@ export async function installGoogleSelectionFixture(
   source.grids.WorkoutLogs.push(
     HEADERS.WorkoutLogs.map((key) => workout[key] ?? ""),
   );
+  const video: Record<string, string | number> = {
+    id: "fictional-cloud-video",
+    url: "https://youtu.be/v7AYKMP6rOE",
+    title: "虛構雲端原影片",
+    category: "瑜伽",
+    minutes: 20,
+    updatedAt: TEST_TIME,
+    deletedAt: "",
+  };
+  if (options.video)
+    source.grids.Videos!.push(HEADERS.Videos.map((key) => video[key] ?? ""));
   await page.route("**/google-config.json", (route) =>
     route.fulfill({
       json: {
@@ -167,6 +178,18 @@ export async function installGoogleSelectionFixture(
     subject,
     token,
     calls,
+    updateVideo: (
+      change: { title: string; youtubeId: string; minutes: number } | null,
+    ) => {
+      if (change === null) video.deletedAt = "2026-11-07T04:01:00.000Z";
+      else
+        Object.assign(video, {
+          title: change.title,
+          url: `https://youtu.be/${change.youtubeId}`,
+          minutes: change.minutes,
+        });
+      source.grids.Videos![1] = HEADERS.Videos.map((key) => video[key] ?? "");
+    },
     updateWorkout: (change: { minutes?: number; note?: string } | null) => {
       if (change === null) workout.deletedAt = "2026-11-07T04:01:00.000Z";
       else Object.assign(workout, change);

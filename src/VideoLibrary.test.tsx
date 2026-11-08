@@ -620,3 +620,173 @@ it("filters favorites by YouTube ID and requires an explicit action before recor
   expect(seen).toHaveBeenCalledTimes(1);
   expect(record.mock.calls[1][1]).toBe(false);
 });
+
+describe("cloud video draft freshness", () => {
+  it.each(["title", "youtubeId", "minutes", "deleted", "missing-tab"])(
+    "keeps the draft without saving stale cloud video after %s changes",
+    (change) => {
+      const save = vi.fn(() => true),
+        draft = vi.fn();
+      const p = {
+        online: true,
+        cloud: true,
+        canEditCloud: true,
+        sheetVideos: [video],
+        onSaveVideo: save,
+        onDraftChange: draft,
+      };
+      const view = render(<VideoLibrary {...p} />);
+      fireEvent.click(
+        screen.getByRole("button", { name: `播放：${video.title}` }),
+      );
+      const player = screen.getByTitle(video.title);
+      fireEvent.click(
+        screen.getByRole("button", { name: `編輯影片：${video.title}` }),
+      );
+      fireEvent.change(screen.getByRole("textbox", { name: "名稱" }), {
+        target: { value: "虛構保留的影片草稿" },
+      });
+      fireEvent.change(screen.getByRole("textbox", { name: "YouTube 網址" }), {
+        target: { value: "https://youtu.be/aaaaaaaaaaa" },
+      });
+      fireEvent.change(
+        screen.getByRole("spinbutton", { name: "長度（分鐘，選填）" }),
+        { target: { value: "23" } },
+      );
+      const changed = { ...video };
+      if (change === "title") changed.title = "虛構雲端新名稱";
+      if (change === "youtubeId") changed.youtubeId = "bbbbbbbbbbb";
+      const next =
+        change === "minutes" ? { ...changed, minutes: undefined } : changed;
+      view.rerender(
+        <VideoLibrary
+          {...p}
+          sheetVideos={
+            change === "missing-tab"
+              ? undefined
+              : change === "deleted"
+                ? []
+                : [next]
+          }
+        />,
+      );
+      // A direct submit must not bypass stale-draft protection.
+      fireEvent.submit(
+        screen.getByRole("button", { name: "儲存影片" }).closest("form")!,
+      );
+      expect(save).not.toHaveBeenCalled();
+      expect(screen.getByRole("alert").textContent).toContain(
+        "影片已更新或刪除",
+      );
+      expect(screen.getByRole("button", { name: "儲存影片" })).toHaveProperty(
+        "disabled",
+        true,
+      );
+      expect(screen.getByRole("textbox", { name: "名稱" })).toHaveProperty(
+        "value",
+        "虛構保留的影片草稿",
+      );
+      expect(
+        screen.getByRole("textbox", { name: "YouTube 網址" }),
+      ).toHaveProperty("value", "https://youtu.be/aaaaaaaaaaa");
+      expect(
+        screen.getByRole("spinbutton", { name: "長度（分鐘，選填）" }),
+      ).toHaveProperty("value", "23");
+      expect(screen.getByTitle(video.title)).toBe(player);
+      expect(draft).toHaveBeenLastCalledWith(true);
+      expect(localStorage.length).toBe(0);
+      fireEvent.click(screen.getByRole("button", { name: "取消" }));
+      expect(draft).toHaveBeenLastCalledWith(false);
+      if (change !== "deleted" && change !== "missing-tab") {
+        fireEvent.click(
+          screen.getByRole("button", { name: `編輯影片：${next.title}` }),
+        );
+        expect(screen.queryByRole("alert")).toBeNull();
+        expect(screen.getByRole("button", { name: "儲存影片" })).toHaveProperty(
+          "disabled",
+          false,
+        );
+        expect(screen.getByRole("textbox", { name: "名稱" })).toHaveProperty(
+          "value",
+          next.title,
+        );
+        expect(
+          screen.getByRole("textbox", { name: "YouTube 網址" }),
+        ).toHaveProperty(
+          "value",
+          `https://www.youtube.com/watch?v=${next.youtubeId}`,
+        );
+        expect(
+          screen.getByRole("spinbutton", { name: "長度（分鐘，選填）" }),
+        ).toHaveProperty(
+          "value",
+          next.minutes === undefined ? "" : String(next.minutes),
+        );
+      }
+    },
+  );
+  it.each(["identical", "other"])(
+    "allows the draft after %s cloud video refresh",
+    (change) => {
+      const save = vi.fn(() => true);
+      const p = {
+        online: true,
+        cloud: true,
+        canEditCloud: true,
+        sheetVideos: [video],
+        onSaveVideo: save,
+      };
+      const view = render(<VideoLibrary {...p} />);
+      fireEvent.click(
+        screen.getByRole("button", { name: `編輯影片：${video.title}` }),
+      );
+      fireEvent.change(screen.getByRole("textbox", { name: "名稱" }), {
+        target: { value: "虛構允許儲存的草稿" },
+      });
+      const rows = [
+        { ...video },
+        ...(change === "other"
+          ? [
+              {
+                ...video,
+                id: "fictional-other-video",
+                youtubeId: "bbbbbbbbbbb",
+                title: "虛構其他影片",
+              },
+            ]
+          : []),
+      ];
+      view.rerender(<VideoLibrary {...p} sheetVideos={rows} />);
+      expect(screen.queryByRole("alert")).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "儲存影片" }));
+      expect(save).toHaveBeenCalledExactlyOnceWith({
+        ...video,
+        title: "虛構允許儲存的草稿",
+      });
+      expect(localStorage.length).toBe(0);
+    },
+  );
+  it("keeps a cloud draft without invoking save after edit permission is lost", () => {
+    const save = vi.fn(() => true);
+    const p = {
+      online: true,
+      cloud: true,
+      canEditCloud: true,
+      sheetVideos: [video],
+      onSaveVideo: save,
+    };
+    const view = render(<VideoLibrary {...p} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: `編輯影片：${video.title}` }),
+    );
+    view.rerender(<VideoLibrary {...p} canEditCloud={false} />);
+    fireEvent.submit(
+      screen.getByRole("button", { name: "儲存影片" }).closest("form")!,
+    );
+    expect(save).not.toHaveBeenCalled();
+    expect(screen.getByRole("textbox", { name: "名稱" })).toHaveProperty(
+      "value",
+      video.title,
+    );
+  });
+});
