@@ -4,8 +4,8 @@
 
 ## 目前落點
 
-- 階段 0、C、D、E1–E20 程式已合併部署；本人 OAuth 寫入、YouTube、VoiceOver 與 iOS 健康捷徑仍保留實機待驗收，不把 HTTP／DOM／Chrome 測試當作 iPhone 結果。
-- 最新已驗證部署為 PR #27，main `8dd2c40d6bf5205b7cb98f0145f4385c11cb8f14`，PR CI 42448267657、Pages 42448455423 成功，兩者均通過 334 項 Vitest、8 項 Python 及 45 個 Playwright 案例。正式首頁、新版 JS／CSS／Service Worker HTTP 200；JS `index-DEMgkj_y.js`、CSS `index-CauEklNq.css` 與本機產物位元組相同，SW 已預快取新版資產。E5 趨勢、E6 頭像、E7 卡片、E8 摘要、數值最大高度、E9 再記一次及 E10 表單標題已完成，不要重做。
+- 階段 0、C、D、E1–E21 程式已合併部署；本人 OAuth 寫入、YouTube、VoiceOver 與 iOS 健康捷徑仍保留實機待驗收，不把 HTTP／DOM／Chrome 測試當作 iPhone 結果。
+- 最新已驗證部署為 PR #28，main `ce82d30d86640001b90f54bd7d05ed0363f23624`，PR CI 42450618760、Pages 42450834569 成功，兩者均通過 342 項 Vitest、8 項 Python 及 48 個 Playwright 案例。正式首頁、新版 JS／CSS／Service Worker HTTP 200；JS `index-BDbqa8tO.js`、CSS `index-CauEklNq.css` 與本機產物位元組相同，SW 已預快取新版資產。E5 趨勢、E6 頭像、E7 卡片、E8 摘要、數值最大高度、E9 再記一次及 E10 表單標題已完成，不要重做。
 - 使用者回報偏好原本的曲線外觀，優先恢復健康圖的 monotone 平滑線與原本漸層；連續紀錄不顯示常駐圓點，孤立量測仍有圓點。保留缺值斷線、日曆日期、數值表與鍵盤 Tooltip。完整 208 項 Vitest、8 項 Python、建置及 diff 檢查通過；三種尺寸共 18 項曲線瀏覽器檢查及既有 45 項介面／離線檢查通過。詳見 docs/trend-accessibility.md；本次 PR／CI／Pages 結果以 GitHub 最新記錄為準。
 - E8 接續健康摘要長清單：跟隨圖表 7／30／90 天、全部日期、每批 14 筆、清楚標示四項數值與缺值。換帳號／副本、參考日及圖表範圍重設摘要視窗，圖表本身不重掛；只影響呈現，沒有刪減儲存或備份資料。完整檢查及實際瀏覽器結果見 docs/stage-e-progress.md；PR #14 已完成上述部署。
 - 使用者回報每日數值展開太長、不易收合：本次將每日／每週數值表格限制為最多 320px 或半個小視窗高度，內部捲動、固定欄名，收合開關留在捲動區外。完整 213 項 Vitest、8 項 Python、建置與 diff 檢查通過；三種尺寸的 66 項捲動／收合檢查與既有 45 項介面／離線檢查通過，詳見 docs/trend-accessibility.md。合併與部署結果追加於本次 PR。
@@ -21,7 +21,8 @@
 - E18 接續長時間開著 PWA 的跨日顯示：先重現週日進到週一後回前景仍顯示舊日期，改由 React useSyncExternalStore 訂閱可見時的 focus／visibilitychange／pageshow，使用穩定日曆字串，本機依裝置日、雲端依副本時區更新。今日步數、本週課表與趨勢基準跟隨，已開啟的運動／健康表單保留日期與草稿，新表單才採新日期。不加入計時器、重新載入、API 呼叫或持久化欄位，也不是健康上傳。PR #25 已完成上述部署；完整測試、手動步驟與限制見 docs/stage-e-progress.md。
 - E19 改善影片查找：名稱／分類／YouTube 連結搜尋、10／20／30 分鐘內或未標示長度、原分類及收藏交集，每批 12 部並顯示完整結果數量。條件改變回首批、清除回搜尋欄位，資料更新保留已展開數量，查找不改資料或關閉目前 iframe；成功存入影片後清除搜尋限制以顯示新片。另補影片新增／編輯草稿的 PWA 更新及重新讀取保護，關閉／離頁解除。沒有新增儲存 key、Google 授權或 Sheet 結構；全部影片仍含於備份，搜尋狀態只留目前頁。完整結果與實機步驟見 docs/stage-e-progress.md；PR #26 已完成合併部署，CI／Pages 及正式資產驗證結果見該 PR。
 - E20 補本機影片清單的舊分頁保護：先重現 A 頁新增覆蓋 B 頁影片及無法解讀清單仍可寫入的失敗，改為將有效清單與精確原始內容配對，每次寫入前比對，並以 storage／可見前景事件補查。變更或讀取失敗先保留草稿、搜尋與播放器，暫停本機影片變更；複製草稿並關閉影片表單後可明確重新讀取。雲端影片 callback／權限不受本機清單錯誤影響，收藏、健康與備份流程不變，沒有新增 key、Sheet 或 Google 授權。完整測試、官方依據與實機步驟見 docs/stage-e-progress.md；PR #27 已完成合併部署，CI／Pages 及正式資產驗證見該 PR。
-- E21 新增本機自訂影片編輯：網址／名稱／分類／選填長度可直接修改，保留 ID、原順序及隱藏設定；取消與失敗不寫入，拒絕重複連結。成功後展開到更新影片並聚焦標題，開表單時 URL 聚焦；播放器與依 YouTube ID 的收藏／看過標記保持原語意。沿用 E20 舊分頁保護及 E19 更新鎖，內建仍只隱藏，雲端權限與 callback 不變，沒有新增 key、Sheet 或 Google 授權。測試、官方依據與實機步驟見 docs/stage-e-progress.md；本輪 CI／Pages 結果追加於 PR。
+- E21 新增本機自訂影片編輯：網址／名稱／分類／選填長度可直接修改，保留 ID、原順序及隱藏設定；取消與失敗不寫入，拒絕重複連結。成功後展開到更新影片並聚焦標題，開表單時 URL 聚焦；播放器與依 YouTube ID 的收藏／看過標記保持原語意。沿用 E20 舊分頁保護及 E19 更新鎖，內建仍只隱藏，雲端權限與 callback 不變，沒有新增 key、Sheet 或 Google 授權。測試、官方依據與實機步驟見 docs/stage-e-progress.md；PR #28 已完成合併部署，CI／Pages 及正式資產驗證見該 PR。
+- E22 補每週目標的草稿更新保護：先重現開著目標表單仍可更新版本的失敗，改由 WeeklyGoal 在 layout 階段回報草稿，納入既有 PWA 更新／重讀／修復草稿鎖。成功儲存、取消、離頁或既有工作區 key 重掛後解除，失敗保留草稿；不同表單的鎖各自保留。加入取消文案、aria-expanded／controls、開啟聚焦與儲存後回焦點，取消時清除舊驗證訊息。沿用目標範圍及偏好儲存，沒有新增 key、Sheet 或 Google 授權。完整測試、官方依據與實機步驟見 docs/stage-e-progress.md；本輪 CI／Pages 結果追加於 PR。
 - 本輪 E7 補健康同步結果與部署驗收準備，見 docs/health-sync-readiness.md。本環境尚未取得可驗證 /exec 網址或可代辦的 Apps Script 部署連線；只停止該部署步驟，不把 PWA 的 drive.file Token 當作 Script 授權。需要使用者完成 Google 首次授權／部署並只提供 /exec 網址，不提供裝置 Token。這輪沒有部署健康 API、沒有修改私人表。
 
 ## 先前檢查點（歷程）
