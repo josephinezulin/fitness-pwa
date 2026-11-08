@@ -16,6 +16,85 @@ function field(name: string) {
   return screen.getByRole("spinbutton", { name }) as HTMLInputElement;
 }
 describe("workout recording experience", () => {
+  it("carries valid totals on activity changes and keeps later manual minutes", () => {
+    render(<WorkoutForm {...props()} />);
+    const type = screen.getByRole("combobox", { name: "運動類型" });
+    fireEvent.change(type, { target: { value: "walk" } });
+    fireEvent.change(field("第 1 段分鐘"), { target: { value: "45" } });
+    fireEvent.change(type, { target: { value: "cycling" } });
+    expect(field("分鐘數").value).toBe("45");
+    expect(screen.getByText(/已帶入分段總時間 45 分鐘/)).toBeTruthy();
+    expect(field("分鐘數").getAttribute("aria-describedby")).toBe(
+      screen.getByRole("status").id,
+    );
+    fireEvent.change(field("分鐘數"), { target: { value: "47" } });
+    expect(screen.queryByRole("status")).toBeNull();
+    fireEvent.change(type, { target: { value: "yoga" } });
+    expect(field("分鐘數").value).toBe("47");
+  });
+  it.each(["", "30"])(
+    "does not invent duration from an incomplete or invalid speed %s",
+    (speed) => {
+      render(<WorkoutForm {...props()} />);
+      fireEvent.change(field("分鐘數"), { target: { value: "71" } });
+      fireEvent.change(screen.getByRole("combobox", { name: "運動類型" }), {
+        target: { value: "walk" },
+      });
+      fireEvent.change(field("第 1 段分鐘"), { target: { value: "45.5" } });
+      fireEvent.change(field("第 1 段速度"), { target: { value: speed } });
+      fireEvent.click(screen.getByRole("checkbox"));
+      expect(field("分鐘數").value).toBe("71");
+      expect(screen.getByText(/未帶入總時間/)).toBeTruthy();
+    },
+  );
+  it("keeps precise segments, calories and applied-estimate status on a mode round trip", () => {
+    const p = props();
+    const original: Workout = {
+      id: "fictional-precise",
+      date: p.today,
+      type: "run",
+      minutes: 45.5,
+      calories: 123,
+      note: "虛構精確時長",
+      segments: [{ minutes: 45.5, speed: 8.5, incline: 1 }],
+    };
+    render(
+      <WorkoutForm
+        {...p}
+        editing={original}
+        metrics={[{ id: "fictional-weight", date: p.today, weight: 60 }]}
+      />,
+    );
+    fireEvent.click(screen.getByText("幫我估算熱量"));
+    fireEvent.click(screen.getByRole("button", { name: "套用估算熱量" }));
+    const calories = field("消耗熱量（kcal）").value;
+    fireEvent.click(screen.getByRole("checkbox"));
+    expect(field("分鐘數").value).toBe("46");
+    expect(screen.getByText(/分段共 45.5 分鐘/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("checkbox"));
+    expect(field("第 1 段分鐘").value).toBe("45.5");
+    expect(field("分鐘數").value).toBe("45.5");
+    expect(field("消耗熱量（kcal）").value).toBe(calories);
+    expect(screen.queryByText(/設定已變更/)).toBeNull();
+    expect(original.minutes).toBe(45.5);
+    expect(original.calories).toBe(123);
+  });
+  it("carries the current treadmill duration into whole-minute recording when leaving treadmill mode", () => {
+    const p = props();
+    render(<WorkoutForm {...p} />);
+    fireEvent.change(screen.getByRole("combobox", { name: "運動類型" }), {
+      target: { value: "walk" },
+    });
+    fireEvent.change(field("第 1 段分鐘"), { target: { value: "45.5" } });
+    fireEvent.click(screen.getByRole("checkbox"));
+    expect(field("分鐘數").value).toBe("46");
+    fireEvent.click(screen.getByRole("button", { name: /儲存紀錄/ }));
+    expect(p.onSave.mock.calls[0][0]).toMatchObject({
+      type: "walk",
+      minutes: 46,
+    });
+    expect(p.onSave.mock.calls[0][0]).not.toHaveProperty("segments");
+  });
   it("keeps type-specific defaults until a segment has actually been configured", () => {
     render(<WorkoutForm {...props()} />);
     const type = screen.getByRole("combobox", { name: "運動類型" });
