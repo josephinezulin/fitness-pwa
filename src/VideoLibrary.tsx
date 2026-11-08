@@ -12,6 +12,7 @@ import {
 import {
   VIDEO_CATEGORIES,
   addVideo,
+  editVideo,
   embedUrl,
   parseYouTubeId,
   validateLibrary,
@@ -197,7 +198,9 @@ export function VideoLibrary({
                       },
                     ],
                   })
-                : addVideo(lib, input);
+                : editing
+                  ? editVideo(lib, editing.id, input)
+                  : addVideo(lib, input);
               if (
                 cloud &&
                 (sheetVideos || []).some(
@@ -222,16 +225,37 @@ export function VideoLibrary({
                 setLength("all");
                 setFavoritesOnly(false);
                 resetBatch();
+                if (!cloud) {
+                  const record = editing
+                    ? next.custom.find((video) => video.id === editing.id)!
+                    : next.custom.at(-1)!;
+                  const index = visibleVideos(next)
+                    .filter((video) => video.category === record.category)
+                    .findIndex((video) => video.id === record.id);
+                  setShown(
+                    Math.max(
+                      VIDEO_BATCH,
+                      Math.ceil((index + 1) / VIDEO_BATCH) * VIDEO_BATCH,
+                    ),
+                  );
+                  pendingFocus.current = record.id;
+                }
               }
             } catch (err) {
               setError((err as Error).message);
             }
           }}
         >
+          {editing && playing?.id === editing.id && (
+            <p className="tiny muted">
+              編輯不會切換目前播放；儲存後重新點選播放，會使用新設定。
+            </p>
+          )}
           <label>
             YouTube 網址
             <input
               name="url"
+              autoFocus
               required
               inputMode="url"
               placeholder="https://youtu.be/…"
@@ -507,10 +531,12 @@ export function VideoLibrary({
                     />
                   </button>
                 )}
-                {x.fromSheet && (
+                {(x.fromSheet || (!cloud && !x.builtIn)) && (
                   <button
                     className="icon-button"
-                    disabled={!canEditCloud}
+                    disabled={
+                      x.fromSheet ? !canEditCloud : videoStorage.blocked
+                    }
                     aria-label={`編輯影片：${x.title}`}
                     onClick={() => {
                       setEditing(x);
@@ -589,6 +615,7 @@ export function VideoLibrary({
           </>
         )}
         JSON 備份會一併包含自訂影片。
+        {!cloud && " 可編輯自訂影片的網址、名稱、分類與長度；內建影片可隱藏。"}
         {preferences && " 收藏與觀看標記儲存在此裝置，依帳號及試算表分開保存。"}
       </p>
     </section>
