@@ -346,7 +346,7 @@ it("combines category, query, duration and favorites without modifying any store
     />,
   );
   fireEvent.change(search(), { target: { value: "ＹＯＧＡ" } });
-  fireEvent.click(screen.getByRole("tab", { name: /^瑜伽/ }));
+  fireEvent.click(screen.getByRole("button", { name: /^瑜伽/ }));
   expect(screen.getAllByRole("article")).toHaveLength(2);
   fireEvent.change(length(), { target: { value: "20" } });
   expect(screen.getAllByRole("article")).toHaveLength(1);
@@ -366,8 +366,8 @@ it("keeps an empty selected category available and clears all filters back to th
   );
   fireEvent.change(search(), { target: { value: "不存在" } });
   expect(screen.queryAllByRole("article")).toHaveLength(0);
-  const category = screen.getByRole("tab", { name: /^瑜伽/ });
-  expect(category.getAttribute("aria-selected")).toBe("true");
+  const category = screen.getByRole("button", { name: /^瑜伽/ });
+  expect(category.getAttribute("aria-pressed")).toBe("true");
   expect(category.textContent).toContain("0");
   fireEvent.click(screen.getByRole("button", { name: "清除影片篩選" }));
   expect((search() as HTMLInputElement).value).toBe("");

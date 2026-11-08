@@ -2171,6 +2171,7 @@ button.video-link {
 .weekly-chart .recharts-surface:focus-visible,
 .chart .tabs button:focus-visible,
 .weekly-activity .chips button:focus-visible,
+.video-library .chips button:focus-visible,
 .trend-data summary:focus-visible,
 .trend-data-scroll:focus-visible {
   outline: 2px solid #536c47;

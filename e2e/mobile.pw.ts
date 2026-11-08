@@ -16,6 +16,150 @@ import { readFile } from "node:fs/promises";
 import { BUILT_IN_VIDEOS, VIDEO_KEY } from "../src/videos";
 import { preferenceKey } from "../src/preferences";
 
+test("影片分類可用原生鍵盤切換與清除，保留播放器和完整資料，離線仍可篩選", async ({
+  page,
+}) => {
+  await page.goto("./");
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+  });
+  const custom = [
+    {
+      id: "fictional-home",
+      youtubeId: "F0000000001",
+      title: "虛構徒手影片",
+      category: "居家徒手",
+    },
+    {
+      id: "fictional-yoga",
+      youtubeId: "F0000000002",
+      title: "虛構瑜伽影片",
+      category: "瑜伽",
+    },
+    {
+      id: "fictional-stretch",
+      youtubeId: "F0000000003",
+      title: "虛構伸展影片",
+      category: "伸展放鬆",
+    },
+  ];
+  await page.evaluate(
+    ({ key, library }) => localStorage.setItem(key, JSON.stringify(library)),
+    {
+      key: VIDEO_KEY,
+      library: { version: 1, custom, hidden: BUILT_IN_VIDEOS.map((v) => v.id) },
+    },
+  );
+  const before = await page.evaluate(
+    (keys) => keys.map((key) => localStorage.getItem(key)),
+    [VIDEO_KEY, STORAGE_KEY, preferenceKey()],
+  );
+  await page.getByRole("button", { name: "運動影片", exact: true }).click();
+  const toast = page.getByRole("button", { name: "關閉離線通知", exact: true });
+  if (await toast.isVisible()) await toast.click();
+  const library = page.locator(".video-library");
+  await library
+    .getByRole("button", { name: "播放：虛構徒手影片", exact: true })
+    .click();
+  const iframe = library.locator("iframe"),
+    frame = (await iframe.elementHandle())!;
+  const group = library.getByRole("group", { name: "影片分類", exact: true });
+  const all = group.getByRole("button", { name: /^全部/ });
+  const home = group.getByRole("button", { name: /^居家徒手/ });
+  const yoga = group.getByRole("button", { name: /^瑜伽/ });
+  const stretch = group.getByRole("button", { name: /^伸展放鬆/ });
+  const search = library.getByRole("searchbox", { name: "搜尋運動影片" });
+  await search.focus();
+  await page.keyboard.press("Tab");
+  await expect(
+    library.getByRole("combobox", { name: "影片長度" }),
+  ).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(all).toBeFocused();
+  await expect(all).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("Tab");
+  await expect(home).toBeFocused();
+  const focus = await home.evaluate((node) => ({
+    outline: getComputedStyle(node).outlineStyle,
+    width: parseFloat(getComputedStyle(node).outlineWidth),
+    height: node.getBoundingClientRect().height,
+  }));
+  expect(focus.outline).toBe("solid");
+  expect(focus.width).toBeGreaterThanOrEqual(2);
+  expect(focus.height).toBeGreaterThanOrEqual(44);
+  await page.keyboard.press("Enter");
+  await expect(home).toHaveAttribute("aria-pressed", "true");
+  await expect(all).toHaveAttribute("aria-pressed", "false");
+  await expect(home).toBeFocused();
+  await expect(library.getByRole("article")).toHaveCount(1);
+  await expect(
+    library.getByRole("heading", { name: "虛構徒手影片", exact: true }).last(),
+  ).toBeVisible();
+  await page.keyboard.press("Tab");
+  await expect(yoga).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(yoga).toHaveAttribute("aria-pressed", "true");
+  await expect(home).toHaveAttribute("aria-pressed", "false");
+  await expect(library.getByRole("article")).toHaveCount(1);
+  await expect(
+    library.getByRole("heading", { name: "虛構瑜伽影片", exact: true }),
+  ).toBeVisible();
+  await page.keyboard.press("Tab");
+  await expect(stretch).toBeFocused();
+  const scrolled = await group.evaluate((node) => ({
+    width: node.clientWidth,
+    content: node.scrollWidth,
+    left: node.scrollLeft,
+  }));
+  if (scrolled.content > scrolled.width)
+    expect(scrolled.left).toBeGreaterThan(0);
+  const bounds = await stretch.evaluate((node) => ({
+    button: {
+      left: node.getBoundingClientRect().left,
+      right: node.getBoundingClientRect().right,
+    },
+    group: {
+      left: node.parentElement!.getBoundingClientRect().left,
+      right: node.parentElement!.getBoundingClientRect().right,
+    },
+  }));
+  expect(bounds.button.left).toBeGreaterThanOrEqual(bounds.group.left - 1);
+  expect(bounds.button.right).toBeLessThanOrEqual(bounds.group.right + 1);
+  await page.keyboard.press("Enter");
+  await expect(stretch).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("Shift+Tab");
+  await expect(yoga).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(yoga).toHaveAttribute("aria-pressed", "true");
+  expect(
+    await iframe.evaluate((node, original) => node === original, frame),
+  ).toBe(true);
+  await library
+    .getByRole("button", { name: "清除影片篩選", exact: true })
+    .focus();
+  await page.keyboard.press("Enter");
+  await expect(search).toBeFocused();
+  await expect(all).toHaveAttribute("aria-pressed", "true");
+  await expect(library.getByRole("article")).toHaveCount(3);
+  await page.context().setOffline(true);
+  await yoga.focus();
+  await page.keyboard.press("Enter");
+  await expect(yoga).toHaveAttribute("aria-pressed", "true");
+  await expect(library.getByRole("article")).toHaveCount(1);
+  expect(
+    await page.evaluate(
+      (keys) => keys.map((key) => localStorage.getItem(key)),
+      [VIDEO_KEY, STORAGE_KEY, preferenceKey()],
+    ),
+  ).toEqual(before);
+  await expectNoOverflow(page);
+  await page.reload();
+  await page.getByRole("button", { name: "運動影片", exact: true }).click();
+  await expect(all).toHaveAttribute("aria-pressed", "true");
+  await expect(library.getByRole("article")).toHaveCount(3);
+  await expectNoOverflow(page);
+});
+
 test("本機自訂影片可取消或編輯，保留原 ID、排序、播放與偏好，離線和備份仍完整", async ({
   page,
 }) => {
@@ -369,7 +513,7 @@ test("影片庫搜尋、長度與收藏可組合，分批保留播放並可離�
   await expect(rows).toHaveCount(12);
   await length.selectOption("10");
   await expect(rows).toHaveCount(9);
-  await catalog.getByRole("tab", { name: /^瑜伽/ }).click();
+  await catalog.getByRole("button", { name: /^瑜伽/ }).click();
   await expect(rows).toHaveCount(5);
   const title = "虛構 YOGA 練習 25";
   await catalog.getByRole("button", { name: `收藏影片：${title}` }).click();

@@ -357,15 +357,22 @@ export function VideoLibrary({
           清除影片篩選
         </button>
       </fieldset>
-      <div className="chips" role="tablist" aria-label="影片分類">
+      <div className="chips" role="group" aria-label="影片分類">
         {(["全部", ...VIDEO_CATEGORIES] as const)
           .filter((c) => c === "全部" || c === category || counts.get(c))
           .map((c) => (
             <button
               key={c}
-              role="tab"
-              aria-selected={category === c}
+              type="button"
+              aria-pressed={category === c}
               className={category === c ? "selected" : ""}
+              onFocus={(event) =>
+                event.currentTarget.scrollIntoView({
+                  block: "nearest",
+                  inline: "nearest",
+                  behavior: "auto",
+                })
+              }
               onClick={() => {
                 setCategory(c);
                 resetBatch();
