@@ -13,7 +13,7 @@ npm run build
 
 `dist/` 是部署產物。Vite 使用相對 base，可部署到 GitHub Pages 的 repo 子目錄。部署不需要私密 Token 或前端環境變數。
 
-瀏覽器回歸測試：`npx playwright install chromium`，完成 `npm run build` 後執行 `npm run test:e2e`。PR 與 Pages 建置都會自動檢查三種手機尺寸的 75 個 Chromium 案例，失敗會阻擋部署；只使用虛構資料。安裝方式、診斷報告與實機限制見 [瀏覽器測試](docs/browser-tests.md)。
+瀏覽器回歸測試：`npx playwright install chromium`，完成 `npm run build` 後執行 `npm run test:e2e`。PR 與 Pages 建置都會自動檢查三種手機尺寸的 81 個 Chromium 案例，失敗會阻擋部署；只使用虛構資料。安裝方式、診斷報告與實機限制見 [瀏覽器測試](docs/browser-tests.md)。
 
 ## 部署與手動授權
 
@@ -50,7 +50,7 @@ npm run build
 
 ## Google 連線與 Gemini 範本
 
-首次選擇私人試算表通過檢查後，會立即套用並記住檔案；下次登入同一 Google 帳號即可自動讀取，不需額外首頁確認。若第一次格式未通過，修正試算表後可直接按「重新讀取這份試算表」，通過即會套用並記住。登入 Token 仍只放記憶體，重開網站需要登入。
+首次選擇私人試算表通過檢查後，會立即套用並記住檔案；下次登入同一 Google 帳號即可自動讀取，不需額外首頁確認。若第一次格式未通過，修正試算表後可直接按「重新讀取這份試算表」，通過即會套用並記住。編輯運動期間若讀回的新資料顯示原紀錄已更新或刪除，會保留草稿並暫停儲存；先複製需要的內容，關閉後再編輯最新紀錄。登入 Token 仍只放記憶體，重開網站需要登入。
 
 - [Google Cloud 手動設定與 Safari 驗收](docs/google-setup.md)
 - [給 Gemini 的完整範本建立 Prompt](docs/gemini-template-prompt.md)

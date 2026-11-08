@@ -569,3 +569,24 @@ refresh 改用具名 automatic／applySelection 選項。只有檢查結果卡�
 最終本機檢查：npm ci、387 項 Vitest（42 檔）、8 項 Python、TypeScript／Vite／Service Worker 正式建置、瀏覽器型別檢查、Prettier 與 git diff --check 通過。CloudPanel 共 22 項測試。正式產物完整通過 75 個 Playwright 案例（3.2 分鐘），包含三種尺寸的格式失敗→修正→明確重讀→總覽 37 分鐘→下次登入自動還原；Picker 不需再次開啟，所有模擬 Google 請求均為 GET，本機原資料不變，儲存區沒有模擬 Token，也沒有水平溢出。
 
 正式 JS 不含虛構 SDK／Token／無效欄名標記及已移除的首頁確認文字。測試均使用隔離 context 與虛構資料；實際 CI／合併／Pages 及正式資產證據追加於本次 PR。
+
+## E31：雲端原運動更新後保留草稿，避免舊編輯覆蓋新版
+
+發現運動表單保留開啟時的 editing，但背景讀回雲端會更新目前資料與寫入基準。原紀錄已更新後直接儲存舊草稿，竟會以新版作為 outbox base，讓原有寫前重讀無法知道使用者編輯的是舊內容。先以 App 整合測試重現：原備註更新後，儲存會產生帶舊內容的 pending operation；舊正式產物的 320px 瀏覽器也沒有更新警告。
+
+App 現在以既有 sameWorkout 比較開表單時的原運動與目前同 ID 紀錄，包括日期、類型、分鐘、熱量、備註與完整有序分段。已變更或找不到原紀錄時，顯示表單內 alert，保留所有草稿欄位以便複製，停用儲存；事件處理也阻擋直接 submit，不建立 outbox、不偷偷新增回已刪紀錄，也不自動合併或關閉草稿。先複製需要內容、關閉再編輯即可採最新值；其他紀錄變更或只有 revision／updatedAt 改變而內容相同不誤阻擋。
+
+一併重現停用儲存後 Tab 離開對話框，既有焦點清單現在略過 :disabled、負 tabIndex 及收合 details 中的控制；衝突狀態由備註 Tab 回固定的關閉按鈕，反向亦然。保留原表單捲動、16px／44px 欄位、取消／Escape、草稿更新鎖及關閉後回焦點，不加新 CSS 或停用縮放。
+
+新增五項 App 整合情境：雲端備註更新、分段速度更新、刪除、只有版本變更、其他運動新增；覆蓋保留草稿、直接 submit 不寫入、取消再編輯採新版、原本機資料不變，以及無關變更仍可提交。瀏覽器新增更新／刪除兩種情境，各跑三種尺寸，用真正前景刷新處理器在 30 秒冷卻後重新讀取，確認總分鐘與表單採新值、鍵盤循環、空 outbox、GET 限定與無水平溢出。沒有正式測試入口；SDK 與雲端回應均為測試路由虛構資料。
+
+官方依據（2026-11-08 實際讀取）：Sheets batchUpdate 保證單一請求內更新一起套用，但明載協同修改下最終狀態不一定完全等於該請求；不能把它當跨裝置 compare-and-swap。本輪補的是畫面已知新資料與舊草稿間的覆蓋缺口，既有寫前讀取、revision、outbox、Web Locks 與競態限制仍存在。WAI-ARIA Modal Dialog 規範要求 Tab／Shift+Tab 在首尾可切換控制間循環。
+
+- https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/batchUpdate
+- https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/
+
+手動方式：使用虛構運動的私人測試副本，在 PWA 開啟編輯並輸入草稿，再到試算表修改該運動備註、有效分段或刪除標記；回 PWA 前景超過原 30 秒冷卻後，應保留草稿且提示原紀錄已更新／刪除，無法儲存。外接鍵盤 Tab 應留在對話框，可先複製內容，再關閉重編最新值；改其他運動時不應擋住本筆。已刪紀錄關閉後不應重新出現。
+
+限制：只保護這次已讀到的內容，不偵測尚未讀取的遠端變更，也不是原子版本鎖。Google consent／真實私人副本讀寫、iPhone Safari／VoiceOver 與 Apple 健康捷徑仍待本人實機驗收。未改 Google scope、Token 模型、Sheet schema、健康表、API、outbox 格式、依賴或分享權限。
+
+最終本機檢查：npm ci、392 項 Vitest（42 檔）、8 項 Python、TypeScript／Vite／Service Worker 正式建置、瀏覽器型別檢查、Prettier 與 git diff --check 通過。App 共 19 項整合測試，清理重複斷言後該檔已再通過。最終正式產物完整通過 81 個 Playwright 案例（3.5 分鐘）；新增六案皆由本機虛構 Google GET 回應驅動真正應用刷新，不存取真實帳號／私人表。JS index-BZmaFRJP.js 不含測試 SDK、Token、虛構草稿或 Service Worker 標記；CSS index-CB3xEyJn.css 未變。實際 CI、合併、Pages 與正式資產證據追加於本次 PR。
