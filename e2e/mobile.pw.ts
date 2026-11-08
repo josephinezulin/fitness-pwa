@@ -18,6 +18,101 @@ import { preferenceKey } from "../src/preferences";
 import { defaultPlans } from "../src/model";
 import { installGoogleSelectionFixture } from "./google-selection-fixture";
 
+for (const change of ["updated", "deleted"] as const) {
+  test(`編輯中雲端運動${change === "updated" ? "更新" : "刪除"}保留草稿但不覆寫，關閉後使用最新紀錄`, async ({
+    page,
+  }) => {
+    const fake = await installGoogleSelectionFixture(page);
+    await page.goto("./");
+    await page.getByRole("button", { name: "設定與備份", exact: true }).click();
+    await page
+      .getByRole("button", { name: "使用 Google 登入", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "選擇自己的副本並驗收", exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "格式檢查通過", exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "總覽", exact: true }).click();
+    await page.getByRole("button", { name: "編輯運動", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog
+      .getByRole("textbox", { name: "備註", exact: true })
+      .fill("虛構不應覆蓋雲端的草稿");
+    await dialog
+      .getByRole("spinbutton", { name: "分鐘數", exact: true })
+      .fill("42");
+    fake.updateWorkout(
+      change === "deleted" ? null : { minutes: 48, note: "虛構雲端最新運動" },
+    );
+    // Exercise the real foreground listener after the existing 30s refresh cooldown.
+    await page.clock.setFixedTime(new Date(`${TODAY}T04:00:31Z`));
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(dialog.getByRole("alert")).toContainText(
+      "運動紀錄已更新或刪除",
+    );
+    await expect(
+      dialog.getByRole("textbox", { name: "備註", exact: true }),
+    ).toHaveValue("虛構不應覆蓋雲端的草稿");
+    await expect(
+      dialog.getByRole("spinbutton", { name: "分鐘數", exact: true }),
+    ).toHaveValue("42");
+    await expect(
+      dialog.getByRole("button", { name: "儲存紀錄", exact: true }),
+    ).toBeDisabled();
+    await dialog
+      .locator("form")
+      .evaluate((form) =>
+        form.dispatchEvent(
+          new Event("submit", { bubbles: true, cancelable: true }),
+        ),
+      );
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("textbox", { name: "備註", exact: true }).focus();
+    await page.keyboard.press("Tab");
+    await expect(
+      dialog.getByRole("button", { name: "關閉", exact: true }),
+    ).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(
+      dialog.getByRole("textbox", { name: "備註", exact: true }),
+    ).toBeFocused();
+    await expectNoOverflow(page);
+    await dialog.getByRole("button", { name: "關閉", exact: true }).click();
+    await expect(page.locator(".goal-total strong")).toHaveText(
+      change === "deleted" ? "0" : "48",
+    );
+    if (change === "updated") {
+      await page.getByRole("button", { name: "編輯運動", exact: true }).click();
+      await expect(dialog.getByRole("alert")).toHaveCount(0);
+      await expect(
+        dialog.getByRole("textbox", { name: "備註", exact: true }),
+      ).toHaveValue("虛構雲端最新運動");
+      await expect(
+        dialog.getByRole("spinbutton", { name: "分鐘數", exact: true }),
+      ).toHaveValue("48");
+      await expect(
+        dialog.getByRole("button", { name: "儲存紀錄", exact: true }),
+      ).toBeEnabled();
+      await dialog.getByRole("button", { name: "關閉", exact: true }).click();
+    } else
+      await expect(
+        page.getByRole("button", { name: "編輯運動", exact: true }),
+      ).toHaveCount(0);
+    expect(fake.calls.every((call) => call.method === "GET")).toBe(true);
+    expect(
+      await page.evaluate(() =>
+        Object.keys(localStorage)
+          .filter((key) => key.startsWith("daily-movement-outbox-v1:"))
+          .map((key) => JSON.parse(localStorage.getItem(key)!)),
+      ),
+    ).toEqual([]);
+    expect(await readData(page)).toEqual(fixtureData);
+    await expectNoOverflow(page);
+  });
+}
+
 test("首次格式失敗修好後重新讀取就套用，記住檔案並可下次登入還原", async ({
   page,
 }) => {

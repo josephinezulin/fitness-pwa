@@ -167,6 +167,14 @@ export async function installGoogleSelectionFixture(
     subject,
     token,
     calls,
+    updateWorkout: (change: { minutes?: number; note?: string } | null) => {
+      if (change === null) workout.deletedAt = "2026-11-07T04:01:00.000Z";
+      else Object.assign(workout, change);
+      workout.revision = Number(workout.revision) + 1;
+      source.grids.WorkoutLogs[1] = HEADERS.WorkoutLogs.map(
+        (key) => workout[key] ?? "",
+      );
+    },
     repairHeader: () => {
       source.grids.WorkoutLogs[0][0] = originalHeader;
     },

@@ -94,6 +94,7 @@ export function WorkoutForm({
   onSave,
   metrics = [],
   initialDraft,
+  saveError = "",
 }: {
   editing: Workout | null;
   today: string;
@@ -101,6 +102,7 @@ export function WorkoutForm({
   onSave: (record: Workout) => boolean;
   metrics?: Metric[];
   initialDraft?: WorkoutDraft | null;
+  saveError?: string;
 }) {
   const [type, setType] = useState<WorkoutType>(
     editing?.type || initialDraft?.type || "home",
@@ -187,7 +189,7 @@ export function WorkoutForm({
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        if (errors.length || (treadmill && !complete)) return;
+        if (disabled || errors.length || (treadmill && !complete)) return;
         const form = new FormData(e.currentTarget);
         const record: Workout = {
           id: editing?.id || crypto.randomUUID(),
@@ -201,6 +203,11 @@ export function WorkoutForm({
         onSave(record);
       }}
     >
+      {saveError && (
+        <p className="notice" role="alert">
+          {saveError}
+        </p>
+      )}
       {!editing && initialDraft?.fromDate && (
         <p className="workout-draft-note">
           已帶入 {initialDraft.fromDate} 的運動設定，請確認這次日期與時長。

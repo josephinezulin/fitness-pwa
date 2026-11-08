@@ -49,6 +49,7 @@ import { CloudPanel, type CloudReadState } from "./CloudPanel";
 import { PwaUpdate } from "./PwaUpdate";
 import { useCalendarToday } from "./useCalendarToday";
 import { useWorkspace } from "./useWorkspace";
+import { sameWorkout } from "./sheets-write";
 import { AccountMenu } from "./AccountMenu";
 export function App() {
   const workspace = useWorkspace();
@@ -97,6 +98,11 @@ export function App() {
         el?.querySelectorAll<HTMLElement>(
           "button,input,select,textarea,[href]",
         ) || [],
+      ).filter(
+        (node) =>
+          !node.matches(":disabled") &&
+          node.tabIndex >= 0 &&
+          !node.closest("details:not([open])"),
       );
     focusable()[0]?.focus();
     const keyboard = (event: KeyboardEvent) => {
@@ -237,6 +243,14 @@ export function App() {
     days,
     onManage: () => setPage("本週課表"),
   };
+  const workoutEditError =
+    editing &&
+    !sameWorkout(
+      editing,
+      data.workouts.find((w) => w.id === editing.id),
+    )
+      ? "運動紀錄已更新或刪除，草稿仍保留。請先複製需要的內容，再關閉並重新編輯最新紀錄。"
+      : "";
   const logsProps = {
     workouts: data.workouts,
     canEdit: workspace.canEditCloud,
@@ -685,8 +699,10 @@ export function App() {
                 initialDraft={workoutDraft}
                 metrics={data.metrics}
                 today={viewToday}
-                disabled={!workspace.canEditCloud}
+                disabled={!workspace.canEditCloud || !!workoutEditError}
+                saveError={workoutEditError}
                 onSave={(record) => {
+                  if (workoutEditError) return false;
                   const ok = save({
                     ...data,
                     workouts: [
