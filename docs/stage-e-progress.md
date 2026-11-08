@@ -590,3 +590,24 @@ App 現在以既有 sameWorkout 比較開表單時的原運動與目前同 ID �
 限制：只保護這次已讀到的內容，不偵測尚未讀取的遠端變更，也不是原子版本鎖。Google consent／真實私人副本讀寫、iPhone Safari／VoiceOver 與 Apple 健康捷徑仍待本人實機驗收。未改 Google scope、Token 模型、Sheet schema、健康表、API、outbox 格式、依賴或分享權限。
 
 最終本機檢查：npm ci、392 項 Vitest（42 檔）、8 項 Python、TypeScript／Vite／Service Worker 正式建置、瀏覽器型別檢查、Prettier 與 git diff --check 通過。App 共 19 項整合測試，清理重複斷言後該檔已再通過。最終正式產物完整通過 81 個 Playwright 案例（3.5 分鐘）；新增六案皆由本機虛構 Google GET 回應驅動真正應用刷新，不存取真實帳號／私人表。JS index-BZmaFRJP.js 不含測試 SDK、Token、虛構草稿或 Service Worker 標記；CSS index-CB3xEyJn.css 未變。實際 CI、合併、Pages 與正式資產證據追加於本次 PR。
+
+## E32：雲端影片更新後保留編輯草稿，不覆蓋已知新版
+
+接續 E31 運動編輯保護，發現影片編輯同樣可能在回前景讀到新資料後，將舊草稿以新資料作 outbox base 儲存。先用 App 整合測試重現：雲端原影片更新後，提交仍建立包含舊草稿的 pending video operation；舊正式產物的 320px 瀏覽器也沒有提示與保護。
+
+開啟影片編輯時複製真正的 SheetVideo 作為原內容，保留 raw record ID，避免拿 sheet- UI ID 比較，也不使用經分類顯示轉換的值。以既有 sameVideo 比對 ID、YouTube ID、名稱、分類及選填長度；原列變更、刪除或 Videos 分頁消失時，顯示 form 內 alert、停用儲存，事件處理也阻擋直接 submit。失去 canEditCloud 同樣不呼叫保存 callback；已有草稿仍可複製或取消。
+
+草稿維持原表單 key、URL／名稱／分類／分鐘輸入；保留既有搜尋、播放中的 iframe、觀看偏好及草稿更新鎖。取消清除原內容基準，再編輯以目前資料開新表單；相同內容重新讀取或其他影片新增不誤阻擋。成功儲存時也清除基準；本機自訂影片的 persist／舊分頁保護、內建影片、雲端 CRUD／outbox／revision／Web Locks 規則不變。沒有新增 schema、儲存 key、scope、API、Token、依賴、計時器或 CSS。
+
+新增八項影片元件情境：名稱、YouTube ID、長度清除、刪除、Videos 消失、相同內容重讀、其他影片新增、編輯權失效。另加兩項 App 整合測試，驗證讀回更新／刪除不加入 outbox、草稿與更新鎖保留，取消後解除或重新編輯最新內容。瀏覽器增加更新／刪除兩情境各三種尺寸，透過真正前景事件在原 30 秒冷卻後讀取，確認四欄草稿、同一 iframe 節點、搜尋、空 outbox、GET 限定與無溢出。
+
+官方依據（2026-11-08 實際讀取）：Sheets batchUpdate 的原子套用僅限同一請求內，官方明載協同修改仍可能影響結果；這輪只補讀到新版後的舊編輯缺口，不當作跨裝置 compare-and-swap。React 會在同位置的元件保留狀態，本輪不因更新換 key 或重掛表單／播放器，避免清除草稿。
+
+- https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/batchUpdate
+- https://react.dev/learn/preserving-and-resetting-state
+
+手動方式：用虛構資料的私人測試副本，播放一部試算表影片並開啟編輯，修改四欄草稿但先不儲存。到試算表改同筆名稱、影片連結、有效長度或 deletedAt，再回 PWA 前景超過原 30 秒冷卻；應保留草稿與目前播放、提示原影片變更且不能儲存。先複製需要的內容，取消再編輯應採最新值；刪除後則不再有該列的編輯入口。修改其他影片不應阻擋本筆。
+
+限制：Google SDK／GET 回應均為測試路由的虛構資料，未讀寫真實私人表；iframe 節點保留不代表真實 YouTube 試播。仍待本人 Safari／VoiceOver、Google consent／實際寫入及 Apple 健康捷徑驗收。只保護已讀回內容，既有跨裝置寫入競態與未讀到的變更限制保留。
+
+最終本機檢查：npm ci、402 項 Vitest（42 檔）、8 項 Python、TypeScript／Vite／Service Worker 正式建置、瀏覽器型別檢查、Prettier 與 git diff --check 通過。影片元件及 App 共 49 項測試，在修正新增測試選擇器型別後再通過。六個新瀏覽器案例先通過，最終正式產物完整通過 87 個 Playwright 案例（3.6 分鐘）；SDK／GET 回應全為隔離測試路由的虛構資料，沒有真實帳號或私人表操作。JS index-ClLZrkiM.js 不含模擬 SDK／Token、虛構草稿或 SW 標記；CSS index-CB3xEyJn.css 未變。CI、合併、Pages 與正式資產證據追加於本次 PR。

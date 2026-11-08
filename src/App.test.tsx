@@ -794,3 +794,77 @@ it.each(["note", "segments", "deleted", "unchanged", "other"])(
     expect(localStorage.getItem(LOCAL_KEY)).toBeNull();
   },
 );
+
+it.each(["updated", "deleted"])(
+  "does not queue a stale cloud video draft after %s refresh",
+  async (change) => {
+    const source = testInspection().source!;
+    source.grids.Videos!.push([
+      "fictional-cloud-video",
+      "https://youtu.be/v7AYKMP6rOE",
+      "虛構雲端原影片",
+      "瑜伽",
+      20,
+      "2026-11-06T12:00:00.000Z",
+      "",
+    ]);
+    lifecycle.snapshot = testInspection(source);
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "設定與備份" }));
+    await act(async () => fireEvent.click(screen.getByText("連線測試帳號A")));
+    fireEvent.click(screen.getByRole("button", { name: "運動影片" }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "編輯影片：虛構雲端原影片" }),
+      ).toHaveProperty("disabled", false),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "編輯影片：虛構雲端原影片" }),
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: "名稱" }), {
+      target: { value: "虛構未提交影片草稿" },
+    });
+    const next = structuredClone(source);
+    if (change === "updated") next.grids.Videos![1][2] = "虛構雲端新影片";
+    else next.grids.Videos![1][6] = "2026-11-07T12:00:00.000Z";
+    lifecycle.snapshot = testInspection(next);
+    await act(async () => fireEvent.click(screen.getByText("連線測試帳號A")));
+    fireEvent.submit(
+      screen.getByRole("button", { name: "儲存影片" }).closest("form")!,
+    );
+    expect(
+      readOutbox(localStorage, {
+        subject: "A",
+        spreadsheetId: "sheet-private-1",
+      }),
+    ).toEqual([]);
+    expect(screen.getByRole("alert").textContent).toContain("影片已更新或刪除");
+    expect(screen.getByRole("textbox", { name: "名稱" })).toHaveProperty(
+      "value",
+      "虛構未提交影片草稿",
+    );
+    expect(screen.getByRole("button", { name: "測試更新版本" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "取消" }));
+    expect(screen.getByRole("button", { name: "測試更新版本" })).toHaveProperty(
+      "disabled",
+      false,
+    );
+    if (change === "updated") {
+      fireEvent.click(
+        screen.getByRole("button", { name: "編輯影片：虛構雲端新影片" }),
+      );
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(screen.getByRole("textbox", { name: "名稱" })).toHaveProperty(
+        "value",
+        "虛構雲端新影片",
+      );
+    } else
+      expect(
+        screen.queryByRole("button", { name: "編輯影片：虛構雲端原影片" }),
+      ).toBeNull();
+    expect(localStorage.getItem(LOCAL_KEY)).toBeNull();
+  },
+);
