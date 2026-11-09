@@ -450,7 +450,7 @@ export function WeightCard({
                   <Tooltip
                     formatter={(v, name) => [
                       `${v} kg`,
-                      name === "avg" ? "7 日平均" : "體重",
+                      name === "avg" ? "7 日平均" : "當日體重",
                     ]}
                     labelFormatter={(d) => shortDate(String(d))}
                   />
@@ -483,6 +483,23 @@ export function WeightCard({
             </div>
           ) : (
             <div className="weight-chart empty-chart" />
+          )}
+          {chart.length > 1 && (
+            <>
+              <ul className="weight-legend" aria-label="體重曲線說明">
+                <li>
+                  <span className="weight-swatch measured" aria-hidden="true" />
+                  當日體重
+                </li>
+                <li>
+                  <span className="weight-swatch average" aria-hidden="true" />7
+                  日平均
+                </li>
+              </ul>
+              <p className="weight-help tiny muted">
+                平均僅計近 7 天有紀錄日，缺值不補 0。
+              </p>
+            </>
           )}
           <div className="seg" role="group" aria-label="體重範圍">
             {[7, 30, 90].map((n) => (

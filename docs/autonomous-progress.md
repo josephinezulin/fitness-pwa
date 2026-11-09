@@ -6,11 +6,15 @@
 
 接續使用者提供的 redesign/ring-dashboard `935cee6`，優先完成 P0 合併與 CI，再補 P1 歡迎頁錯誤、離線說明、成功動畫與影片候選來源。已在改版分支整合最新 main `cdaf990` 並保留 E29–E32 的選表／重試／草稿保護；不把改版前參考點 `403e7a2` 當作回復 main 的指令。詳見 docs/redesign-progress.md。
 
-改版 P0 已於 PR #40 合併部署；P1 歡迎頁重試、離線說明、儲存勾選與工作區影片推薦已完成程式及本機 424／8／105 檢查，發布追蹤為 feature/redesign-followups → main 的 PR。E33 每週目標雙分頁保護原保存於 fix/weekly-goal-conflict `bfc7913`，現已接回新版 WeeklyGoal；該保存分支本身未合併，不把它當作部署證據。最新測試、PR 與部署狀態見 docs/redesign-progress.md。
+改版 P0（PR #40）及 P1／E33（PR #41）均已合併部署。最新正式 main `2fdd2a62d1c5a8d725603613e2891cc6b3eb1e16`，PR CI 42542655483、Pages 42543135798 成功，兩者均通過 424 項 Vitest、8 項 Python 與全部 105 個 Playwright。正式首頁／JS／CSS／SW HTTP 200，JS index-B0cH8DSr.js、CSS index-CE_ePMQj.css 與已測產物相同並已預快取；完整發布日誌見 PR #41。E33 已接回新版活動環，不重複合併原保存分支 fix/weekly-goal-conflict。
+
+2026-11-09 使用者回報私人捷徑已成功上傳，並指定私人驗收副本供工具只讀檢查；已確認有寫入資料與成功批次。不再把健康 API 一概標示為尚未部署，也不要求重做 Google 登入。未取得實際端點做獨立拒絕測試，鎖定、斷網、每日自動化、權限撤銷與 Health 畫面逐日總數仍待驗收。個人數值、紀錄筆數、量測日期、檔案／裝置／請求識別碼與憑證不存 repo。
+
+本輪 E34 回應使用者看不懂體重圖綠／灰線：補常駐「當日體重／7 日平均」圖例及平均只計有紀錄日期的說明，保留原曲線與計算；使用者已指定影片清單先保留，不能自行改造該頁。發布日誌以本輪 fix/weight-chart-legend → main 的 PR 為準。
 
 ## 目前落點
 
-- 階段 0、C、D、E1–E32 程式已合併部署；本人 OAuth 寫入、YouTube、VoiceOver 與 iOS 健康捷徑仍保留實機待驗收，不把 HTTP／DOM／Chrome 測試當作 iPhone 結果。
+- 階段 0、C、D、E1–E33 程式已合併部署；本人 PWA OAuth 寫入、YouTube、VoiceOver 及健康捷徑背景／失敗情境仍保留實機待驗收，不把 HTTP／DOM／Chrome 測試當作 iPhone 結果。
 - 本輪開工時已驗證部署為改版 P0 的 PR #40，main `d42c4478c56dce4f7aa441076553648eda1dbc80`，PR CI 42539861342、Pages 42540260254 成功，兩者均通過 404 項 Vitest、8 項 Python 及全部 87 個 Playwright 案例，含兩種備份下載。正式首頁／JS／CSS／SW HTTP 200，JS `index-BpVuTxLm.js`、CSS `index-NlWlSS2v.css` 與當時已測產物一致，SW 已預快取。P1 發布證據完成後追加於本次 PR，最新細節見 docs/redesign-progress.md；iPhone、本人 OAuth、YouTube 與健康捷徑仍未完成真實驗收。
 - 使用者回報偏好原本的曲線外觀，優先恢復健康圖的 monotone 平滑線與原本漸層；連續紀錄不顯示常駐圓點，孤立量測仍有圓點。保留缺值斷線、日曆日期、數值表與鍵盤 Tooltip。完整 208 項 Vitest、8 項 Python、建置及 diff 檢查通過；三種尺寸共 18 項曲線瀏覽器檢查及既有 45 項介面／離線檢查通過。詳見 docs/trend-accessibility.md；本次 PR／CI／Pages 結果以 GitHub 最新記錄為準。
 - E8 接續健康摘要長清單：跟隨圖表 7／30／90 天、全部日期、每批 14 筆、清楚標示四項數值與缺值。換帳號／副本、參考日及圖表範圍重設摘要視窗，圖表本身不重掛；只影響呈現，沒有刪減儲存或備份資料。完整檢查及實際瀏覽器結果見 docs/stage-e-progress.md；PR #14 已完成上述部署。
@@ -39,7 +43,7 @@
 - E30 補齊格式失敗後的重新讀取：明確按所選檔案的重讀按鈕，通過原有檢查後直接套用及記住，不需再次開 Picker 或首頁確認。自動／頭像更新仍限目前啟用檔案；晚到重讀遇到切回本機則保留檢視及原選擇，失敗不改資料來源。原 scope、Token、schema、資料及 CSS 不變，完整驗證與手動方式見 docs/stage-e-progress.md；PR #37 已完成合併部署，CI／Pages 及正式資產驗證見該 PR。
 - E31 補運動編輯的已知新版保護：背景讀回雲端時，若正在編輯的原運動已更新、分段已改或已刪除，保留所有表單草稿並提示先複製再關閉重編，停用儲存且阻擋直接 submit，不加入 outbox。無關紀錄或僅版本資訊更新仍可儲存；沿用 sameWorkout 欄位／分段比較及既有寫前重讀、revision／Web Locks 保護，不宣稱跨裝置原子版本鎖。另修正停用儲存後 Tab／Shift+Tab 離開對話框，略過停用控制與收合估算內容；原樣式、Google scope、Token、schema、健康資料及依賴不變。完整驗證及限制見 docs/stage-e-progress.md；PR #38 已完成合併部署，CI／Pages 及正式資產驗證見該 PR。
 - E32 補雲端影片編輯的已知新版保護：開編輯時保留原 SheetVideo 副本，使用既有 sameVideo 與當前同 ID 比較；名稱、YouTube ID、分類、選填長度變更或原紀錄不再存在時，保留所有草稿、搜尋、播放器與更新鎖，提示複製後取消重編。按鈕及 submit 都阻擋舊草稿，不加入 outbox；失去編輯權或 Videos 分頁也阻擋提交。無關影片或相同內容重讀仍可儲存，本機影片防護與取消流程不變。沒有新增 schema、儲存 key、scope、API、Token、依賴或 CSS；完整測試、官方依據及限制見 docs/stage-e-progress.md；PR #39 已完成合併部署，CI／Pages 與資產證據見該 PR。
-- 本輪 E7 補健康同步結果與部署驗收準備，見 docs/health-sync-readiness.md。本環境尚未取得可驗證 /exec 網址或可代辦的 Apps Script 部署連線；只停止該部署步驟，不把 PWA 的 drive.file Token 當作 Script 授權。需要使用者完成 Google 首次授權／部署並只提供 /exec 網址，不提供裝置 Token。這輪沒有部署健康 API、沒有修改私人表。
+- E7 的首次部署阻擋已由使用者自行完成，最新只讀確認見檔首與 docs/health-sync-readiness.md；工具尚未獨立驗證 /exec 拒絕未授權請求，不把成功寫入推定為所有安全／背景情境通過。沒有修改私人表、索取 Token 或重用 PWA drive.file 憑證。
 
 ## 先前檢查點（歷程）
 

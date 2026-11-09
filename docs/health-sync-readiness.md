@@ -20,13 +20,15 @@ SyncLogs.receivedAt 是伺服器收到該批次的時間，不是健康量測時
 
 所有結果仍標示 authorized_write_test=not_performed。此工具通過不會自動開啟服務，或代替 iPhone 健康授權與上傳測試。
 
-## 實際阻擋點與需要本人處理的步驟
+## 最新本人回報與剩餘驗收（2026-11-09）
 
-本輪沒有收到正式 /exec 網址，環境也沒有 Apps Script 部署工具／擁有者授權可直接完成首次部署。已停止這個步驟，沒有嘗試重用其他服務憑證、擴大 PWA OAuth scope、公開無驗證 API，或把 mock 當作端點驗收。
+使用者已完成私人捷徑上傳並指定私人驗收副本，工具只讀確認有健康資料、有效日期／單位及成功批次；觀察到的現有唯一鍵沒有重複。這是實際副本讀回與本人來源回報，不再標示「未部署」。沒有把私人副本名稱／ID、裝置／請求 ID、健康值、量測日期或筆數存進 repo，也沒有修改副本。
 
-請依 [部署步驟](health-ingest-setup.md#目前只需要先做哪一段) 在自己的 Google 帳號完成一次性設定、初始化與部署，保持服務關閉先驗收；只提供 /exec 網址，不提供裝置 Token。若已在其他工作階段完成，不必重建，直接提供網址即可。部署順序與執行身分依 [Google 官方 Web Apps 文件](https://developers.google.com/apps-script/guides/web)；不是以 drive.file 憑證代替 Script 授權。
+已成功的部署與捷徑可沿用，不要求重建或再建立 Google OAuth client。仍未取得可獨立測試的 /exec 網址，因此尚未驗證缺少／錯誤憑證的實際拒絕行為；每日自動化、鎖定、斷網補同步、同批重送、較舊快照及 Health 畫面總數仍需逐項實機驗收。成功批次不代表上述全部通過，也不能只由目前唯一鍵判定所有未來重送都安全。
 
-## 驗證結果
+若後續進行端點拒絕測試，只需提供 /exec 網址，不提供裝置 Token。本人授權與部署步驟保留於 [部署文件](health-ingest-setup.md#一次性部署步驟需要使用者在-google-操作)，供尚未完成者參考；不把 PWA 的 drive.file 憑證代替 Script 授權。
+
+## E7 歷史程式檢查結果（當時尚未部署）
 
 完整檢查：npm ci、207 項 Vitest（32 檔）、8 項 Python、TypeScript／Vite／Service Worker 正式建置、git diff --check 通過。新增回歸涵蓋無紀錄、無可用來源、亂序／同時刻批次、成功與未完成分開、零假造新增筆數、時區日期、帳號切換、快取缺少狀態及中繼資料不落盤；端點檢查工具新增關閉／認證模式與不一致回應測試。
 
@@ -36,7 +38,7 @@ Chromium 156／Playwright 在 320×852、390×844、844×390 執行正式 dist �
 
 ## 部署後及 iPhone 驗收
 
-1. 以私人測試副本部署 HealthIngest.gs，關閉時跑端點檢查；啟用後再跑，確認為 auth_rejected。本人用私人捷徑發最小有效批次，核對 JSON ok 與 requestId，不只看 HTTP 200。
+1. 沿用現有私人測試副本的部署；關閉時跑端點檢查，啟用後再跑，確認為 auth_rejected。本人用私人捷徑發最小有效批次，核對 JSON ok 與 requestId，不只看 HTTP 200。
 2. PWA 更新資料，卡片顯示 committed 批次與收件時間；同批重送不把 acceptedCount 誤認成新增筆數。核對 HealthMetrics／DailySteps 的實際去重與步數覆寫。
 3. 在虛構測試資料中提供新 partial／failed 與較舊 committed，卡片應同時顯示未完成／失敗及上次成功，不能顯示一切已同步。
 4. 切換帳號／副本、離線與重新開啟，只顯示該工作區已知紀錄；沒有來源時不得沿用另一個帳號或推定成功。

@@ -1933,6 +1933,30 @@ test("跨日回前景更新今日與本週統計，保留表單草稿並以新�
 
 test("平滑曲線、缺值及數值清單保留真實零", async ({ page }) => {
   await page.goto("./");
+  const weight = page.locator(".weight-card");
+  const legend = weight.getByRole("list", { name: "體重曲線說明" });
+  await expect(legend).toBeVisible();
+  await expect(legend.getByRole("listitem")).toHaveText([
+    "當日體重",
+    "7 日平均",
+  ]);
+  await expect(
+    weight.getByText("平均僅計近 7 天有紀錄日，缺值不補 0。"),
+  ).toBeVisible();
+  for (const range of [30, 90, 7]) {
+    await weight
+      .getByRole("button", { name: `${range} 天`, exact: true })
+      .click();
+    await expect(legend).toBeVisible();
+    await expect(
+      weight.locator('.recharts-line-curve[stroke="#9fb9a6"]'),
+    ).toHaveCount(1);
+    await expect(
+      weight.locator('.recharts-line-curve[stroke="url(#weight-avg)"]'),
+    ).toHaveCount(1);
+    await expectNoOverflow(page);
+  }
+  expect(await readData(page)).toEqual(fixtureData);
   await page
     .getByRole("button", { name: "帳號與同步設定", exact: true })
     .click();

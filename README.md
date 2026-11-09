@@ -46,7 +46,7 @@ npm run build
 
 先閱讀 [安全決策與整合閘門](docs/security.md)、[Sheets 資料模型](docs/sheets.md)、[iOS 捷徑規格](docs/shortcuts.md)。依使用者要求，安全可行性未驗證前不開啟雲端 API。
 
-未來擴充保留「共用 PWA、各自登入 Google、各自複製範本到 Google Drive」模式，詳見 [範本與資料隔離規格](docs/sheets.md#保留-google-範本與各自資料的擴充彈性)。第一版維持單人使用；已實作登入與 Picker 選擇副本的驗收流程；帳號與檔案的摘要快取分區已實作；雲端寫入與離線 outbox 已實作；捷徑部署及 iPhone 端到端寫入仍待驗收。不支援 OneDrive／Excel。
+未來擴充保留「共用 PWA、各自登入 Google、各自複製範本到 Google Drive」模式，詳見 [範本與資料隔離規格](docs/sheets.md#保留-google-範本與各自資料的擴充彈性)。第一版維持單人使用；已實作登入與 Picker 選擇副本的驗收流程；帳號與檔案的摘要快取分區已實作；雲端寫入與離線 outbox 已實作；本人捷徑已成功寫入私人驗收副本並由工具只讀確認；鎖定／斷網／每日自動化與未授權拒絕仍待實機驗收。不支援 OneDrive／Excel。
 
 ## Google 連線與 Gemini 範本
 
