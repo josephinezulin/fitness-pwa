@@ -611,3 +611,16 @@ App 現在以既有 sameWorkout 比較開表單時的原運動與目前同 ID �
 限制：Google SDK／GET 回應均為測試路由的虛構資料，未讀寫真實私人表；iframe 節點保留不代表真實 YouTube 試播。仍待本人 Safari／VoiceOver、Google consent／實際寫入及 Apple 健康捷徑驗收。只保護已讀回內容，既有跨裝置寫入競態與未讀到的變更限制保留。
 
 最終本機檢查：npm ci、402 項 Vitest（42 檔）、8 項 Python、TypeScript／Vite／Service Worker 正式建置、瀏覽器型別檢查、Prettier 與 git diff --check 通過。影片元件及 App 共 49 項測試，在修正新增測試選擇器型別後再通過。六個新瀏覽器案例先通過，最終正式產物完整通過 87 個 Playwright 案例（3.6 分鐘）；SDK／GET 回應全為隔離測試路由的虛構資料，沒有真實帳號或私人表操作。JS index-ClLZrkiM.js 不含模擬 SDK／Token、虛構草稿或 SW 標記；CSS index-CB3xEyJn.css 未變。CI、合併、Pages 與正式資產證據追加於本次 PR。
+
+## E33：每週目標跨分頁草稿與寫前比對（接回活動環改版）
+
+原修正保存於 fix/weekly-goal-conflict `bfc7913`，本輪 feature/redesign-followups 接到新版 WeeklyGoal，不回復舊首頁或重複發布保存分支。開啟目標時固定原值，外部更新後保留輸入草稿並提示目前目標，停用儲存且阻擋直接 submit；取消重開採新值。儲存之前再讀目前偏好並比對 expectedWeeklyGoal，不同則只刷新畫面供使用者重編，不呼叫 change、不寫入；相同時合併最新收藏／觀看。沿用工作區分區、更新鎖、錯誤保留與 JSON 備份。
+
+新增三項 WeeklyGoal、三項 usePreferences、兩項 App 整合情境，以及真正雙分頁在三尺寸的瀏覽器流程；包含漏掉 storage 通知、未修改輸入、其他偏好更新與取消重開。與本輪歡迎頁、離線說明、儲存勾選與影片候選修正一起驗證，最新數量及發布結果見 docs/redesign-progress.md 與本輪 PR。
+
+官方 WHATWG Web Storage 明載應假設沒有鎖；此處不是跨分頁／裝置原子交易，也不自動合併兩個目標草稿。React input defaultValue 只指定初值，因而以開表單時的基準保持未修改輸入，避免重繪偷換預設。
+
+- https://html.spec.whatwg.org/multipage/webstorage.html
+- https://react.dev/reference/react-dom/components/input
+
+手動方式：兩頁開同工作區目標，A 填草稿、B 儲存新目標，A 應保留草稿並停止儲存；取消重開採 B 新值。A 沒改輸入也不得覆蓋；其他分頁只收藏影片不應阻擋目標儲存。沒有新增儲存 key、Sheet 欄位、OAuth scope 或健康資料 API。

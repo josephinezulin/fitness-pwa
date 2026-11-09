@@ -1,5 +1,5 @@
 import { WeeklyGoal } from "../WeeklyActivity";
-import type { Metric, Workout, WorkoutPlan } from "../model";
+import type { Metric, Workout, WorkoutPlan, SheetVideo } from "../model";
 import type { Video } from "../videos";
 import { MiniStats, TodayCard, WeekChecklist, WeightCard } from "./HomeCards";
 
@@ -14,7 +14,8 @@ export function OverviewPage({
   canEdit,
   canAddMetric,
   seen,
-  hidden,
+  cloud,
+  sheetVideos,
   onGoalChange,
   onGoalDraftChange,
   onCheck,
@@ -33,7 +34,8 @@ export function OverviewPage({
   canEdit: boolean;
   canAddMetric: boolean;
   seen: Record<string, number>;
-  hidden: string[];
+  cloud: boolean;
+  sheetVideos?: SheetVideo[];
   onGoalChange: (goal: number) => boolean;
   onGoalDraftChange?: (open: boolean) => void;
   onCheck: (plan: WorkoutPlan, date: string) => void;
@@ -56,7 +58,8 @@ export function OverviewPage({
       <TodayCard
         {...checks}
         seen={seen}
-        hidden={hidden}
+        cloud={cloud}
+        sheetVideos={sheetVideos}
         onVideoDone={onVideoDone}
       />
       <WeeklyGoal

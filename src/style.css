@@ -3570,3 +3570,34 @@ header {
   max-height: 92dvh;
   padding-bottom: env(safe-area-inset-bottom);
 }
+
+.welcome-error {
+  max-width: 300px;
+  margin: 0;
+  color: var(--text, #233b31);
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.account-menu {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.offline-button {
+  min-width: 44px;
+  min-height: 44px;
+  color: var(--muted, #67796e);
+}
+
+.save-feedback {
+  min-inline-size: 108px;
+}
+.save-label,
+.save-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}

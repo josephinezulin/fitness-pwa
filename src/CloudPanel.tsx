@@ -68,8 +68,8 @@ export function CloudPanel({
   const [notice, setNotice] = useState("");
   const [readError, setReadError] = useState("");
   useEffect(() => {
-    onReadState?.({ busy: !!busy, error: readError });
-  }, [busy, readError, onReadState]);
+    onReadState?.({ busy: !!busy, error: readError || (eager ? notice : "") });
+  }, [busy, readError, notice, eager, onReadState]);
   const epoch = useRef(0);
   const request = useRef<AbortController | null>(null);
   const currentSession = useRef<GoogleSession | null>(null);
@@ -135,7 +135,21 @@ export function CloudPanel({
     };
   }, [retry]);
   useEffect(() => {
-    onLoginReady?.(config && ready && !session ? signIn : null);
+    const retryPreparation = () => {
+      setNotice("");
+      setRetry((value) => value + 1);
+    };
+    onLoginReady?.(
+      !busy
+        ? config && ready
+          ? session
+            ? () => void pick(session)
+            : signIn
+          : configLoaded && notice
+            ? retryPreparation
+            : null
+        : null,
+    );
   });
   useEffect(() => {
     if (!(visible || eager) || !config || ready) return;
@@ -157,7 +171,7 @@ export function CloudPanel({
     };
   }, [visible, eager, config, retry]);
   function signIn() {
-    if (!config || !ready) return;
+    if (!config || !ready || busy) return;
     const version = ++epoch.current;
     setBusy("等待 Google 登入");
     setNotice("");
@@ -329,7 +343,11 @@ export function CloudPanel({
         session,
         controller.signal,
       );
-      if (!selected || !valid(version)) return;
+      if (!valid(version)) return;
+      if (!selected) {
+        setNotice("已取消選擇試算表，請重試。");
+        return;
+      }
       const result = await inspectSpreadsheet(
         selected.id,
         session,
@@ -342,6 +360,8 @@ export function CloudPanel({
         return;
       }
       if (result.report.ok && result.data) useSnapshot(result, session);
+      else
+        setNotice("這份試算表格式尚未符合需求，請修正後重試或選擇其他副本。");
     } catch (error) {
       if (!valid(version)) return;
       if (error instanceof GoogleAccessError && error.status === 401) {

@@ -135,7 +135,7 @@ export async function reloadOffline(page: Page) {
   await page.context().setOffline(true);
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(
-    page.getByText("目前離線，仍可查看與記錄本機資料。", { exact: true }),
+    page.getByRole("button", { name: "離線說明", exact: true }),
   ).toBeVisible();
 }
 

@@ -4,6 +4,7 @@ import {
   Settings,
   LogOut,
   Cloud,
+  CloudOff,
   HardDrive,
   ChartNoAxesCombined,
 } from "lucide-react";
@@ -38,12 +39,14 @@ export function AccountMenu({
   const id = useId(),
     root = useRef<HTMLDivElement>(null),
     trigger = useRef<HTMLButtonElement>(null);
+  const opener = useRef<HTMLButtonElement | null>(null);
   const [openFor, setOpenFor] = useState<string | null>(null);
   const open = openFor === contextKey;
   const attention = issue || pendingCount > 0 || !online;
   const close = (focus = false) => {
     setOpenFor(null);
-    if (focus) trigger.current?.focus();
+    if (focus)
+      (opener.current?.isConnected ? opener.current : trigger.current)?.focus();
   };
   useEffect(() => setOpenFor(null), [contextKey]);
   useEffect(() => {
@@ -55,7 +58,10 @@ export function AccountMenu({
       if (event.key === "Escape") {
         event.preventDefault();
         setOpenFor(null);
-        trigger.current?.focus();
+        (opener.current?.isConnected
+          ? opener.current
+          : trigger.current
+        )?.focus();
       }
     };
     document.addEventListener("pointerdown", outside);
@@ -92,13 +98,30 @@ export function AccountMenu({
           close();
       }}
     >
+      {!online && (
+        <button
+          className="icon-button round offline-button"
+          aria-label="離線說明"
+          aria-expanded={open}
+          aria-controls={id}
+          onClick={(event) => {
+            opener.current = event.currentTarget;
+            setOpenFor(contextKey);
+          }}
+        >
+          <CloudOff size={18} aria-hidden="true" />
+        </button>
+      )}
       <button
         className="avatar"
         ref={trigger}
         aria-label="帳號與同步設定"
         aria-expanded={open}
         aria-controls={id}
-        onClick={() => setOpenFor(open ? null : contextKey)}
+        onClick={(event) => {
+          opener.current = event.currentTarget;
+          setOpenFor(open ? null : contextKey);
+        }}
       >
         <span aria-hidden="true">我</span>
         <i
@@ -113,6 +136,13 @@ export function AccountMenu({
             <strong>帳號與資料</strong>
           </div>
           <p className="account-status">{status}</p>
+          {!online && (
+            <p className="account-help" role="note" aria-label="離線模式說明">
+              {cloud
+                ? "目前顯示上次讀取的資料。運動、課表與影片修改會保留在此裝置，恢復網路並有有效 Google 授權後補同步。"
+                : "目前離線，仍可查看、記錄與備份此瀏覽器的資料。雲端同步與影片播放需要網路。"}
+            </p>
+          )}
           {cloud ? (
             <>
               <h2>{cloud.title}</h2>

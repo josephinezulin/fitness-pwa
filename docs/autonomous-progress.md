@@ -6,12 +6,12 @@
 
 接續使用者提供的 redesign/ring-dashboard `935cee6`，優先完成 P0 合併與 CI，再補 P1 歡迎頁錯誤、離線說明、成功動畫與影片候選來源。已在改版分支整合最新 main `cdaf990` 並保留 E29–E32 的選表／重試／草稿保護；不把改版前參考點 `403e7a2` 當作回復 main 的指令。詳見 docs/redesign-progress.md。
 
-E33 每週目標雙分頁保護已保存及推送至 fix/weekly-goal-conflict `bfc7913`，本機 410 項 Vitest、8 項 Python、90 個 Playwright 通過；尚未送 PR／部署。完成改版交接後應在新介面接回，不要遺失該修正，也不要誤稱已上線。
+改版 P0 已於 PR #40 合併部署；P1 歡迎頁重試、離線說明、儲存勾選與工作區影片推薦已完成程式及本機 424／8／105 檢查，發布追蹤為 feature/redesign-followups → main 的 PR。E33 每週目標雙分頁保護原保存於 fix/weekly-goal-conflict `bfc7913`，現已接回新版 WeeklyGoal；該保存分支本身未合併，不把它當作部署證據。最新測試、PR 與部署狀態見 docs/redesign-progress.md。
 
 ## 目前落點
 
 - 階段 0、C、D、E1–E32 程式已合併部署；本人 OAuth 寫入、YouTube、VoiceOver 與 iOS 健康捷徑仍保留實機待驗收，不把 HTTP／DOM／Chrome 測試當作 iPhone 結果。
-- 最新已驗證部署為 PR #39，main `cdaf9908e41b59422c77f50c645efcd5a763fc74`，PR CI 42530728262、Pages 42531114385 成功，兩者均通過 402 項 Vitest、8 項 Python 及 87 個 Playwright 案例。正式首頁／JS／CSS／SW HTTP 200，JS `index-ClLZrkiM.js`、CSS `index-CB3xEyJn.css` 與本機產物一致，SW 已預快取，沒有模擬 Google 標記。最新改版 P0／P1 見 docs/redesign-progress.md；未完成真實 iPhone 驗收。
+- 本輪開工時已驗證部署為改版 P0 的 PR #40，main `d42c4478c56dce4f7aa441076553648eda1dbc80`，PR CI 42539861342、Pages 42540260254 成功，兩者均通過 404 項 Vitest、8 項 Python 及全部 87 個 Playwright 案例，含兩種備份下載。正式首頁／JS／CSS／SW HTTP 200，JS `index-BpVuTxLm.js`、CSS `index-NlWlSS2v.css` 與當時已測產物一致，SW 已預快取。P1 發布證據完成後追加於本次 PR，最新細節見 docs/redesign-progress.md；iPhone、本人 OAuth、YouTube 與健康捷徑仍未完成真實驗收。
 - 使用者回報偏好原本的曲線外觀，優先恢復健康圖的 monotone 平滑線與原本漸層；連續紀錄不顯示常駐圓點，孤立量測仍有圓點。保留缺值斷線、日曆日期、數值表與鍵盤 Tooltip。完整 208 項 Vitest、8 項 Python、建置及 diff 檢查通過；三種尺寸共 18 項曲線瀏覽器檢查及既有 45 項介面／離線檢查通過。詳見 docs/trend-accessibility.md；本次 PR／CI／Pages 結果以 GitHub 最新記錄為準。
 - E8 接續健康摘要長清單：跟隨圖表 7／30／90 天、全部日期、每批 14 筆、清楚標示四項數值與缺值。換帳號／副本、參考日及圖表範圍重設摘要視窗，圖表本身不重掛；只影響呈現，沒有刪減儲存或備份資料。完整檢查及實際瀏覽器結果見 docs/stage-e-progress.md；PR #14 已完成上述部署。
 - 使用者回報每日數值展開太長、不易收合：本次將每日／每週數值表格限制為最多 320px 或半個小視窗高度，內部捲動、固定欄名，收合開關留在捲動區外。完整 213 項 Vitest、8 項 Python、建置與 diff 檢查通過；三種尺寸的 66 項捲動／收合檢查與既有 45 項介面／離線檢查通過，詳見 docs/trend-accessibility.md。合併與部署結果追加於本次 PR。

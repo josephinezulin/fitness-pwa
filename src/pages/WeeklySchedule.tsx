@@ -1,3 +1,4 @@
+import { SaveButton, useSaveFeedback } from "../SaveFeedback";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { Check, Dumbbell, Pencil, Plus, Play, X } from "lucide-react";
 import {
@@ -142,6 +143,7 @@ export function PlanManager({
   onSave: (plans: WorkoutPlan[]) => boolean;
   onDraftChange: (open: boolean) => void;
 }) {
+  const feedback = useSaveFeedback();
   const [editing, setEditing] = useState<WorkoutPlan | "new" | null>(null);
   const [error, setError] = useState("");
   const formId = useId();
@@ -264,7 +266,7 @@ export function PlanManager({
           aria-labelledby={`${formId}-title`}
           onSubmit={(event) => {
             event.preventDefault();
-            if (!canEdit) return;
+            if (!canEdit || feedback.pending()) return;
             if (
               editing !== "new" &&
               !samePlan(
@@ -289,7 +291,7 @@ export function PlanManager({
               active: fields.get("active") === "on",
             };
             if (commit([...plans.filter((p) => p.id !== plan.id), plan]))
-              setEditing(null);
+              feedback.finish(() => setEditing(null));
           }}
         >
           <div className="section-head">
@@ -301,6 +303,7 @@ export function PlanManager({
               className="icon-button"
               aria-label="取消編輯課表"
               onClick={() => {
+                feedback.cancel();
                 setEditing(null);
                 setError("");
               }}
@@ -394,9 +397,9 @@ export function PlanManager({
               />
               啟用，每週安排這個課表
             </label>
-            <button className="primary" type="submit">
+            <SaveButton feedback={feedback}>
               儲存課表 <Check size={16} />
-            </button>
+            </SaveButton>
           </fieldset>
         </form>
       )}

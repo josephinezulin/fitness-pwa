@@ -213,3 +213,41 @@ it("retains the source and screen after quota failure and allows retry after spa
   });
   expect(result.current.error).toBe("");
 });
+
+it("refreshes readonly candidates, recovers from bad content and refuses every write", () => {
+  const { result } = renderHook(() => useVideoStorage({ readOnly: true }));
+  storeLibrary(localStorage, fixture);
+  const raw = localStorage.getItem(VIDEO_KEY);
+  act(() =>
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: VIDEO_KEY,
+        storageArea: localStorage,
+      }),
+    ),
+  );
+  expect(result.current.library).toEqual(fixture);
+  act(() => expect(result.current.persist(emptyLibrary)).toBe(false));
+  expect(localStorage.getItem(VIDEO_KEY)).toBe(raw);
+  localStorage.setItem(VIDEO_KEY, "{fictional-bad");
+  act(() =>
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: VIDEO_KEY,
+        storageArea: localStorage,
+      }),
+    ),
+  );
+  expect(result.current.library).toEqual(fixture);
+  expect(result.current.blocked).toBe(true);
+  localStorage.setItem(VIDEO_KEY, raw!);
+  act(() =>
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: VIDEO_KEY,
+        storageArea: localStorage,
+      }),
+    ),
+  );
+  expect(result.current.blocked).toBe(false);
+});

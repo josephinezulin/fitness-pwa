@@ -21,8 +21,6 @@ import { MotionConfig, motion } from "motion/react";
 import {
   Plus,
   Dumbbell,
-  Check,
-  WifiOff,
   X,
   House,
   CalendarDays,
@@ -59,13 +57,13 @@ const TAGLINES = [
 import {
   type Data,
   type Workout,
-  type Metric,
   weekDays,
   workoutPlans,
   completed,
   validate,
 } from "./model";
 import { WorkoutForm } from "./WorkoutForm";
+import { MetricForm } from "./MetricForm";
 import { VideoLibrary } from "./VideoLibrary";
 import { readLibrary, watchUrl, type VideoCategory } from "./videos";
 import { CloudPanel, type CloudReadState } from "./CloudPanel";
@@ -356,11 +354,6 @@ export function App() {
         </nav>
         <main>
           <header>
-            {!online && (
-              <span className="offline-dot" title="離線中">
-                <WifiOff size={16} aria-label="離線中" />
-              </span>
-            )}
             <div className="header-right">
               <AccountMenu
                 cloud={workspace.cloud}
@@ -506,14 +499,6 @@ export function App() {
                 {cloudReadState.error}
               </div>
             )}
-            {!online && (
-              <div className="notice">
-                <WifiOff size={16} />
-                {workspace.cloud
-                  ? "目前離線，健康摘要為先前快取；運動、課表與影片修改會先保留在此裝置，連線並登入後補同步。"
-                  : "目前離線，仍可查看與記錄本機資料。"}
-              </div>
-            )}
             {message && (
               <div className="notice" role="status">
                 {message}
@@ -536,11 +521,13 @@ export function App() {
                   canEdit={workspace.canEditCloud}
                   canAddMetric={!workspace.cloud && workspace.canEditCloud}
                   seen={preferences.value.seen}
-                  hidden={
-                    workspace.cloud ? [] : readLibrary(localStorage).hidden
-                  }
+                  cloud={!!workspace.cloud}
+                  sheetVideos={workspace.cloud ? data.videos : undefined}
                   onGoalChange={(weeklyGoal) =>
-                    preferences.update((p) => ({ ...p, weeklyGoal }))
+                    preferences.update(
+                      (p) => ({ ...p, weeklyGoal }),
+                      preferences.value.weeklyGoal,
+                    )
                   }
                   onGoalDraftChange={setGoalDraftOpen}
                   onCheck={(plan, date) =>
@@ -740,6 +727,7 @@ export function App() {
         {showWelcome && (
           <Welcome
             account={readAccount(localStorage)}
+            error={cloudReadState.error}
             loginReady={loginReady}
             waiting={loginWaiting || cloudReadState.busy}
             onLogin={() => {
@@ -805,6 +793,10 @@ export function App() {
                   today={viewToday}
                   disabled={!workspace.canEditCloud || !!workoutEditError}
                   saveError={workoutEditError}
+                  onSaved={() => {
+                    setModal(null);
+                    setWorkoutDraft(null);
+                  }}
                   onSave={(record) => {
                     if (workoutEditError) return false;
                     const ok = save({
@@ -819,90 +811,28 @@ export function App() {
                         const id = workoutDraft.videoId;
                         preferences.update((p) => markSeen(p, id));
                       }
-                      setModal(null);
-                      setWorkoutDraft(null);
                     }
                     return ok;
                   }}
                 />
               ) : (
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    const form = new FormData(e.currentTarget);
-                    {
-                      const date = String(form.get("date"));
-                      const old = data.metrics.find((m) => m.date === date);
-                      const record: Metric = {
-                        id: old?.id || crypto.randomUUID(),
-                        date,
-                      };
-                      for (const k of [
-                        "weight",
-                        "fat",
-                        "heart",
-                        "steps",
-                      ] as const) {
-                        const v = String(form.get(k));
-                        if (v !== "") record[k] = Number(v);
-                      }
-                      if (
-                        save({
-                          ...data,
-                          metrics: [
-                            ...data.metrics.filter((m) => m.date !== date),
-                            record,
-                          ],
-                        })
-                      )
-                        setModal(null);
-                    }
-                  }}
-                >
-                  <label>
-                    日期
-                    <input
-                      name="date"
-                      type="date"
-                      required
-                      defaultValue={viewToday}
-                      max={viewToday}
-                    />
-                  </label>
-                  {
-                    <>
-                      <p className="tiny muted">
-                        至少填寫一項。相同日期會取代當天摘要；未填欄位將清空。
-                      </p>
-                      {(
-                        [
-                          ["weight", "體重（kg）", 1, 500, 0.1],
-                          ["fat", "體脂率（%）", 0, 100, 0.1],
-                          ["heart", "心率（bpm）", 20, 250, 1],
-                          ["steps", "每日步數", 0, 200000, 1],
-                        ] as const
-                      ).map(([key, label, min, max, step]) => (
-                        <label key={key}>
-                          {label}
-                          <input
-                            name={key}
-                            type="number"
-                            min={min}
-                            max={max}
-                            step={step}
-                          />
-                        </label>
-                      ))}
-                    </>
+                <MetricForm
+                  metrics={data.metrics}
+                  today={viewToday}
+                  disabled={!!workspace.cloud || !workspace.canEditCloud}
+                  onSave={(record) =>
+                    save({
+                      ...data,
+                      metrics: [
+                        ...data.metrics.filter(
+                          (metric) => metric.date !== record.date,
+                        ),
+                        record,
+                      ],
+                    })
                   }
-                  <button
-                    className="primary full"
-                    disabled={!!workspace.cloud || !workspace.canEditCloud}
-                    type="submit"
-                  >
-                    儲存紀錄 <Check size={18} />
-                  </button>
-                </form>
+                  onSaved={() => setModal(null)}
+                />
               )}
             </motion.section>
           </motion.div>

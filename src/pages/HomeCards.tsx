@@ -34,7 +34,10 @@ import {
   embedUrl,
   thumbnailUrl,
   type Video,
+  visibleVideos,
 } from "../videos";
+import { useVideoStorage } from "../useVideoStorage";
+import type { SheetVideo } from "../model";
 import { CountUp } from "../motion-ui";
 
 const WEEKDAY = "一二三四五六日";
@@ -82,8 +85,9 @@ export function suggestVideo(
   seen: Record<string, number>,
   categories: readonly string[],
   hidden: string[] = [],
+  videos: readonly Video[] = BUILT_IN_VIDEOS,
 ): Video | null {
-  const pool = BUILT_IN_VIDEOS.filter(
+  const pool = videos.filter(
     (v) =>
       categories.includes(v.category) &&
       (v.minutes ?? 99) <= 10 &&
@@ -104,7 +108,8 @@ export function TodayCard({
   days,
   canEdit,
   seen,
-  hidden,
+  cloud = false,
+  sheetVideos,
   onCheck,
   onUncheck,
   onVideoDone,
@@ -115,28 +120,41 @@ export function TodayCard({
   days: string[];
   canEdit: boolean;
   seen: Record<string, number>;
-  hidden: string[];
+  cloud?: boolean;
+  sheetVideos?: SheetVideo[];
   onCheck: (plan: WorkoutPlan, date: string) => void;
   onUncheck: (plan: WorkoutPlan, date: string) => void;
   onVideoDone: (video: Video) => void;
 }) {
+  const local = useVideoStorage({ readOnly: true });
+  const candidates = useMemo(
+    () =>
+      visibleVideos(
+        cloud ? { ...local.library, custom: [] } : local.library,
+        cloud ? sheetVideos : undefined,
+      ),
+    [cloud, sheetVideos, local.library],
+  );
   const index = days.indexOf(viewToday);
   const today = plans.filter((p) => p.weekday === index + 1);
   const allDone =
     today.length > 0 &&
     today.every((p) => completed(workouts, viewToday, p.type));
   const [offset, setOffset] = useState(0);
-  const [playing, setPlaying] = useState(false);
+  const [playing, setPlaying] = useState<Video | null>(null);
   const showVideo = !today.length || allDone;
-  const video = showVideo
-    ? suggestVideo(
-        viewToday,
-        offset,
-        seen,
-        allDone ? ["伸展放鬆"] : LIGHT_CATEGORIES,
-        hidden,
-      )
-    : null;
+  const video =
+    playing ??
+    (showVideo
+      ? suggestVideo(
+          viewToday,
+          offset,
+          seen,
+          allDone ? ["伸展放鬆"] : LIGHT_CATEGORIES,
+          local.library.hidden,
+          candidates,
+        )
+      : null);
   return (
     <article className="card today-card">
       <div className="card-title">
@@ -204,7 +222,7 @@ export function TodayCard({
               type="button"
               className="suggest-thumb"
               aria-label={`播放：${video.title}`}
-              onClick={() => setPlaying(true)}
+              onClick={() => setPlaying(video)}
             >
               <img src={thumbnailUrl(video.youtubeId)} alt="" loading="lazy" />
               <span className="play">
@@ -222,7 +240,7 @@ export function TodayCard({
               className="icon-button round"
               aria-label="換一個"
               onClick={() => {
-                setPlaying(false);
+                setPlaying(null);
                 setOffset((n) => n + 1);
               }}
             >

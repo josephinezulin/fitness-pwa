@@ -24,7 +24,9 @@ function read() {
 }
 
 /** Protect sequential writes from stale pages; Web Storage is not a transaction. */
-export function useVideoStorage() {
+export function useVideoStorage({
+  readOnly = false,
+}: { readOnly?: boolean } = {}) {
   const [initial] = useState(read);
   const [library, setLibrary] = useState(initial.library);
   const raw = useRef(initial.raw);
@@ -39,6 +41,21 @@ export function useVideoStorage() {
   }
 
   function check() {
+    if (readOnly) {
+      const next = read();
+      if (next.error) {
+        block(next.error);
+        return false;
+      }
+      if (next.raw !== raw.current || blockedRef.current) {
+        raw.current = next.raw;
+        blockedRef.current = false;
+        setBlocked(false);
+        setError("");
+        setLibrary(next.library);
+      }
+      return true;
+    }
     if (blockedRef.current) return false;
     try {
       if (localStorage.getItem(VIDEO_KEY) === raw.current) return true;
@@ -75,10 +92,10 @@ export function useVideoStorage() {
       window.removeEventListener("pageshow", foreground);
       document.removeEventListener("visibilitychange", foreground);
     };
-  }, []);
+  }, [readOnly]);
 
   function persist(next: VideoLibrary) {
-    if (!check()) return false;
+    if (readOnly || !check()) return false;
     try {
       const valid = validateLibrary(next);
       const serialized = JSON.stringify(valid);

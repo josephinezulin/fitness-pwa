@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { motion } from "motion/react";
 import { Activity, LoaderCircle } from "lucide-react";
 
@@ -10,13 +11,16 @@ export function Welcome({
   waiting,
   onLogin,
   onLocal,
+  error = "",
 }: {
   account: string;
   loginReady: boolean;
   waiting: boolean;
   onLogin: () => void;
   onLocal: () => void;
+  error?: string;
 }) {
+  const errorId = useId();
   return (
     <motion.div
       className="welcome"
@@ -66,6 +70,7 @@ export function Welcome({
           className="primary google"
           disabled={!loginReady || waiting}
           onClick={onLogin}
+          aria-describedby={error ? errorId : undefined}
           whileTap={{ scale: 0.95 }}
         >
           {!loginReady || waiting ? (
@@ -75,8 +80,17 @@ export function Welcome({
               G
             </span>
           )}
-          {account ? `以 ${account} 繼續` : "用 Google 開始"}
+          {error
+            ? "重試 Google 連線"
+            : account
+              ? `以 ${account} 繼續`
+              : "用 Google 開始"}
         </motion.button>
+        {error && (
+          <p className="welcome-error" id={errorId} role="alert">
+            {error}
+          </p>
+        )}
         <button className="text-button quiet" onClick={onLocal}>
           先逛逛
         </button>

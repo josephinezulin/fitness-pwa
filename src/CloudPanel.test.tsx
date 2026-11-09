@@ -642,3 +642,54 @@ describe("Google connection lifecycle", () => {
     );
   });
 });
+
+it("lets the welcome page retry SDK preparation without opening OAuth outside a user click", async () => {
+  const p = { ...props(), eager: true };
+  const readyAction = vi.fn();
+  mock.prepare.mockRejectedValueOnce(Error("虛構 SDK 載入失敗"));
+  render(<CloudPanel {...p} onLoginReady={readyAction} />);
+  await waitFor(() =>
+    expect(p.onReadState).toHaveBeenLastCalledWith({
+      busy: false,
+      error: expect.stringContaining("Google 登入暫時無法使用"),
+    }),
+  );
+  expect(readyAction.mock.calls.at(-1)![0]).toBeTypeOf("function");
+  await act(async () => readyAction.mock.calls.at(-1)![0]());
+  await ready();
+  expect(mock.prepare).toHaveBeenCalledTimes(2);
+  expect(mock.login).not.toHaveBeenCalled();
+  expect(p.onReadState).toHaveBeenLastCalledWith({ busy: false, error: "" });
+  await act(async () => readyAction.mock.calls.at(-1)![0]());
+  await waitFor(() => expect(p.onUseSnapshot).toHaveBeenCalledOnce());
+  expect(mock.login).toHaveBeenCalledOnce();
+});
+
+it("reports welcome login and picker cancellation errors and retries the picker without logging in again", async () => {
+  const p = { ...props(), eager: true };
+  const readyAction = vi.fn();
+  render(<CloudPanel {...p} onLoginReady={readyAction} />);
+  await ready();
+  mock.login.mockRejectedValueOnce(Error("虛構登入取消"));
+  fireEvent.click(screen.getByRole("button", { name: "使用 Google 登入" }));
+  await waitFor(() =>
+    expect(p.onReadState).toHaveBeenLastCalledWith({
+      busy: false,
+      error: "虛構登入取消",
+    }),
+  );
+  mock.choose.mockResolvedValueOnce(null);
+  await act(async () => readyAction.mock.calls.at(-1)![0]());
+  await waitFor(() =>
+    expect(p.onReadState).toHaveBeenLastCalledWith({
+      busy: false,
+      error: expect.stringContaining("已取消選擇試算表"),
+    }),
+  );
+  expect(readyAction.mock.calls.at(-1)![0]).toBeTypeOf("function");
+  await act(async () => readyAction.mock.calls.at(-1)![0]());
+  await waitFor(() => expect(p.onUseSnapshot).toHaveBeenCalledOnce());
+  expect(mock.login).toHaveBeenCalledTimes(2);
+  expect(mock.choose).toHaveBeenCalledTimes(2);
+  expect(p.onReadState).toHaveBeenLastCalledWith({ busy: false, error: "" });
+});

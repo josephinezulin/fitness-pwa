@@ -1,3 +1,4 @@
+import { SaveButton, useSaveFeedback } from "./SaveFeedback";
 import React, { useState } from "react";
 import {
   ArrowUpRight,
@@ -62,6 +63,7 @@ export function VideoLibrary({
   onDraftChange?: (open: boolean) => void;
 }) {
   const videoStorage = useVideoStorage();
+  const feedback = useSaveFeedback();
   const lib = videoStorage.library;
   const [category, setCategory] = useState<VideoCategory | "全部">(
     initialCategory,
@@ -114,6 +116,7 @@ export function VideoLibrary({
 
   const editConflict = !!(
     cloud &&
+    !feedback.saved &&
     adding &&
     editing &&
     (!editingBase ||
@@ -140,10 +143,12 @@ export function VideoLibrary({
         <button
           className="text-button"
           disabled={
-            !adding &&
-            (cloud ? !canEditCloud || !sheetVideos : videoStorage.blocked)
+            feedback.saved ||
+            (!adding &&
+              (cloud ? !canEditCloud || !sheetVideos : videoStorage.blocked))
           }
           onClick={() => {
+            feedback.cancel();
             setEditing(null);
             setEditingBase(null);
             setAdding((a) => !a);
@@ -187,7 +192,10 @@ export function VideoLibrary({
           className="video-form"
           onSubmit={(e) => {
             e.preventDefault();
-            if (cloud && (!canEditCloud || !sheetVideos || editConflict))
+            if (
+              feedback.pending() ||
+              (cloud && (!canEditCloud || !sheetVideos || editConflict))
+            )
               return;
             const form = new FormData(e.currentTarget);
             try {
@@ -230,32 +238,33 @@ export function VideoLibrary({
                     ...(editing ? { id: editing.sheetRecordId! } : {}),
                   })
                 : persist(next);
-              if (saved) {
-                setError("");
-                setAdding(false);
-                setEditing(null);
-                setEditingBase(null);
-                setCategory(form.get("category") as VideoCategory);
-                setQuery("");
-                setLength("all");
-                setFavoritesOnly(false);
-                resetBatch();
-                if (!cloud) {
-                  const record = editing
-                    ? next.custom.find((video) => video.id === editing.id)!
-                    : next.custom.at(-1)!;
-                  const index = visibleVideos(next)
-                    .filter((video) => video.category === record.category)
-                    .findIndex((video) => video.id === record.id);
-                  setShown(
-                    Math.max(
-                      VIDEO_BATCH,
-                      Math.ceil((index + 1) / VIDEO_BATCH) * VIDEO_BATCH,
-                    ),
-                  );
-                  pendingFocus.current = record.id;
-                }
-              }
+              if (saved)
+                feedback.finish(() => {
+                  setError("");
+                  setAdding(false);
+                  setEditing(null);
+                  setEditingBase(null);
+                  setCategory(form.get("category") as VideoCategory);
+                  setQuery("");
+                  setLength("all");
+                  setFavoritesOnly(false);
+                  resetBatch();
+                  if (!cloud) {
+                    const record = editing
+                      ? next.custom.find((video) => video.id === editing.id)!
+                      : next.custom.at(-1)!;
+                    const index = visibleVideos(next)
+                      .filter((video) => video.category === record.category)
+                      .findIndex((video) => video.id === record.id);
+                    setShown(
+                      Math.max(
+                        VIDEO_BATCH,
+                        Math.ceil((index + 1) / VIDEO_BATCH) * VIDEO_BATCH,
+                      ),
+                    );
+                    pendingFocus.current = record.id;
+                  }
+                });
             } catch (err) {
               setError((err as Error).message);
             }
@@ -318,9 +327,9 @@ export function VideoLibrary({
               />
             </label>
           </div>
-          <button
+          <SaveButton
+            feedback={feedback}
             className="primary"
-            type="submit"
             disabled={
               cloud
                 ? !canEditCloud || !sheetVideos || editConflict
@@ -328,7 +337,7 @@ export function VideoLibrary({
             }
           >
             {editing ? "儲存影片" : "加入影片庫"} <Plus size={16} />
-          </button>
+          </SaveButton>
         </form>
       )}
       <fieldset className="video-filters">
@@ -570,6 +579,7 @@ export function VideoLibrary({
                     }
                     aria-label={`編輯影片：${x.title}`}
                     onClick={() => {
+                      feedback.cancel();
                       setEditing(x);
                       const original = sheetVideos?.find(
                         (video) => video.id === x.sheetRecordId,
