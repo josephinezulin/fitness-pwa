@@ -18,6 +18,95 @@ import { preferenceKey } from "../src/preferences";
 import { defaultPlans } from "../src/model";
 import { installGoogleSelectionFixture } from "./google-selection-fixture";
 
+test("兩分頁調整每週目標保留草稿並阻擋覆寫，取消重開採新目標且離線備份完整", async ({
+  page,
+}) => {
+  const key = preferenceKey();
+  const initial = {
+    version: 1,
+    weeklyGoal: 150,
+    favorites: ["v7AYKMP6rOE"],
+    seen: { v7AYKMP6rOE: 2 },
+  };
+  await page.addInitScript(
+    ({ key, initial }) => {
+      if (!localStorage.getItem(key))
+        localStorage.setItem(key, JSON.stringify(initial));
+    },
+    { key, initial },
+  );
+  await page.goto("./");
+  const other = await page.context().newPage();
+  const errors: string[] = [];
+  other.on("pageerror", (error) => errors.push(error.message));
+  try {
+    await other.goto("http://127.0.0.1:4173/fitness-pwa/");
+    await page.getByRole("button", { name: "調整目標", exact: true }).click();
+    const form = page.getByRole("form", { name: "每週運動目標", exact: true });
+    const field = form.getByRole("spinbutton", {
+      name: "每週目標（分鐘）",
+      exact: true,
+    });
+    await field.fill("175");
+    await other.getByRole("button", { name: "調整目標", exact: true }).click();
+    await other
+      .getByRole("spinbutton", { name: "每週目標（分鐘）", exact: true })
+      .fill("240");
+    await other.getByRole("button", { name: "儲存目標", exact: true }).click();
+    await expect(page.locator(".goal-total")).toContainText("/ 240");
+    const raw = await page.evaluate((key) => localStorage.getItem(key), key);
+    await form.evaluate((node) =>
+      node.dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true }),
+      ),
+    );
+    expect(await page.evaluate((key) => localStorage.getItem(key), key)).toBe(
+      raw,
+    );
+    await expect(form.getByRole("alert")).toContainText("240 分鐘");
+    await expect(field).toHaveValue("175");
+    await expect(
+      form.getByRole("button", { name: "儲存目標", exact: true }),
+    ).toBeDisabled();
+    await expectNoOverflow(page);
+    await page.getByRole("button", { name: "取消調整", exact: true }).click();
+    await expect(form).toHaveCount(0);
+    expect(await page.evaluate((key) => localStorage.getItem(key), key)).toBe(
+      raw,
+    );
+    await page.getByRole("button", { name: "調整目標", exact: true }).click();
+    await expect(field).toHaveValue("240");
+    await expect(form.getByRole("alert")).toHaveCount(0);
+    await field.fill("260");
+    await form.getByRole("button", { name: "儲存目標", exact: true }).click();
+    await expect(other.locator(".goal-total")).toContainText("/ 260");
+    const saved = { ...initial, weeklyGoal: 260 };
+    expect(
+      await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!), key),
+    ).toEqual(saved);
+    expect(await readData(page)).toEqual(fixtureData);
+    expect(
+      await page.evaluate((key) => localStorage.getItem(key), VIDEO_KEY),
+    ).toBeNull();
+    await page.context().setOffline(true);
+    await page.getByRole("button", { name: "設定與備份", exact: true }).click();
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      page.getByRole("button", { name: "匯出 JSON 備份", exact: true }).click(),
+    ]);
+    const backup = JSON.parse(await readFile((await download.path())!, "utf8"));
+    expect(backup.experience).toEqual(saved);
+    expect(backup.workouts).toEqual(fixtureData.workouts);
+    expect(backup.metrics).toEqual(fixtureData.metrics);
+    await page.reload({ waitUntil: "networkidle" });
+    await expect(page.locator(".goal-total")).toContainText("/ 260");
+    await expectNoOverflow(page);
+    expect(errors).toEqual([]);
+  } finally {
+    await other.close();
+  }
+});
+
 for (const change of ["updated", "deleted"] as const) {
   test(`編輯中雲端影片${change === "updated" ? "更新" : "刪除"}保留草稿與播放器，不加入待同步修改`, async ({
     page,

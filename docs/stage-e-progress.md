@@ -611,3 +611,24 @@ App 現在以既有 sameWorkout 比較開表單時的原運動與目前同 ID �
 限制：Google SDK／GET 回應均為測試路由的虛構資料，未讀寫真實私人表；iframe 節點保留不代表真實 YouTube 試播。仍待本人 Safari／VoiceOver、Google consent／實際寫入及 Apple 健康捷徑驗收。只保護已讀回內容，既有跨裝置寫入競態與未讀到的變更限制保留。
 
 最終本機檢查：npm ci、402 項 Vitest（42 檔）、8 項 Python、TypeScript／Vite／Service Worker 正式建置、瀏覽器型別檢查、Prettier 與 git diff --check 通過。影片元件及 App 共 49 項測試，在修正新增測試選擇器型別後再通過。六個新瀏覽器案例先通過，最終正式產物完整通過 87 個 Playwright 案例（3.6 分鐘）；SDK／GET 回應全為隔離測試路由的虛構資料，沒有真實帳號或私人表操作。JS index-ClLZrkiM.js 不含模擬 SDK／Token、虛構草稿或 SW 標記；CSS index-CB3xEyJn.css 未變。CI、合併、Pages 與正式資產證據追加於本次 PR。
+
+## E33：雙分頁調整每週目標時保留草稿，不覆蓋新值
+
+接續 E28 偏好跨分頁刷新，發現目標草稿雖保留，仍會覆蓋另一頁已更新的目標。先以 App 的 storage 已送達／尚未送達兩情境重現，原 240 分被舊草稿 175 分取代；舊正式產物的 320px 真實雙分頁也重現同樣寫入結果。
+
+WeeklyGoal 改為記住開啟時的目標，讓 defaultValue 固定在這次編輯基準。現在收到不同目標時，保留已輸入的數字，甚至尚未修改的欄位也維持原值；以 form alert 顯示目前目標、停用儲存，直接 submit 同樣不執行保存。取消清除基準與驗證回饋，下次開啟才採最新值。原 10–2000 分鐘範圍、草稿更新鎖、取消／成功後焦點及一般分鐘更新不變。
+
+App 儲存目標時向 usePreferences.update 傳入畫面上預期的目標。update 先重讀目前帳號／檔案分區；目標已不同就不執行修改函式、不寫入，更新目前偏好讓表單提示衝突並回傳 false。即使 storage／前景通知尚未送達，也能擋住寫前已存在的新值。只有收藏／觀看改變且目標仍相同時，沿用最新其他欄位再寫入，不誤阻擋。正常偏好更新與 JSON 還原未傳此選用基準，維持原本明確操作語意；壞檔、配額與儲存權限失敗仍保留原內容。
+
+新增八項單元／整合情境：修改過與未修改的草稿遇到新目標、僅運動分鐘變化、本機與雲端分區的未通知新目標、其他偏好更新仍可儲存，以及 App 已通知／未通知的舊草稿提交。覆蓋不寫回、保留原始字串、草稿與更新鎖、取消重開採新值，以及運動資料不變。瀏覽器新增一個真實雙分頁情境各跑三種尺寸，包含 150→B 存 240→A 的 175 不覆蓋→取消重開→明確存 260，最後離線匯出與重開，收藏／觀看與完整紀錄保留。
+
+官方依據（2026-11-08 實際讀取）：WHATWG Web Storage 明載應假定多個 agent cluster 沒有鎖，讀後寫仍可能競爭。因此本輪只比較寫前讀到的內容，不宣稱原子 compare-and-swap，也未建立跨裝置同步。React 的 input 文件將 defaultValue 定義為初始值，表單維持這次編輯的基準，避免以外部新值重設草稿。
+
+- https://html.spec.whatwg.org/multipage/webstorage.html
+- https://react.dev/reference/react-dom/components/input
+
+手動方式：在同一瀏覽器開兩個 PWA 分頁，A 調整目標輸入 175，B 存 240。A 應保留 175、提示目前為 240 並不能儲存；先記下需要的數值，取消再開應採 240。重新明確輸入新目標可正常儲存，收藏／觀看及運動紀錄不應改變，備份應帶目前目標。未變更目標而只增加運動或收藏時，不應阻擋 A 儲存。
+
+限制：只處理同一瀏覽器／儲存分區，不代表 Safari 與 iOS 主畫面 PWA 共用資料，也不是跨裝置目標同步。localStorage 寫前比對不是原子鎖；真人 iPhone／VoiceOver 與既有 Google／健康捷徑實機驗收仍待完成。沒有新增 Google API、scope、Sheet schema、儲存 key、JSON 格式、Token、依賴、計時器或 CSS。
+
+E33 本機檢查已完成：npm ci、410 項 Vitest（42 檔）、8 項 Python、正式建置、瀏覽器型別檢查、Prettier 與 git diff --check 通過；正式產物完整通過 90 個 Playwright 案例（3.7 分鐘）。2026-11-09 接獲 redesign/ring-dashboard 交接，先將此輪工作保存至 fix/weekly-goal-conflict 分支，尚未送 PR／部署，優先整合新版 P0，之後再在新介面接回此修正。

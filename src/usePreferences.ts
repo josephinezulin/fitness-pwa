@@ -59,11 +59,21 @@ export function usePreferences(
       document.removeEventListener("visibilitychange", foreground);
     };
   }, [key]);
-  function update(change: (current: Preferences) => Preferences) {
+  function update(
+    change: (current: Preferences) => Preferences,
+    expectedWeeklyGoal?: number,
+  ) {
     try {
-      const next = validatePreferences(
-        change(readPreferences(localStorage, key)),
-      );
+      const latest = readPreferences(localStorage, key);
+      if (
+        expectedWeeklyGoal !== undefined &&
+        latest.weeklyGoal !== expectedWeeklyGoal
+      ) {
+        // Refresh the editor's goal so it can explain the conflict while retaining its draft.
+        setState({ key, value: latest });
+        return false;
+      }
+      const next = validatePreferences(change(latest));
       localStorage.setItem(key, JSON.stringify(next));
       setState({ key, value: next });
       return true;

@@ -495,7 +495,10 @@ export function App() {
               }
               logs={<WorkoutLogs {...logsProps} limit={4} />}
               onGoalChange={(weeklyGoal) =>
-                preferences.update((p) => ({ ...p, weeklyGoal }))
+                preferences.update(
+                  (p) => ({ ...p, weeklyGoal }),
+                  preferences.value.weeklyGoal,
+                )
               }
               onGoalDraftChange={setGoalDraftOpen}
               onSchedule={() => setPage("本週課表")}

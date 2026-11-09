@@ -219,3 +219,51 @@ describe("personal experience preferences", () => {
     ).toBe(1);
   });
 });
+
+it.each([null, a])(
+  "checks the expected goal against fresh storage in scope %j before changing preferences",
+  (scope) => {
+    const key = preferenceKey(scope),
+      onError = vi.fn();
+    const { result } = renderHook(() => usePreferences(key, onError));
+    const latest = {
+      ...defaultPreferences,
+      weeklyGoal: 240,
+      favorites: ["v7AYKMP6rOE"],
+      seen: { v7AYKMP6rOE: 2 },
+    };
+    const raw = JSON.stringify(latest);
+    localStorage.setItem(key, raw);
+    expect(result.current.value.weeklyGoal).toBe(150);
+    const change = vi.fn((p: typeof defaultPreferences) => ({
+      ...p,
+      weeklyGoal: 175,
+    }));
+    act(() => expect(result.current.update(change, 150)).toBe(false));
+    expect(change).not.toHaveBeenCalled();
+    expect(localStorage.getItem(key)).toBe(raw);
+    expect(result.current.value).toEqual(latest);
+    expect(onError).not.toHaveBeenCalled();
+  },
+);
+it("preserves fresh favorites and seen counts when the expected goal still matches", () => {
+  const key = preferenceKey(),
+    onError = vi.fn();
+  const { result } = renderHook(() => usePreferences(key, onError));
+  const latest = {
+    ...defaultPreferences,
+    favorites: ["v7AYKMP6rOE"],
+    seen: { v7AYKMP6rOE: 3 },
+  };
+  localStorage.setItem(key, JSON.stringify(latest));
+  act(() =>
+    expect(result.current.update((p) => ({ ...p, weeklyGoal: 180 }), 150)).toBe(
+      true,
+    ),
+  );
+  expect(readPreferences(localStorage, key)).toEqual({
+    ...latest,
+    weeklyGoal: 180,
+  });
+  expect(onError).not.toHaveBeenCalled();
+});

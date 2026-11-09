@@ -31,8 +31,10 @@ export function WeeklyGoal({
   onDraftChange?: (open: boolean) => void;
 }) {
   const id = useId();
-  const [editing, setEditing] = useState(false),
+  const [editingGoal, setEditingGoal] = useState<number | null>(null),
     [error, setError] = useState("");
+  const editing = editingGoal !== null;
+  const goalChanged = editing && goal !== editingGoal;
   const toggleRef = useRef<HTMLButtonElement>(null);
   useLayoutEffect(() => {
     onDraftChange?.(editing);
@@ -53,7 +55,7 @@ export function WeeklyGoal({
           aria-controls={editing ? `${id}-editor` : undefined}
           onClick={() => {
             setError("");
-            setEditing((value) => !value);
+            setEditingGoal(editing ? null : goal);
           }}
         >
           {editing ? "取消調整" : "調整目標"}
@@ -79,18 +81,25 @@ export function WeeklyGoal({
           className="goal-editor"
           onSubmit={(e) => {
             e.preventDefault();
+            if (goalChanged) return;
             const n = Number(new FormData(e.currentTarget).get("goal"));
             if (!Number.isInteger(n) || n < 10 || n > 2000) {
               setError("目標需為 10–2000 分鐘的整數。");
               return;
             }
             if (onChange(n)) {
-              setEditing(false);
+              setEditingGoal(null);
               setError("");
               toggleRef.current?.focus();
             }
           }}
         >
+          {goalChanged && (
+            <p className="notice" role="alert">
+              每週目標已更新為 {goal}{" "}
+              分鐘，草稿仍保留。請先記下需要的數值，再取消調整並重新開啟。
+            </p>
+          )}
           <label htmlFor={id}>每週目標（分鐘）</label>
           <input
             id={id}
@@ -101,9 +110,9 @@ export function WeeklyGoal({
             max="2000"
             step="1"
             required
-            defaultValue={goal}
+            defaultValue={editingGoal ?? goal}
           />
-          <button className="secondary" type="submit">
+          <button className="secondary" type="submit" disabled={goalChanged}>
             儲存目標
           </button>
           <p className="tiny muted">
@@ -193,8 +202,7 @@ export function WeeklyActivity({
               filterNull={false}
               content={({ active, payload }) => {
                 const row = payload?.[0]?.payload as
-                  | (WeeklyRow & { value: number | null })
-                  | undefined;
+                  (WeeklyRow & { value: number | null }) | undefined;
                 return (
                   <TrendTooltip
                     active={active}
