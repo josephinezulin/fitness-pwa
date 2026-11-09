@@ -3462,6 +3462,47 @@ header {
   height: 150px;
   margin: 8px -6px 4px;
 }
+.weight-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 8px 0 4px;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+.weight-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.weight-swatch {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: 24px;
+}
+.weight-swatch.measured {
+  height: 0;
+  border-top: 1.5px solid #9fb9a6;
+}
+.weight-swatch.measured::after {
+  content: "";
+  position: absolute;
+  top: -3.25px;
+  left: 10px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #9fb9a6;
+}
+.weight-swatch.average {
+  height: 3px;
+  background: linear-gradient(to right, #43c48a, #1f7a5a);
+}
+.weight-help {
+  margin: 0 0 10px;
+}
 .empty-chart {
   height: 40px;
 }

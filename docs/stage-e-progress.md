@@ -624,3 +624,19 @@ App 現在以既有 sameWorkout 比較開表單時的原運動與目前同 ID �
 - https://react.dev/reference/react-dom/components/input
 
 手動方式：兩頁開同工作區目標，A 填草稿、B 儲存新目標，A 應保留草稿並停止儲存；取消重開採 B 新值。A 沒改輸入也不得覆蓋；其他分頁只收藏影片不應阻擋目標儲存。沒有新增儲存 key、Sheet 欄位、OAuth scope 或健康資料 API。
+
+## E34：首頁體重雙曲線加上常駐圖例
+
+使用者回報分不清綠／灰線；在原圖下方補「當日體重」的細線圓點與「7 日平均」的綠色粗線圖例，並說明只計近七天有紀錄日，未記錄不補 0。Tooltip 名稱跟隨圖例；切到 30／90 天仍清楚標成 7 日平均。只改標示與說明，保留原灰色量測線、綠色漸層、monotone、資料／平均計算、時間範圍與原本空資料呈現；不改影片清單、API、權限、schema 或儲存。
+
+官方 WCAG 1.4.1（2026-11-09 實際讀取 HTTP 200）要求不用顏色作唯一識別，建議附文字／形狀；本輪同時使用文字、線粗與圓點，不靠 Tooltip 或辨色才能知道曲線意義。
+
+- https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html
+
+擴充既有三尺寸趨勢回歸：圖例可見且具名、7／30／90 天皆保留兩條原曲線及說明、無水平溢出、原資料不變，再接續既有缺值、真實零、鍵盤 Tooltip 與數值表。只用虛構 fixture；本人的健康資料只在已連接工具與對話核對，不寫入測試或 repo。
+
+手動方式：首頁體重卡應直接看到灰色細線圓點「當日體重」及綠色粗線「7 日平均」，切換範圍圖例不變；完整健康趨勢頁仍是該指標單一實測曲線。私人健康同步進度已修正為本人成功寫入／工具讀回，其他安全與背景情境尚待驗收；不重做已成功的 Google 或捷徑設定。
+
+檢查、PR CI、合併與 Pages 正式資產證據完成後追加於本輪 fix/weight-chart-legend → main 的 PR。
+
+E34 最終本機檢查：npm ci、424 項 Vitest（45 檔）、8 項 Python、TypeScript／Vite／Service Worker 建置、Prettier 與 git diff --check 通過；三個尺寸的圖例／曲線重點案例先通過，正式 dist 完整 105 個 Playwright（5.2 分鐘）全部通過、沒有略過。已目視檢查虛構資料的 320px／390px 圖例，曲線、文字及控制項保持可見。JS index-Dkoe0-mr.js、CSS index-Ctde04Ff.css；最終 CI／合併／Pages 證據追加於本輪 PR。
