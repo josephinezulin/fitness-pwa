@@ -40,28 +40,10 @@ import { CountUp } from "../motion-ui";
 const WEEKDAY = "一二三四五六日";
 const spring = { type: "spring", stiffness: 500, damping: 26 } as const;
 
-function CheckBox({
-  checked,
-  disabled,
-  label,
-  onToggle,
-}: {
-  checked: boolean;
-  disabled?: boolean;
-  label: string;
-  onToggle: () => void;
-}) {
+/** Visual tick only; the whole row is the interactive checkbox. */
+function CheckMark({ checked }: { checked: boolean }) {
   return (
-    <motion.button
-      type="button"
-      className={"check-box" + (checked ? " on" : "")}
-      role="checkbox"
-      aria-checked={checked}
-      aria-label={label}
-      disabled={disabled}
-      onClick={onToggle}
-      whileTap={{ scale: 0.82 }}
-    >
+    <span className={"check-box" + (checked ? " on" : "")} aria-hidden="true">
       {checked && (
         <motion.span
           initial={{ scale: 0, rotate: -30 }}
@@ -71,7 +53,7 @@ function CheckBox({
           <Check size={16} strokeWidth={3} />
         </motion.span>
       )}
-    </motion.button>
+    </span>
   );
 }
 
@@ -97,7 +79,8 @@ export function suggestVideo(
   return list[(hash + offset) % list.length];
 }
 
-export function TodayCard({
+/** Short video for days with nothing planned, or a stretch once today's plan is done. */
+export function TodaySuggestion({
   plans,
   workouts,
   viewToday,
@@ -105,8 +88,6 @@ export function TodayCard({
   canEdit,
   seen,
   hidden,
-  onCheck,
-  onUncheck,
   onVideoDone,
 }: {
   plans: WorkoutPlan[];
@@ -116,8 +97,6 @@ export function TodayCard({
   canEdit: boolean;
   seen: Record<string, number>;
   hidden: string[];
-  onCheck: (plan: WorkoutPlan, date: string) => void;
-  onUncheck: (plan: WorkoutPlan, date: string) => void;
   onVideoDone: (video: Video) => void;
 }) {
   const index = days.indexOf(viewToday);
@@ -138,50 +117,20 @@ export function TodayCard({
       )
     : null;
   return (
-    <article className="card today-card">
-      <div className="card-title">
-        <h2>今天</h2>
-        <span className="muted">
-          {viewToday.slice(5).replace("-", "/")} 週{WEEKDAY[index] ?? ""}
-        </span>
-      </div>
-      {today.map((p) => {
-        const done = completed(workouts, viewToday, p.type);
-        return (
-          <div className={"todo" + (done ? " done" : "")} key={p.id}>
-            <CheckBox
-              checked={done}
-              disabled={!canEdit}
-              label={`${p.title}${done ? "（已完成）" : ""}`}
-              onToggle={() =>
-                done ? onUncheck(p, viewToday) : onCheck(p, viewToday)
-              }
-            />
-            <div className="grow">
-              <strong>{p.title}</strong>
-              <span>
-                {p.minMinutes === p.maxMinutes
-                  ? p.minMinutes
-                  : `${p.minMinutes}–${p.maxMinutes}`}{" "}
-                分
-              </span>
-            </div>
-          </div>
-        );
-      })}
-      {allDone && (
-        <motion.p
-          className="cheer"
-          initial={{ opacity: 0, scale: 0.6 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={spring}
-          aria-hidden="true"
-        >
-          💪
-        </motion.p>
-      )}
+    <>
       {video && (
         <div className="suggest">
+          <div className="suggest-label">
+            {allDone ? (
+              <span aria-hidden="true">💪</span>
+            ) : (
+              <BedDouble size={16} aria-hidden="true" />
+            )}
+            <span>
+              今天 · {video.category}
+              {video.minutes ? ` · ${video.minutes} 分` : ""}
+            </span>
+          </div>
           <div className="suggest-label">
             <BedDouble size={16} aria-hidden="true" />
             <span>
@@ -241,7 +190,7 @@ export function TodayCard({
           </div>
         </div>
       )}
-    </article>
+    </>
   );
 }
 
@@ -299,15 +248,27 @@ export function WeekChecklist({
           const done = completed(workouts, date, p.type);
           const future = date > viewToday;
           return (
-            <li key={p.id} className={done ? "done" : ""}>
-              <CheckBox
-                checked={done}
+            <li
+              key={p.id}
+              className={
+                (done ? "done" : "") + (date === viewToday ? " is-today" : "")
+              }
+            >
+              <motion.button
+                type="button"
+                className="week-row"
+                role="checkbox"
+                aria-checked={done}
+                aria-label={`週${WEEKDAY[p.weekday - 1]} ${p.title}${date === viewToday ? "（今天）" : ""}${done ? "（已完成）" : ""}`}
                 disabled={!canEdit || future}
-                label={`週${WEEKDAY[p.weekday - 1]} ${p.title}${done ? "（已完成）" : ""}`}
-                onToggle={() => (done ? onUncheck(p, date) : onCheck(p, date))}
-              />
-              <span className="day">週{WEEKDAY[p.weekday - 1]}</span>
-              <span className="grow">{p.title}</span>
+                onClick={() => (done ? onUncheck(p, date) : onCheck(p, date))}
+                whileTap={{ scale: 0.98 }}
+              >
+                <CheckMark checked={done} />
+                <span className="day">週{WEEKDAY[p.weekday - 1]}</span>
+                <span className="grow title">{p.title}</span>
+                {date === viewToday && <span className="today-tag">今天</span>}
+              </motion.button>
             </li>
           );
         })}

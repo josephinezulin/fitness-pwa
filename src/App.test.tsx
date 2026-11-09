@@ -676,7 +676,9 @@ it("checks off today's plan through a prefilled form and confirms before removin
     JSON.parse(localStorage.getItem(LOCAL_KEY) || '{"workouts":[]}')
       .workouts as Workout[];
   render(<App />);
-  fireEvent.click(screen.getByRole("checkbox", { name: "健身房上坡快走" }));
+  fireEvent.click(
+    screen.getByRole("checkbox", { name: "週三 健身房上坡快走（今天）" }),
+  );
   expect(
     screen.getAllByRole("spinbutton", { name: /第 .* 段分鐘/ }),
   ).toHaveLength(3);
@@ -689,7 +691,7 @@ it("checks off today's plan through a prefilled form and confirms before removin
     { date: "2026-11-04", type: "walk", minutes: 55 },
   ]);
   const done = screen.getByRole("checkbox", {
-    name: "健身房上坡快走（已完成）",
+    name: "週三 健身房上坡快走（今天）（已完成）",
   });
   expect(done.getAttribute("aria-checked")).toBe("true");
   fireEvent.click(done);

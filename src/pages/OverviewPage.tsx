@@ -1,7 +1,12 @@
 import { WeeklyGoal } from "../WeeklyActivity";
 import type { Metric, Workout, WorkoutPlan } from "../model";
 import type { Video } from "../videos";
-import { MiniStats, TodayCard, WeekChecklist, WeightCard } from "./HomeCards";
+import {
+  MiniStats,
+  TodaySuggestion,
+  WeekChecklist,
+  WeightCard,
+} from "./HomeCards";
 
 export function OverviewPage({
   metrics,
@@ -53,12 +58,6 @@ export function OverviewPage({
   };
   return (
     <div className="home">
-      <TodayCard
-        {...checks}
-        seen={seen}
-        hidden={hidden}
-        onVideoDone={onVideoDone}
-      />
       <WeeklyGoal
         minutes={weekMinutes}
         goal={weeklyGoal}
@@ -66,6 +65,12 @@ export function OverviewPage({
         onDraftChange={onGoalDraftChange}
       >
         <WeekChecklist {...checks} />
+        <TodaySuggestion
+          {...checks}
+          seen={seen}
+          hidden={hidden}
+          onVideoDone={onVideoDone}
+        />
       </WeeklyGoal>
       <WeightCard
         metrics={metrics}
