@@ -2320,6 +2320,11 @@ body {
 }
 .sr-only {
   position: absolute !important;
+  left: 0;
+  top: 0;
+  margin: -1px;
+  padding: 0;
+  border: 0;
   width: 1px;
   height: 1px;
   overflow: hidden;
@@ -3569,4 +3574,140 @@ header {
   border-radius: 28px 28px 0 0 !important;
   max-height: 92dvh;
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* First-time setup */
+.onboarding {
+  justify-content: space-between;
+  padding-top: calc(20px + env(safe-area-inset-top));
+}
+.onboarding-top {
+  width: min(420px, 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.onboarding .dots {
+  display: flex;
+  gap: 6px;
+}
+.onboarding .dots i {
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--brand);
+}
+.onboarding-stage {
+  width: min(420px, 100%);
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+.onboarding-card {
+  width: 100%;
+  padding: 28px 22px !important;
+  text-align: left;
+}
+.onboarding-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(135deg, var(--ring-a), var(--brand));
+  margin-bottom: 18px;
+}
+.onboarding-card h2 {
+  font-size: 24px;
+  margin: 0 0 20px;
+}
+.onboarding-card input,
+.onboarding-card select {
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(31, 90, 67, 0.18);
+  background: rgba(255, 255, 255, 0.85);
+  font-size: 18px;
+}
+.unit-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.unit-input input {
+  font-size: 28px !important;
+  font-weight: 700;
+}
+.unit-input span {
+  font-size: 16px;
+  color: var(--muted);
+}
+.goal-chips {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.goal-chips button,
+.day-toggles button {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: rgba(31, 90, 67, 0.07);
+  color: var(--brand);
+  font-size: 15px;
+}
+.goal-chips button.on,
+.day-toggles button.on {
+  color: #fff;
+  background: linear-gradient(135deg, var(--ring-a), var(--brand));
+}
+.day-toggles {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.day-toggles button {
+  padding: 0;
+  min-width: 0;
+  width: 100%;
+  aspect-ratio: 1;
+  min-height: 0;
+  font-size: 14px;
+}
+@media (max-width: 360px) {
+  .day-toggles {
+    gap: 4px;
+  }
+  .onboarding-card {
+    padding: 24px 16px !important;
+  }
+}
+.day-type {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 15px;
+  color: var(--muted);
+}
+.day-type select {
+  min-height: 46px;
+  font-size: 16px;
+}
+.onboarding-nav {
+  width: min(420px, 100%);
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 12px;
+  align-items: center;
+}
+.onboarding-nav .primary {
+  min-height: 54px;
+  font-size: 16px;
 }

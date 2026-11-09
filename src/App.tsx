@@ -29,7 +29,14 @@ import {
   MonitorPlay,
 } from "lucide-react";
 import { Welcome } from "./Welcome";
-import { readAccount, readEntry, writeEntry } from "./entry";
+import {
+  readAccount,
+  readEntry,
+  readProfile,
+  writeEntry,
+  writeProfile,
+} from "./entry";
+import { Onboarding, type OnboardingResult } from "./Onboarding";
 
 const ease = [0.16, 1, 0.3, 1] as const;
 /** Enter transition for a page; keyed by page so switching tabs replays it. */
@@ -118,6 +125,35 @@ export function App() {
     }
   }, [workspace.cloud, entry]);
   const showWelcome = !workspace.cloud && entry !== "local" && !browsing;
+  const [profile, setProfile] = useState(() => readProfile(localStorage));
+  // First-time setup only for local browsing with an empty device workspace.
+  const showOnboarding =
+    !showWelcome &&
+    !workspace.cloud &&
+    entry === "local" &&
+    !profile.onboarded &&
+    // Unreadable storage looks empty; never cover the recovery flow with setup.
+    !workspace.storageError &&
+    !workspace.localRecovery &&
+    !workspace.data.workouts.length &&
+    !workspace.data.metrics.length;
+  const finishOnboarding = (result: OnboardingResult) => {
+    const next = { ...workspace.data };
+    if (result.weight !== null)
+      next.metrics = [
+        ...next.metrics.filter((m) => m.date !== viewToday),
+        { id: crypto.randomUUID(), date: viewToday, weight: result.weight },
+      ];
+    if (result.plans) next.plans = result.plans;
+    if (result.weight !== null || result.plans) save(next);
+    if (result.weeklyGoal !== null) {
+      const weeklyGoal = result.weeklyGoal;
+      preferences.update((p) => ({ ...p, weeklyGoal }));
+    }
+    const done = { onboarded: true, nickname: result.nickname };
+    writeProfile(localStorage, done);
+    setProfile(done);
+  };
   const draftOpen = !!modal || planDraftOpen || videoDraftOpen || goalDraftOpen;
   const preferences = usePreferences(
     preferenceKey(workspace.cloud),
@@ -397,7 +433,9 @@ export function App() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, ease }}
                 >
-                  {page === "首頁" ? greeting() : page}
+                  {page === "首頁"
+                    ? `${greeting()}${profile.nickname ? `，${profile.nickname}` : ""}`
+                    : page}
                 </motion.h1>
                 {page === "首頁" && <p className="tagline">{tagline}</p>}
               </div>
@@ -737,6 +775,7 @@ export function App() {
             </SettingsPage>
           </div>
         </main>
+        {showOnboarding && <Onboarding onFinish={finishOnboarding} />}
         {showWelcome && (
           <Welcome
             account={readAccount(localStorage)}

@@ -95,6 +95,11 @@ export const test = base.extend({
         // These tests cover the signed-out workspace, so skip the welcome screen.
         if (!localStorage.getItem("daily-movement-entry-v1"))
           localStorage.setItem("daily-movement-entry-v1", "local");
+        if (!localStorage.getItem("daily-movement-profile-v1"))
+          localStorage.setItem(
+            "daily-movement-profile-v1",
+            JSON.stringify({ onboarded: true, nickname: "" }),
+          );
       },
       { key: STORAGE_KEY, data: fixtureData, origin: ORIGIN },
     );

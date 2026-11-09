@@ -90,6 +90,10 @@ beforeEach(() => {
   localStorage.clear();
   // Skip the welcome screen; these tests exercise the signed-out local workspace.
   localStorage.setItem("daily-movement-entry-v1", "local");
+  localStorage.setItem(
+    "daily-movement-profile-v1",
+    JSON.stringify({ onboarded: true, nickname: "" }),
+  );
   Object.defineProperty(navigator, "onLine", {
     configurable: true,
     value: false,
@@ -916,3 +920,52 @@ it.each(["updated", "deleted"])(
     expect(localStorage.getItem(LOCAL_KEY)).toBeNull();
   },
 );
+it("browsing first asks for a short setup and keeps the answers on this device", () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-11-04T12:00:00Z"));
+  localStorage.removeItem("daily-movement-entry-v1");
+  localStorage.removeItem("daily-movement-profile-v1");
+  const view = render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "先逛逛" }));
+  expect(screen.getByRole("dialog", { name: "初次設定" })).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("暱稱"), {
+    target: { value: "小明" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /下一步/ }));
+  fireEvent.change(screen.getByLabelText("目前體重（kg）"), {
+    target: { value: "68.4" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /下一步/ }));
+  fireEvent.click(screen.getByRole("button", { name: "210" }));
+  fireEvent.click(screen.getByRole("button", { name: /下一步/ }));
+  fireEvent.click(screen.getByRole("button", { name: "週五" }));
+  fireEvent.change(screen.getByLabelText("週五運動"), {
+    target: { value: "yoga" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /開始/ }));
+  expect(screen.queryByRole("dialog", { name: "初次設定" })).toBeNull();
+  const stored = JSON.parse(localStorage.getItem(LOCAL_KEY)!);
+  expect(stored.metrics).toMatchObject([{ date: "2026-11-04", weight: 68.4 }]);
+  expect(
+    stored.plans.map((p: { weekday: number; type: string }) => [
+      p.weekday,
+      p.type,
+    ]),
+  ).toEqual([
+    [1, "home"],
+    [3, "walk"],
+    [5, "yoga"],
+    [6, "home"],
+  ]);
+  expect(
+    JSON.parse(localStorage.getItem(preferenceKey(null))!).weeklyGoal,
+  ).toBe(210);
+  expect(screen.getByRole("heading", { level: 1 }).textContent).toContain(
+    "小明",
+  );
+  view.unmount();
+  render(<App />);
+  expect(screen.queryByRole("dialog", { name: "初次設定" })).toBeNull();
+  expect(screen.queryByRole("dialog", { name: "日常動作" })).toBeNull();
+  expect(screen.getByText(/68\.4/)).toBeTruthy();
+});
