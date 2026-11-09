@@ -15,7 +15,11 @@ import { testInspection } from "./test-fixtures";
 import { readOutbox } from "./outbox";
 import { LOCAL_KEY } from "./workspace";
 import { preferenceKey } from "./preferences";
-const lifecycle = vi.hoisted(() => ({ mounts: 0, unmounts: 0 }));
+const lifecycle = vi.hoisted(() => ({
+  mounts: 0,
+  unmounts: 0,
+  snapshot: null as ReturnType<typeof testInspection> | null,
+}));
 vi.mock("./pages/HealthChart", () => ({
   HealthChart: () => <div>健康圖表</div>,
 }));
@@ -44,7 +48,7 @@ vi.mock("./CloudPanel", async () => {
             <button
               key={subject}
               onClick={() => {
-                const inspection = testInspection();
+                const inspection = lifecycle.snapshot ?? testInspection();
                 inspection.data!.plans![0].title = `帳號${subject}課表`;
                 inspection.source!.grids.WorkoutPlans[1][3] = `帳號${subject}課表`;
                 onSessionChange({
@@ -80,6 +84,7 @@ function openSettings() {
   fireEvent.click(screen.getByRole("button", { name: "設定與備份" }));
 }
 beforeEach(() => {
+  lifecycle.snapshot = null;
   lifecycle.mounts = 0;
   lifecycle.unmounts = 0;
   localStorage.clear();
@@ -687,3 +692,227 @@ it("checks off today's plan through a prefilled form and confirms before removin
   expect(confirm).toHaveBeenCalledWith(expect.stringContaining("11/04"));
   expect(saved()).toHaveLength(0);
 });
+
+it.each(["note", "segments", "deleted", "unchanged", "other"])(
+  "preserves the workout draft and checks its base after a cloud %s change",
+  async (change) => {
+    const source = testInspection().source!;
+    const original: Workout = {
+      id: "fictional-edit-target",
+      date: today(),
+      type: "walk",
+      minutes: 30,
+      calories: 123,
+      note: "虛構原始運動",
+      segments: [{ minutes: 30, speed: 5, incline: 2 }],
+    };
+    source.grids.WorkoutLogs.push([
+      original.id,
+      original.date,
+      "Asia/Taipei",
+      original.type,
+      30,
+      123,
+      original.note,
+      "pwa",
+      1,
+      "2026-11-06T12:00:00.000Z",
+      "",
+    ]);
+    source.grids.TreadmillSegments!.push([
+      "fictional-segment",
+      original.id,
+      1,
+      30,
+      5,
+      2,
+      "2026-11-06T12:00:00.000Z",
+      "",
+    ]);
+    lifecycle.snapshot = testInspection(source);
+    render(<App />);
+    openSettings();
+    await act(async () => fireEvent.click(screen.getByText("連線測試帳號A")));
+    fireEvent.click(screen.getByRole("button", { name: "紀錄" }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("編輯運動")).toHaveProperty(
+        "disabled",
+        false,
+      ),
+    );
+    fireEvent.click(screen.getByLabelText("編輯運動"));
+    fireEvent.change(screen.getByRole("textbox", { name: "備註" }), {
+      target: { value: "虛構保留的草稿" },
+    });
+    const newer = structuredClone(source);
+    if (change === "note") newer.grids.WorkoutLogs[1][6] = "虛構雲端新備註";
+    if (change === "segments") newer.grids.TreadmillSegments![1][4] = 6;
+    if (change === "deleted")
+      newer.grids.WorkoutLogs[1][10] = "2026-11-07T12:00:00.000Z";
+    if (change === "unchanged") newer.grids.WorkoutLogs[1][8] = 2;
+    if (change === "other")
+      newer.grids.WorkoutLogs.push([
+        "fictional-other-workout",
+        original.date,
+        "Asia/Taipei",
+        "yoga",
+        10,
+        0,
+        "虛構其他運動",
+        "pwa",
+        1,
+        "2026-11-06T12:00:00.000Z",
+        "",
+      ]);
+    lifecycle.snapshot = testInspection(newer);
+    await act(async () => fireEvent.click(screen.getByText("連線測試帳號A")));
+    if (change === "unchanged" || change === "other") {
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(screen.getByRole("textbox", { name: "備註" })).toHaveProperty(
+        "value",
+        "虛構保留的草稿",
+      );
+      expect(screen.getByRole("button", { name: "儲存紀錄" })).toHaveProperty(
+        "disabled",
+        false,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "儲存紀錄" }));
+      const queue = readOutbox(localStorage, {
+        subject: "A",
+        spreadsheetId: "sheet-private-1",
+      });
+      expect(queue).toHaveLength(1);
+      expect(queue[0].value).toEqual(
+        expect.objectContaining({ id: original.id, note: "虛構保留的草稿" }),
+      );
+      if (change === "unchanged")
+        expect(queue[0].base).toEqual(expect.objectContaining({ revision: 2 }));
+      else expect(screen.getByText("虛構其他運動")).toBeTruthy();
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(localStorage.getItem(LOCAL_KEY)).toBeNull();
+      return;
+    }
+    expect(screen.getByRole("alert").textContent).toContain(
+      "運動紀錄已更新或刪除",
+    );
+    expect(screen.getByRole("textbox", { name: "備註" })).toHaveProperty(
+      "value",
+      "虛構保留的草稿",
+    );
+    expect(screen.getByRole("button", { name: "儲存紀錄" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+    // A forced form submission must not bypass the disabled control.
+    fireEvent.submit(
+      screen.getByRole("button", { name: "儲存紀錄" }).closest("form")!,
+    );
+    expect(
+      readOutbox(localStorage, {
+        subject: "A",
+        spreadsheetId: "sheet-private-1",
+      }),
+    ).toEqual([]);
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "測試更新版本" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "關閉" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    if (change === "deleted")
+      expect(screen.queryByLabelText("編輯運動")).toBeNull();
+    else {
+      fireEvent.click(screen.getByLabelText("編輯運動"));
+      expect(screen.queryByRole("alert")).toBeNull();
+      if (change === "note")
+        expect(screen.getByRole("textbox", { name: "備註" })).toHaveProperty(
+          "value",
+          "虛構雲端新備註",
+        );
+      else
+        expect(
+          screen.getByRole("spinbutton", { name: "第 1 段速度" }),
+        ).toHaveProperty("value", "6");
+      expect(screen.getByRole("button", { name: "儲存紀錄" })).toHaveProperty(
+        "disabled",
+        false,
+      );
+    }
+    expect(localStorage.getItem(LOCAL_KEY)).toBeNull();
+  },
+);
+
+it.each(["updated", "deleted"])(
+  "does not queue a stale cloud video draft after %s refresh",
+  async (change) => {
+    const source = testInspection().source!;
+    source.grids.Videos!.push([
+      "fictional-cloud-video",
+      "https://youtu.be/v7AYKMP6rOE",
+      "虛構雲端原影片",
+      "瑜伽",
+      20,
+      "2026-11-06T12:00:00.000Z",
+      "",
+    ]);
+    lifecycle.snapshot = testInspection(source);
+    render(<App />);
+    openSettings();
+    await act(async () => fireEvent.click(screen.getByText("連線測試帳號A")));
+    fireEvent.click(screen.getByRole("button", { name: "影片" }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "編輯影片：虛構雲端原影片" }),
+      ).toHaveProperty("disabled", false),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "編輯影片：虛構雲端原影片" }),
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: "名稱" }), {
+      target: { value: "虛構未提交影片草稿" },
+    });
+    const next = structuredClone(source);
+    if (change === "updated") next.grids.Videos![1][2] = "虛構雲端新影片";
+    else next.grids.Videos![1][6] = "2026-11-07T12:00:00.000Z";
+    lifecycle.snapshot = testInspection(next);
+    await act(async () => fireEvent.click(screen.getByText("連線測試帳號A")));
+    fireEvent.submit(
+      screen.getByRole("button", { name: "儲存影片" }).closest("form")!,
+    );
+    expect(
+      readOutbox(localStorage, {
+        subject: "A",
+        spreadsheetId: "sheet-private-1",
+      }),
+    ).toEqual([]);
+    expect(screen.getByRole("alert").textContent).toContain("影片已更新或刪除");
+    expect(screen.getByRole("textbox", { name: "名稱" })).toHaveProperty(
+      "value",
+      "虛構未提交影片草稿",
+    );
+    expect(screen.getByRole("button", { name: "測試更新版本" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "取消" }));
+    expect(screen.getByRole("button", { name: "測試更新版本" })).toHaveProperty(
+      "disabled",
+      false,
+    );
+    if (change === "updated") {
+      fireEvent.click(
+        screen.getByRole("button", { name: "編輯影片：虛構雲端新影片" }),
+      );
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(screen.getByRole("textbox", { name: "名稱" })).toHaveProperty(
+        "value",
+        "虛構雲端新影片",
+      );
+    } else
+      expect(
+        screen.queryByRole("button", { name: "編輯影片：虛構雲端原影片" }),
+      ).toBeNull();
+    expect(localStorage.getItem(LOCAL_KEY)).toBeNull();
+  },
+);

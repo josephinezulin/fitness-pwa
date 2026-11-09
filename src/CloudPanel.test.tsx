@@ -10,7 +10,9 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CloudPanel } from "./CloudPanel";
-import { rememberSelection, selectionKey } from "./workspace";
+import { readSelection, rememberSelection, selectionKey } from "./workspace";
+import { testSource } from "./test-fixtures";
+import type { SheetInspection } from "./sheets";
 const mock = vi.hoisted(() => ({
   login: vi.fn(),
   prepare: vi.fn(),
@@ -41,7 +43,7 @@ const session = (subject = "A") => ({
   email: `${subject.toLowerCase()}@example.com`,
   expiresAt: Date.now() + 3600000,
 });
-const inspection = () => ({
+const inspection = (): SheetInspection => ({
   id: "sheet-private-1",
   title: "私人表",
   timezone: "Asia/Taipei",
@@ -77,13 +79,24 @@ async function ready() {
     ).toBe(false),
   );
 }
-async function connect() {
+async function connect(automatic = false) {
   await ready();
+  const first = !readSelection(localStorage, "A");
+  // Cancel the automatic first-login picker; individual tests exercise explicit selection separately.
+  if (first && !automatic) mock.choose.mockResolvedValueOnce(null);
   fireEvent.click(screen.getByRole("button", { name: "使用 Google 登入" }));
   await screen.findByText("a@example.com");
+  if (first && !automatic) {
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+      ).toHaveProperty("disabled", false),
+    );
+    mock.choose.mockClear();
+  }
 }
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   localStorage.clear();
   mock.config.mockResolvedValue(config);
   mock.prepare.mockResolvedValue(undefined);
@@ -114,6 +127,345 @@ describe("Google connection lifecycle", () => {
       ).disabled,
     ).toBe(true);
     expect(mock.prepare).not.toHaveBeenCalled();
+  });
+  it("immediately applies and remembers a first valid pick, restoring it on the next login", async () => {
+    const result = { ...inspection(), source: testSource() };
+    mock.inspect.mockResolvedValue(result);
+    const p = props();
+    render(<CloudPanel {...p} />);
+    await connect();
+    expect(p.onUseSnapshot).not.toHaveBeenCalled();
+    fireEvent.click(
+      screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+    );
+    await screen.findByText("格式檢查通過");
+    expect(p.onUseSnapshot).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ subject: "A", spreadsheetId: result.id }),
+      result.data,
+      result.source,
+    );
+    expect(readSelection(localStorage, "A")).toEqual({
+      id: result.id,
+      title: result.title,
+    });
+    expect(
+      screen.queryByRole("button", { name: "在首頁查看這份雲端資料" }),
+    ).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "登出" }));
+    await connect();
+    await waitFor(() => expect(p.onUseSnapshot).toHaveBeenCalledTimes(2));
+    expect(mock.choose).toHaveBeenCalledTimes(1);
+    expect(mock.inspect).toHaveBeenNthCalledWith(
+      2,
+      result.id,
+      expect.objectContaining({ subject: "A" }),
+      expect.any(AbortSignal),
+    );
+    expect(
+      [...Array(localStorage.length)]
+        .map((_, i) => localStorage.getItem(localStorage.key(i)!))
+        .join(""),
+    ).not.toContain("memory-only");
+  });
+  it.each(["invalid", "missing-data"])(
+    "does not activate or remember a picked result that is %s",
+    async (kind) => {
+      const result = inspection();
+      if (kind === "invalid")
+        result.report = {
+          ...result.report,
+          ok: false,
+          errors: ["虛構格式錯誤"],
+        };
+      else delete (result as Partial<ReturnType<typeof inspection>>).data;
+      mock.inspect.mockResolvedValue(result);
+      const p = props();
+      render(<CloudPanel {...p} />);
+      await connect();
+      fireEvent.click(
+        screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+      );
+      await screen.findByText(
+        kind === "invalid" ? "格式尚未符合需求" : "格式檢查通過",
+      );
+      expect(p.onUseSnapshot).not.toHaveBeenCalled();
+      expect(readSelection(localStorage, "A")).toBeNull();
+    },
+  );
+  it("does not inspect or change the selection when the picker is cancelled", async () => {
+    mock.choose.mockResolvedValue(null);
+    const p = props();
+    render(<CloudPanel {...p} />);
+    await connect();
+    fireEvent.click(
+      screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+    );
+    await waitFor(() => expect(mock.choose).toHaveBeenCalledOnce());
+    expect(mock.inspect).not.toHaveBeenCalled();
+    expect(p.onUseSnapshot).not.toHaveBeenCalled();
+    expect(readSelection(localStorage, "A")).toBeNull();
+  });
+  it("does not apply or remember a picker response after logout and another account login", async () => {
+    let finish!: (value: ReturnType<typeof inspection>) => void;
+    mock.inspect.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    mock.login
+      .mockResolvedValueOnce(session("A"))
+      .mockResolvedValueOnce(session("B"));
+    const p = props();
+    render(<CloudPanel {...p} />);
+    await connect();
+    fireEvent.click(
+      screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+    );
+    await waitFor(() => expect(mock.inspect).toHaveBeenCalledOnce());
+    const signal = mock.inspect.mock.calls[0][2] as AbortSignal;
+    fireEvent.click(screen.getByRole("button", { name: "登出" }));
+    expect(signal.aborted).toBe(true);
+    await ready();
+    mock.choose.mockResolvedValueOnce(null);
+    fireEvent.click(screen.getByRole("button", { name: "使用 Google 登入" }));
+    await screen.findByText("b@example.com");
+    await act(async () => finish(inspection()));
+    expect(p.onUseSnapshot).not.toHaveBeenCalled();
+    expect(readSelection(localStorage, "A")).toBeNull();
+    expect(readSelection(localStorage, "B")).toBeNull();
+  });
+  it("rejects an otherwise valid picked result if the session has expired", async () => {
+    const current = session();
+    mock.login.mockResolvedValue(current);
+    let finish!: (value: ReturnType<typeof inspection>) => void;
+    mock.inspect.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const p = props();
+    render(<CloudPanel {...p} />);
+    await connect();
+    fireEvent.click(
+      screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+    );
+    await waitFor(() => expect(mock.inspect).toHaveBeenCalledOnce());
+    const now = vi.spyOn(Date, "now").mockReturnValue(current.expiresAt + 1);
+    try {
+      await act(async () => finish(inspection()));
+      expect(p.onUseSnapshot).not.toHaveBeenCalled();
+      expect(readSelection(localStorage, "A")).toBeNull();
+    } finally {
+      now.mockRestore();
+    }
+  });
+  it("keeps a valid selection usable and explains when remembering is denied", async () => {
+    const p = props();
+    render(<CloudPanel {...p} />);
+    await connect();
+    const write = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw Error("denied");
+      });
+    try {
+      fireEvent.click(
+        screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+      );
+      await screen.findByText(
+        "已讀取資料，但無法記住這份檔案，下次登入需重新選擇。",
+      );
+      expect(p.onUseSnapshot).toHaveBeenCalledOnce();
+    } finally {
+      write.mockRestore();
+    }
+  });
+  it("does not remember a new file when activation itself fails", async () => {
+    const p = props();
+    p.onUseSnapshot.mockImplementation(() => {
+      throw Error("虛構套用失敗");
+    });
+    render(<CloudPanel {...p} />);
+    await connect();
+    fireEvent.click(
+      screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+    );
+    await screen.findByText("虛構套用失敗");
+    expect(readSelection(localStorage, "A")).toBeNull();
+  });
+  it("applies and remembers a repaired first selection after explicit reinspection", async () => {
+    const good = { ...inspection(), source: testSource() };
+    mock.inspect
+      .mockResolvedValueOnce({
+        ...good,
+        report: { ...good.report, ok: false, errors: ["虛構待修正欄位"] },
+      })
+      .mockResolvedValueOnce(good);
+    const p = props();
+    render(<CloudPanel {...p} />);
+    await connect();
+    fireEvent.click(
+      screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+    );
+    await screen.findByText("格式尚未符合需求");
+    expect(p.onUseSnapshot).not.toHaveBeenCalled();
+    expect(readSelection(localStorage, "A")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "重新讀取這份試算表" }));
+    await screen.findByText("格式檢查通過");
+    expect(p.onUseSnapshot).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ spreadsheetId: good.id }),
+      good.data,
+      good.source,
+    );
+    expect(readSelection(localStorage, "A")).toEqual({
+      id: good.id,
+      title: good.title,
+    });
+    expect(mock.choose).toHaveBeenCalledOnce();
+    expect(
+      screen.queryByRole("button", { name: "在首頁查看這份雲端資料" }),
+    ).toBeNull();
+  });
+  it("switches from the active file to a repaired selected file only on explicit reinspection", async () => {
+    const p = props();
+    const view = render(<CloudPanel {...p} />);
+    await connect();
+    fireEvent.click(
+      screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+    );
+    await waitFor(() => expect(p.onUseSnapshot).toHaveBeenCalledOnce());
+    view.rerender(<CloudPanel {...p} activeSpreadsheetId="sheet-private-1" />);
+    const second = {
+      ...inspection(),
+      id: "sheet-private-2",
+      title: "修好的第二份表",
+    };
+    mock.choose.mockResolvedValueOnce({ id: second.id, title: second.title });
+    mock.inspect
+      .mockResolvedValueOnce({
+        ...second,
+        report: { ...second.report, ok: false, errors: ["虛構格式問題"] },
+      })
+      .mockResolvedValueOnce(second);
+    fireEvent.click(
+      screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+    );
+    await screen.findByText("格式尚未符合需求");
+    expect(readSelection(localStorage, "A")?.id).toBe("sheet-private-1");
+    fireEvent.click(screen.getByRole("button", { name: "重新讀取這份試算表" }));
+    await screen.findByText("格式檢查通過");
+    expect(p.onUseSnapshot).toHaveBeenCalledTimes(2);
+    expect(p.onUseSnapshot.mock.calls[1][0].spreadsheetId).toBe(second.id);
+    expect(readSelection(localStorage, "A")?.id).toBe(second.id);
+  });
+  it("keeps local mode and the remembered file if a pending selected-file reinspection finishes later", async () => {
+    const p = props();
+    const view = render(<CloudPanel {...p} />);
+    await connect();
+    fireEvent.click(
+      screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+    );
+    await waitFor(() => expect(p.onUseSnapshot).toHaveBeenCalledOnce());
+    view.rerender(<CloudPanel {...p} activeSpreadsheetId="sheet-private-1" />);
+    const second = {
+      ...inspection(),
+      id: "sheet-private-2",
+      title: "另一份表",
+    };
+    mock.choose.mockResolvedValueOnce({ id: second.id, title: second.title });
+    mock.inspect.mockResolvedValueOnce({
+      ...second,
+      report: { ...second.report, ok: false, errors: ["虛構格式問題"] },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+    );
+    await screen.findByText("格式尚未符合需求");
+    let finish!: (value: SheetInspection) => void;
+    mock.inspect.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "重新讀取這份試算表" }));
+    await waitFor(() => expect(mock.inspect).toHaveBeenCalledTimes(3));
+    view.rerender(<CloudPanel {...p} activeSpreadsheetId={null} />);
+    await act(async () => finish(second));
+    expect(p.onUseSnapshot).toHaveBeenCalledTimes(1);
+    expect(readSelection(localStorage, "A")?.id).toBe("sheet-private-1");
+    expect(
+      screen.getByText("資料來源已切換，這次讀取未套用；需要時請重新選擇。"),
+    ).toBeTruthy();
+  });
+  it.each(["format", "network"])(
+    "keeps the current file when a selected-file reinspection fails with %s",
+    async (reason) => {
+      const p = props();
+      const view = render(<CloudPanel {...p} />);
+      await connect();
+      fireEvent.click(
+        screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+      );
+      await waitFor(() => expect(p.onUseSnapshot).toHaveBeenCalledOnce());
+      view.rerender(
+        <CloudPanel {...p} activeSpreadsheetId="sheet-private-1" />,
+      );
+      const bad = {
+        ...inspection(),
+        id: "sheet-private-2",
+        report: { ...inspection().report, ok: false, errors: ["虛構格式問題"] },
+      };
+      mock.choose.mockResolvedValueOnce({ id: bad.id, title: bad.title });
+      mock.inspect.mockResolvedValueOnce(bad);
+      fireEvent.click(
+        screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+      );
+      await screen.findByText("格式尚未符合需求");
+      if (reason === "network")
+        mock.inspect.mockRejectedValueOnce(Error("offline"));
+      else mock.inspect.mockResolvedValueOnce(bad);
+      const retry = screen.getByRole("button", {
+        name: "重新讀取這份試算表",
+      }) as HTMLButtonElement;
+      fireEvent.click(retry);
+      await waitFor(() => expect(mock.inspect).toHaveBeenCalledTimes(3));
+      await waitFor(() => expect(retry.disabled).toBe(false));
+      expect(p.onUseSnapshot).toHaveBeenCalledTimes(1);
+      expect(readSelection(localStorage, "A")?.id).toBe("sheet-private-1");
+    },
+  );
+  it("keeps automatic and toolbar refresh limited to the active file after another selection fails", async () => {
+    const p = props();
+    const view = render(<CloudPanel {...p} />);
+    await connect();
+    fireEvent.click(
+      screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+    );
+    await waitFor(() => expect(p.onUseSnapshot).toHaveBeenCalledOnce());
+    view.rerender(<CloudPanel {...p} activeSpreadsheetId="sheet-private-1" />);
+    const bad = {
+      ...inspection(),
+      id: "sheet-private-2",
+      report: { ...inspection().report, ok: false, errors: ["虛構格式問題"] },
+    };
+    mock.choose.mockResolvedValueOnce({ id: bad.id, title: bad.title });
+    mock.inspect.mockResolvedValueOnce(bad);
+    fireEvent.click(
+      screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+    );
+    await screen.findByText("格式尚未符合需求");
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+      ).toHaveProperty("disabled", false),
+    );
+    act(() => window.dispatchEvent(new Event("daily-movement-refresh")));
+    await waitFor(() => expect(p.onUseSnapshot).toHaveBeenCalledTimes(2));
+    expect(mock.inspect.mock.calls[2][0]).toBe("sheet-private-1");
+    expect(readSelection(localStorage, "A")?.id).toBe("sheet-private-1");
   });
   it("restores only the selected file belonging to the authenticated account", async () => {
     rememberSelection(localStorage, "A", {
@@ -168,7 +520,7 @@ describe("Google connection lifecycle", () => {
   it("opens the picker on first sign-in and applies and remembers a compatible pick at once", async () => {
     const p = props();
     render(<CloudPanel {...p} />);
-    await connect();
+    await connect(true);
     await waitFor(() => expect(p.onUseSnapshot).toHaveBeenCalledTimes(1));
     expect(mock.choose).toHaveBeenCalledTimes(1);
     expect(
@@ -200,7 +552,7 @@ describe("Google connection lifecycle", () => {
   it("does not switch back to cloud when a pending refresh completes after returning to local", async () => {
     const p = props();
     const view = render(<CloudPanel {...p} />);
-    await connect();
+    await connect(true);
     await screen.findByText("格式檢查通過");
     await waitFor(() => expect(p.onUseSnapshot).toHaveBeenCalledTimes(1));
     view.rerender(<CloudPanel {...p} activeSpreadsheetId="sheet-private-1" />);
@@ -217,12 +569,45 @@ describe("Google connection lifecycle", () => {
     await act(async () => finish(inspection()));
     expect(p.onUseSnapshot).toHaveBeenCalledTimes(1);
   });
-  it("keeps the last snapshot and reports a failed refresh outside the settings panel", async () => {
+  it("does not apply or remember a pending new pick after returning to local", async () => {
     const p = props();
     const view = render(<CloudPanel {...p} />);
     await connect();
+    fireEvent.click(
+      screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+    );
+    await waitFor(() => expect(p.onUseSnapshot).toHaveBeenCalledOnce());
+    view.rerender(<CloudPanel {...p} activeSpreadsheetId="sheet-private-1" />);
+    const second = {
+      ...inspection(),
+      id: "sheet-private-2",
+      title: "另一份私人表",
+    };
+    mock.choose.mockResolvedValueOnce({ id: second.id, title: second.title });
+    let finish!: (value: SheetInspection) => void;
+    mock.inspect.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+    );
+    await waitFor(() => expect(mock.inspect).toHaveBeenCalledTimes(2));
+    view.rerender(<CloudPanel {...p} activeSpreadsheetId={null} />);
+    await act(async () => finish(second));
+    expect(p.onUseSnapshot).toHaveBeenCalledTimes(1);
+    expect(readSelection(localStorage, "A")?.id).toBe("sheet-private-1");
+    expect(
+      screen.getByText("資料來源已切換，這次選表未套用；需要時請重新選擇。"),
+    ).toBeTruthy();
+  });
+  it("keeps the last snapshot and reports a failed refresh outside the settings panel", async () => {
+    const p = props();
+    const view = render(<CloudPanel {...p} />);
+    await connect(true);
     await screen.findByText("格式檢查通過");
-    await waitFor(() => expect(p.onUseSnapshot).toHaveBeenCalledTimes(1));
     view.rerender(<CloudPanel {...p} activeSpreadsheetId="sheet-private-1" />);
     mock.inspect.mockRejectedValueOnce(Error("offline"));
     act(() => window.dispatchEvent(new Event("daily-movement-refresh")));

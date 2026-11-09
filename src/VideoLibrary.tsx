@@ -27,6 +27,7 @@ import type { SheetVideo } from "./model";
 import { seenCount, type Preferences } from "./preferences";
 import { searchVideos, VIDEO_LENGTHS, type VideoLength } from "./video-search";
 import { useVideoStorage } from "./useVideoStorage";
+import { sameVideo } from "./sheets-write";
 
 const VIDEO_BATCH = 12;
 
@@ -72,6 +73,7 @@ export function VideoLibrary({
     return () => onDraftChange?.(false);
   }, [adding, onDraftChange]);
   const [editing, setEditing] = useState<Video | null>(null);
+  const [editingBase, setEditingBase] = useState<SheetVideo | null>(null);
   const [error, setError] = useState("");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [query, setQuery] = useState("");
@@ -110,6 +112,16 @@ export function VideoLibrary({
   for (const x of matching)
     counts.set(x.category, (counts.get(x.category) || 0) + 1);
 
+  const editConflict = !!(
+    cloud &&
+    adding &&
+    editing &&
+    (!editingBase ||
+      !sameVideo(
+        editingBase,
+        sheetVideos?.find((video) => video.id === editingBase.id),
+      ))
+  );
   const persist = videoStorage.persist;
   function play(video: Video) {
     setPlaying(video);
@@ -133,6 +145,7 @@ export function VideoLibrary({
           }
           onClick={() => {
             setEditing(null);
+            setEditingBase(null);
             setAdding((a) => !a);
           }}
         >
@@ -174,6 +187,8 @@ export function VideoLibrary({
           className="video-form"
           onSubmit={(e) => {
             e.preventDefault();
+            if (cloud && (!canEditCloud || !sheetVideos || editConflict))
+              return;
             const form = new FormData(e.currentTarget);
             try {
               const minutes = Number(form.get("minutes")) || undefined;
@@ -219,6 +234,7 @@ export function VideoLibrary({
                 setError("");
                 setAdding(false);
                 setEditing(null);
+                setEditingBase(null);
                 setCategory(form.get("category") as VideoCategory);
                 setQuery("");
                 setLength("all");
@@ -245,6 +261,11 @@ export function VideoLibrary({
             }
           }}
         >
+          {editConflict && (
+            <p className="notice" role="alert">
+              影片已更新或刪除，草稿仍保留。請先複製需要的內容，再取消並重新編輯最新影片。
+            </p>
+          )}
           {editing && playing?.id === editing.id && (
             <p className="tiny muted">
               編輯不會切換目前播放；儲存後重新點選播放，會使用新設定。
@@ -300,7 +321,11 @@ export function VideoLibrary({
           <button
             className="primary"
             type="submit"
-            disabled={cloud ? !canEditCloud : videoStorage.blocked}
+            disabled={
+              cloud
+                ? !canEditCloud || !sheetVideos || editConflict
+                : videoStorage.blocked
+            }
           >
             {editing ? "儲存影片" : "加入影片庫"} <Plus size={16} />
           </button>
@@ -546,6 +571,10 @@ export function VideoLibrary({
                     aria-label={`編輯影片：${x.title}`}
                     onClick={() => {
                       setEditing(x);
+                      const original = sheetVideos?.find(
+                        (video) => video.id === x.sheetRecordId,
+                      );
+                      setEditingBase(original ? { ...original } : null);
                       setAdding(true);
                     }}
                   >

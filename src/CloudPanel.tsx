@@ -234,7 +234,13 @@ export function CloudPanel({
     }
     lastRefresh.current = Date.now();
   }
-  async function refresh(id: string, automatic = false) {
+  async function refresh(
+    id: string,
+    {
+      automatic = false,
+      applySelection = false,
+    }: { automatic?: boolean; applySelection?: boolean } = {},
+  ) {
     const current = currentSession.current;
     if (
       !current ||
@@ -242,6 +248,7 @@ export function CloudPanel({
       (automatic && Date.now() - lastRefresh.current < 30000)
     )
       return;
+    const viewAtStart = currentViewId.current;
     const version = ++epoch.current;
     request.current?.abort();
     const controller = new AbortController();
@@ -254,9 +261,21 @@ export function CloudPanel({
       const result = await inspectSpreadsheet(id, current, controller.signal);
       if (!valid(version)) return;
       setInspection(result);
+      if (applySelection && currentViewId.current !== viewAtStart) {
+        setNotice("資料來源已切換，這次讀取未套用；需要時請重新選擇。");
+        return;
+      }
       if (!result.report.ok)
-        setReadError("試算表格式已變更，尚未更新；目前保留上次讀取的摘要。");
-      if (currentViewId.current === id && result.report.ok && result.data)
+        setReadError(
+          applySelection
+            ? "格式尚未符合需求，尚未套用這份試算表。"
+            : "試算表格式已變更，尚未更新；目前保留上次讀取的摘要。",
+        );
+      if (
+        (applySelection || currentViewId.current === id) &&
+        result.report.ok &&
+        result.data
+      )
         useSnapshot(result, current);
     } catch (error) {
       if (!valid(version)) return;
@@ -264,7 +283,9 @@ export function CloudPanel({
         reset(error.message);
         return;
       }
-      const message = "未能更新，仍保留上次讀取的摘要。可重新選檔或稍後重試。";
+      const message = applySelection
+        ? "未能重新讀取這份試算表，已保留目前資料來源。請稍後重試。"
+        : "未能更新，仍保留上次讀取的摘要。可重新選檔或稍後重試。";
       setReadError(message);
       setNotice(message);
     } finally {
@@ -275,7 +296,7 @@ export function CloudPanel({
     if (!session || !activeSpreadsheetId) return;
     const update = () => {
       if (document.visibilityState === "visible" && navigator.onLine)
-        void refresh(activeSpreadsheetId, true);
+        void refresh(activeSpreadsheetId, { automatic: true });
     };
     const manualUpdate = () => {
       void refresh(activeSpreadsheetId);
@@ -294,6 +315,7 @@ export function CloudPanel({
   async function pick(current: GoogleSession | null = session) {
     if (!current || !config) return;
     const session = current;
+    const viewAtStart = currentViewId.current;
     const version = ++epoch.current;
     request.current?.abort();
     const controller = new AbortController();
@@ -315,7 +337,10 @@ export function CloudPanel({
       );
       if (!valid(version)) return;
       setInspection(result);
-      // A compatible pick is applied and remembered at once, so the next sign-in reloads it.
+      if (currentViewId.current !== viewAtStart) {
+        setNotice("資料來源已切換，這次選表未套用；需要時請重新選擇。");
+        return;
+      }
       if (result.report.ok && result.data) useSnapshot(result, session);
     } catch (error) {
       if (!valid(version)) return;
@@ -450,7 +475,9 @@ export function CloudPanel({
             <button
               className="text-button"
               disabled={!!busy}
-              onClick={() => void refresh(inspection.id)}
+              onClick={() =>
+                void refresh(inspection.id, { applySelection: true })
+              }
             >
               重新讀取這份試算表
             </button>

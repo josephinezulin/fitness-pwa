@@ -522,3 +522,92 @@ usePreferences 的寫入原本已先讀最新儲存內容，但畫面只在目�
 完整瀏覽器驗證：69 個 Playwright 案例通過（3.1 分鐘）。新增三種尺寸的真實雙分頁流程，B 收藏／看過後 A 更新星號與次數，同時保留新增影片草稿值、焦點、搜尋與同一 iframe；B 儲存 240 分目標時，A 的 175 分草稿保留，取消後原始偏好字串不變。A 再標記看過，B 讀回 2 次，目標及收藏保持；離線下載 JSON 的 experience 與完整偏好相同，重開仍有 240 分、收藏及 2 次，原影片庫與運動／健康資料完整，整頁無水平溢出。
 
 全部使用隔離 context／虛構資料，外部影片與 Google 請求阻擋，沒有登入 Google 或寫私人 Sheet。這輪沒有 CSS／外觀調整；iframe DOM 保留不代表真實 YouTube 播放。Prettier 與 git diff --check 通過。CI／合併／Pages 與正式資產證據追加於本次 PR。
+
+## E29：首次選表通過立即套用及記住
+
+使用者回報試算表未自動載入，要求移除多餘的首頁確認。根因是 pick 只設定 inspection；既有 useSnapshot 負責套用資料並呼叫 rememberSelection，卻只在額外的「在首頁查看這份雲端資料」按鈕及已記住檔案的登入／刷新路徑使用。第一次雖顯示格式通過，若沒再按確認，就沒有切換資料或記住選擇。
+
+Picker 回傳後沿用 inspectSpreadsheet 的私人檔案、擁有權、可編輯、版本、型別及公式檢查。結果仍屬於有效請求、通過檢查且有 data 時，立即呼叫既有 useSnapshot，將同一份 source／data 套用工作區並記住該帳號的 ID／標題；移除額外首頁確認按鈕，調整說明。既有下次登入自動讀取同帳號檔案的流程不變，選取與檢查本身仍只讀 Google API，不上傳或混入本機紀錄。
+
+保留 epoch、abort、目前帳號與過期時間驗證；取消、格式不符／缺 data、登出後回應及過期結果不套用也不記住。另先重現自動套用帶來的晚到選表回應：讀取期間若從既有雲端切回本機，會再次切回雲端。補上起始資料來源比對，檢視已切換則保留目前畫面與原選擇、提示重新選表。原有刷新完成後不切回雲端的案例保留。記住檔案的儲存失敗會說明下次需重選，本次有效資料仍已套用；套用本身拋錯時不記住。
+
+官方依據（2026-11-08 實際讀取）：Google Picker web API 使用 PickerBuilder 與登入後的 OAuth 權限，保留現有 drive.file 最小範圍及原登入手勢；Token model 的 access token 有短效期限，到期須由使用者動作取得新 Token。本輪只簡化已授權檔案的應用流程，不改 scope、共用權限、記憶體 Token 模型、Sheet schema、API、依賴或 CSS。
+
+- https://developers.google.com/drive/picker/guides/overview
+- https://developers.google.com/identity/oauth2/web/guides/use-token-model
+
+測試先重現首次選表 onUseSnapshot 呼叫次數為 0，以及舊產物仍有首頁確認按鈕；修正後單元覆蓋首選即套用／記住與再登入還原、兩種無效結果、取消選檔、換帳號後的晚到回應、到期結果、記住失敗、套用失敗及選表中切回本機。Google 操作文件同步修正首次選表及重登入步驟，原有登入前不顯示雲端快取、帳號分區與安全檢查保留。
+
+手動方式：更新介面後，以原 Google 帳號登入並重新選一次自己的私人試算表。看見格式檢查通過後直接回總覽，應已是該檔的資料，不需再按首頁確認。重開網站先看到本機畫面，再登入同帳號，應不用重選就自動讀取。若瀏覽器不允許記住檔案，依提示下次重選；格式錯誤、取消或讀取中切回本機都不應偷偷套用新檔案。不需要新 API Key、scope 或試算表欄位。
+
+限制：新增瀏覽器流程使用本機模擬 SDK／Google GET 回應與虛構資料，不是真實 Google consent、Picker popup、CORS 或本人 Safari 授權驗收。重開仍須登入，這不是永久登入；舊版未保存選擇者需再選一次。Apple 健康捷徑部署及本人實機同步待辦不變。
+
+最終本機檢查：npm ci、381 項 Vitest（42 檔）、8 項 Python、TypeScript／Vite／Service Worker 正式建置、瀏覽器型別檢查、Prettier 與 git diff --check 通過。CloudPanel 從 7 增至 16 項測試，九項新增情境與既有刷新／會話生命週期共同覆蓋自動套用邊界。
+
+包含晚到選表保護的最終產物完整通過 72 個 Playwright 案例（3.3 分鐘）。新增三種尺寸，以測試路由本機提供虛構 Google SDK／Picker、userinfo、Drive 及 Sheets GET 回應，真正執行應用內的登入處理、擁有權／私人檔案及 typed grid 格式驗證、投影與工作區套用。首次選表後總覽顯示虛構 37 分鐘，選擇資料已記住且沒有確認按鈕；重載先顯示本機資料，再登入同一模擬帳號即自動重讀，選檔器未再開啟。空 outbox 情境全部 API 請求為 GET，localStorage／sessionStorage 沒有模擬 Token，本機原資料完整不變、各尺寸沒有水平溢出。
+
+測試全為隔離 context／虛構資料；指定外部 URL 的回應由 page.route 本機提供，其他外部請求阻擋，未登入真實 Google 或讀寫私人 Sheet。已檢查正式 JS 不含模擬 SDK／Token 標記與移除的按鈕文字；沒有新增正式測試入口、依賴或資料格式。CI／合併／Pages 與正式資產證據追加於本次 PR。
+
+## E30：格式修正後明確重讀即可套用所選檔案
+
+接續 E29 選表立即套用，發現既有重讀仍只更新目前啟用的 spreadsheetId。第一次選表若格式失敗，修好後按「重新讀取這份試算表」會顯示通過，但沒有啟用檔案、也未保存選擇；既有額外首頁確認已移除，因此這個重試路徑必須直接完成套用。先以單元重現回呼 0 次，並在舊產物的 320px 瀏覽器重現重讀通過後 selection 仍為 null。
+
+refresh 改用具名 automatic／applySelection 選項。只有檢查結果卡片的明確重讀帶入 applySelection，沿用 inspectSpreadsheet 權限／格式驗證與 useSnapshot 帳號／到期檢查，成功後立即套用同一 source／data 並記住檔案。自動回前景、恢復連線與頭像手動更新仍只更新目前啟用的檔案，保留 30 秒自動冷卻，不會因其他選擇曾失敗就切換資料來源。
+
+明確重讀綁定起始檢視；完成前切回本機或其他來源，保留目前檢視及原記住的檔案，提示本次未套用。格式仍不符或網路失敗時不套用、不改選擇，錯誤說明保留目前資料來源；原登出／換帳號 epoch、abort、401 與授權到期規則不變。沒有增加按鈕、scope、Google API、Sheet schema、依賴、計時器或 CSS；健康資料、待同步資料及本機紀錄的規則保持不變。
+
+官方依據（2026-11-08 實際讀取）：Google Drive 的 drive.file 是使用者透過 Picker 等方式選定檔案的每檔授權；本輪重讀同一已選檔案，保留這個範圍及既有每次讀取的擁有權／私人檔案檢查，不新增廣泛 Drive 存取。格式修正不代表授權被延長，原過期檢查繼續適用。
+
+- https://developers.google.com/workspace/drive/api/guides/api-specific-auth
+
+新增六項單元情境，覆蓋首次失敗修正後套用／記住、從目前 A 檔明確切換到修好的 B 檔、晚到重讀遇到回本機、重讀仍格式失敗或網路失敗，以及自動／頭像更新仍限 A 檔。原首次選表、取消、帳號與到期保護案例全部保留。
+
+手動方式：使用不含真實健康資料的測試副本，選表格式未通過時先修正欄名，再直接按既有重讀按鈕；通過後回總覽應已顯示該檔，下一次登入同帳號可自動讀回。已有另一檔時，失敗不應切換來源；重讀中切回本機，完成後也不應返回雲端。不需新 Google 設定、授權範圍或試算表欄位。
+
+限制：本機瀏覽器案例以測試路由提供虛構 Google SDK／API 回應，未讀寫真實私人試算表，不是本人 Safari／Google consent／CORS 或健康捷徑驗收。重讀與原有 API 相同仍需有效登入；不提供背景自動修正試算表或永久登入。
+
+最終本機檢查：npm ci、387 項 Vitest（42 檔）、8 項 Python、TypeScript／Vite／Service Worker 正式建置、瀏覽器型別檢查、Prettier 與 git diff --check 通過。CloudPanel 共 22 項測試。正式產物完整通過 75 個 Playwright 案例（3.2 分鐘），包含三種尺寸的格式失敗→修正→明確重讀→總覽 37 分鐘→下次登入自動還原；Picker 不需再次開啟，所有模擬 Google 請求均為 GET，本機原資料不變，儲存區沒有模擬 Token，也沒有水平溢出。
+
+正式 JS 不含虛構 SDK／Token／無效欄名標記及已移除的首頁確認文字。測試均使用隔離 context 與虛構資料；實際 CI／合併／Pages 及正式資產證據追加於本次 PR。
+
+## E31：雲端原運動更新後保留草稿，避免舊編輯覆蓋新版
+
+發現運動表單保留開啟時的 editing，但背景讀回雲端會更新目前資料與寫入基準。原紀錄已更新後直接儲存舊草稿，竟會以新版作為 outbox base，讓原有寫前重讀無法知道使用者編輯的是舊內容。先以 App 整合測試重現：原備註更新後，儲存會產生帶舊內容的 pending operation；舊正式產物的 320px 瀏覽器也沒有更新警告。
+
+App 現在以既有 sameWorkout 比較開表單時的原運動與目前同 ID 紀錄，包括日期、類型、分鐘、熱量、備註與完整有序分段。已變更或找不到原紀錄時，顯示表單內 alert，保留所有草稿欄位以便複製，停用儲存；事件處理也阻擋直接 submit，不建立 outbox、不偷偷新增回已刪紀錄，也不自動合併或關閉草稿。先複製需要內容、關閉再編輯即可採最新值；其他紀錄變更或只有 revision／updatedAt 改變而內容相同不誤阻擋。
+
+一併重現停用儲存後 Tab 離開對話框，既有焦點清單現在略過 :disabled、負 tabIndex 及收合 details 中的控制；衝突狀態由備註 Tab 回固定的關閉按鈕，反向亦然。保留原表單捲動、16px／44px 欄位、取消／Escape、草稿更新鎖及關閉後回焦點，不加新 CSS 或停用縮放。
+
+新增五項 App 整合情境：雲端備註更新、分段速度更新、刪除、只有版本變更、其他運動新增；覆蓋保留草稿、直接 submit 不寫入、取消再編輯採新版、原本機資料不變，以及無關變更仍可提交。瀏覽器新增更新／刪除兩種情境，各跑三種尺寸，用真正前景刷新處理器在 30 秒冷卻後重新讀取，確認總分鐘與表單採新值、鍵盤循環、空 outbox、GET 限定與無水平溢出。沒有正式測試入口；SDK 與雲端回應均為測試路由虛構資料。
+
+官方依據（2026-11-08 實際讀取）：Sheets batchUpdate 保證單一請求內更新一起套用，但明載協同修改下最終狀態不一定完全等於該請求；不能把它當跨裝置 compare-and-swap。本輪補的是畫面已知新資料與舊草稿間的覆蓋缺口，既有寫前讀取、revision、outbox、Web Locks 與競態限制仍存在。WAI-ARIA Modal Dialog 規範要求 Tab／Shift+Tab 在首尾可切換控制間循環。
+
+- https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/batchUpdate
+- https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/
+
+手動方式：使用虛構運動的私人測試副本，在 PWA 開啟編輯並輸入草稿，再到試算表修改該運動備註、有效分段或刪除標記；回 PWA 前景超過原 30 秒冷卻後，應保留草稿且提示原紀錄已更新／刪除，無法儲存。外接鍵盤 Tab 應留在對話框，可先複製內容，再關閉重編最新值；改其他運動時不應擋住本筆。已刪紀錄關閉後不應重新出現。
+
+限制：只保護這次已讀到的內容，不偵測尚未讀取的遠端變更，也不是原子版本鎖。Google consent／真實私人副本讀寫、iPhone Safari／VoiceOver 與 Apple 健康捷徑仍待本人實機驗收。未改 Google scope、Token 模型、Sheet schema、健康表、API、outbox 格式、依賴或分享權限。
+
+最終本機檢查：npm ci、392 項 Vitest（42 檔）、8 項 Python、TypeScript／Vite／Service Worker 正式建置、瀏覽器型別檢查、Prettier 與 git diff --check 通過。App 共 19 項整合測試，清理重複斷言後該檔已再通過。最終正式產物完整通過 81 個 Playwright 案例（3.5 分鐘）；新增六案皆由本機虛構 Google GET 回應驅動真正應用刷新，不存取真實帳號／私人表。JS index-BZmaFRJP.js 不含測試 SDK、Token、虛構草稿或 Service Worker 標記；CSS index-CB3xEyJn.css 未變。實際 CI、合併、Pages 與正式資產證據追加於本次 PR。
+
+## E32：雲端影片更新後保留編輯草稿，不覆蓋已知新版
+
+接續 E31 運動編輯保護，發現影片編輯同樣可能在回前景讀到新資料後，將舊草稿以新資料作 outbox base 儲存。先用 App 整合測試重現：雲端原影片更新後，提交仍建立包含舊草稿的 pending video operation；舊正式產物的 320px 瀏覽器也沒有提示與保護。
+
+開啟影片編輯時複製真正的 SheetVideo 作為原內容，保留 raw record ID，避免拿 sheet- UI ID 比較，也不使用經分類顯示轉換的值。以既有 sameVideo 比對 ID、YouTube ID、名稱、分類及選填長度；原列變更、刪除或 Videos 分頁消失時，顯示 form 內 alert、停用儲存，事件處理也阻擋直接 submit。失去 canEditCloud 同樣不呼叫保存 callback；已有草稿仍可複製或取消。
+
+草稿維持原表單 key、URL／名稱／分類／分鐘輸入；保留既有搜尋、播放中的 iframe、觀看偏好及草稿更新鎖。取消清除原內容基準，再編輯以目前資料開新表單；相同內容重新讀取或其他影片新增不誤阻擋。成功儲存時也清除基準；本機自訂影片的 persist／舊分頁保護、內建影片、雲端 CRUD／outbox／revision／Web Locks 規則不變。沒有新增 schema、儲存 key、scope、API、Token、依賴、計時器或 CSS。
+
+新增八項影片元件情境：名稱、YouTube ID、長度清除、刪除、Videos 消失、相同內容重讀、其他影片新增、編輯權失效。另加兩項 App 整合測試，驗證讀回更新／刪除不加入 outbox、草稿與更新鎖保留，取消後解除或重新編輯最新內容。瀏覽器增加更新／刪除兩情境各三種尺寸，透過真正前景事件在原 30 秒冷卻後讀取，確認四欄草稿、同一 iframe 節點、搜尋、空 outbox、GET 限定與無溢出。
+
+官方依據（2026-11-08 實際讀取）：Sheets batchUpdate 的原子套用僅限同一請求內，官方明載協同修改仍可能影響結果；這輪只補讀到新版後的舊編輯缺口，不當作跨裝置 compare-and-swap。React 會在同位置的元件保留狀態，本輪不因更新換 key 或重掛表單／播放器，避免清除草稿。
+
+- https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/batchUpdate
+- https://react.dev/learn/preserving-and-resetting-state
+
+手動方式：用虛構資料的私人測試副本，播放一部試算表影片並開啟編輯，修改四欄草稿但先不儲存。到試算表改同筆名稱、影片連結、有效長度或 deletedAt，再回 PWA 前景超過原 30 秒冷卻；應保留草稿與目前播放、提示原影片變更且不能儲存。先複製需要的內容，取消再編輯應採最新值；刪除後則不再有該列的編輯入口。修改其他影片不應阻擋本筆。
+
+限制：Google SDK／GET 回應均為測試路由的虛構資料，未讀寫真實私人表；iframe 節點保留不代表真實 YouTube 試播。仍待本人 Safari／VoiceOver、Google consent／實際寫入及 Apple 健康捷徑驗收。只保護已讀回內容，既有跨裝置寫入競態與未讀到的變更限制保留。
+
+最終本機檢查：npm ci、402 項 Vitest（42 檔）、8 項 Python、TypeScript／Vite／Service Worker 正式建置、瀏覽器型別檢查、Prettier 與 git diff --check 通過。影片元件及 App 共 49 項測試，在修正新增測試選擇器型別後再通過。六個新瀏覽器案例先通過，最終正式產物完整通過 87 個 Playwright 案例（3.6 分鐘）；SDK／GET 回應全為隔離測試路由的虛構資料，沒有真實帳號或私人表操作。JS index-ClLZrkiM.js 不含模擬 SDK／Token、虛構草稿或 SW 標記；CSS index-CB3xEyJn.css 未變。CI、合併、Pages 與正式資產證據追加於本次 PR。

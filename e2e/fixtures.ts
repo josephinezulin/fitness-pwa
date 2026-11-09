@@ -138,3 +138,10 @@ export async function reloadOffline(page: Page) {
     page.getByText("目前離線，仍可查看與記錄本機資料。", { exact: true }),
   ).toBeVisible();
 }
+
+export async function openSettings(page: Page) {
+  await page
+    .getByRole("button", { name: "帳號與同步設定", exact: true })
+    .click();
+  await page.getByRole("button", { name: "設定與備份", exact: true }).click();
+}

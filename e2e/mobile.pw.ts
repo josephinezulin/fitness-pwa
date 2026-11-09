@@ -11,11 +11,412 @@ import {
   readData,
   expectNoOverflow,
   reloadOffline,
+  openSettings,
 } from "./fixtures";
 import { readFile } from "node:fs/promises";
 import { BUILT_IN_VIDEOS, VIDEO_KEY } from "../src/videos";
 import { preferenceKey } from "../src/preferences";
 import { defaultPlans } from "../src/model";
+import { installGoogleSelectionFixture } from "./google-selection-fixture";
+
+for (const change of ["updated", "deleted"] as const) {
+  test(`編輯中雲端影片${change === "updated" ? "更新" : "刪除"}保留草稿與播放器，不加入待同步修改`, async ({
+    page,
+  }) => {
+    const fake = await installGoogleSelectionFixture(page, { video: true });
+    await page.goto("./");
+    await openSettings(page);
+    await page
+      .getByRole("button", { name: "使用 Google 登入", exact: true })
+      .click();
+
+    await expect(
+      page.getByRole("heading", { name: "格式檢查通過", exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "影片", exact: true }).click();
+    await page
+      .getByRole("searchbox", { name: "搜尋運動影片", exact: true })
+      .fill("虛構雲端");
+    await page
+      .getByRole("button", { name: "播放：虛構雲端原影片", exact: true })
+      .click();
+    const frame = await page.locator(".player iframe").elementHandle();
+    await page
+      .getByRole("button", { name: "編輯影片：虛構雲端原影片", exact: true })
+      .click();
+    const form = page.locator(".video-form");
+    await form
+      .getByRole("textbox", { name: "名稱", exact: true })
+      .fill("虛構保留的影片草稿");
+    await form
+      .getByRole("textbox", { name: "YouTube 網址", exact: true })
+      .fill("https://youtu.be/aaaaaaaaaaa");
+    await form
+      .getByRole("combobox", { name: "分類", exact: true })
+      .selectOption("伸展放鬆");
+    await form
+      .getByRole("spinbutton", { name: "長度（分鐘，選填）", exact: true })
+      .fill("23");
+    fake.updateVideo(
+      change === "deleted"
+        ? null
+        : { title: "虛構雲端最新影片", youtubeId: "bbbbbbbbbbb", minutes: 35 },
+    );
+    await page.clock.setFixedTime(new Date(`${TODAY}T04:00:31Z`));
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(form.getByRole("alert")).toContainText("影片已更新或刪除");
+    await expect(
+      form.getByRole("textbox", { name: "名稱", exact: true }),
+    ).toHaveValue("虛構保留的影片草稿");
+    await expect(
+      form.getByRole("textbox", { name: "YouTube 網址", exact: true }),
+    ).toHaveValue("https://youtu.be/aaaaaaaaaaa");
+    await expect(
+      form.getByRole("combobox", { name: "分類", exact: true }),
+    ).toHaveValue("伸展放鬆");
+    await expect(
+      form.getByRole("spinbutton", { name: "長度（分鐘，選填）", exact: true }),
+    ).toHaveValue("23");
+    await expect(
+      form.getByRole("button", { name: "儲存影片", exact: true }),
+    ).toBeDisabled();
+    await form.evaluate((node) =>
+      node.dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true }),
+      ),
+    );
+    await expect(form).toBeVisible();
+    expect(
+      await frame!.evaluate(
+        (node) =>
+          node.isConnected && node === document.querySelector(".player iframe"),
+      ),
+    ).toBe(true);
+    await expect(
+      page.getByRole("searchbox", { name: "搜尋運動影片", exact: true }),
+    ).toHaveValue("虛構雲端");
+    await expectNoOverflow(page);
+    await page.getByRole("button", { name: "取消", exact: true }).click();
+    await expect(form).toHaveCount(0);
+    if (change === "updated") {
+      await page
+        .getByRole("button", {
+          name: "編輯影片：虛構雲端最新影片",
+          exact: true,
+        })
+        .click();
+      await expect(form.getByRole("alert")).toHaveCount(0);
+      await expect(
+        form.getByRole("textbox", { name: "名稱", exact: true }),
+      ).toHaveValue("虛構雲端最新影片");
+      await expect(
+        form.getByRole("textbox", { name: "YouTube 網址", exact: true }),
+      ).toHaveValue("https://www.youtube.com/watch?v=bbbbbbbbbbb");
+      await expect(
+        form.getByRole("spinbutton", {
+          name: "長度（分鐘，選填）",
+          exact: true,
+        }),
+      ).toHaveValue("35");
+      await expect(
+        form.getByRole("button", { name: "儲存影片", exact: true }),
+      ).toBeEnabled();
+      await page.getByRole("button", { name: "取消", exact: true }).click();
+    } else
+      await expect(
+        page.getByRole("button", {
+          name: "編輯影片：虛構雲端原影片",
+          exact: true,
+        }),
+      ).toHaveCount(0);
+    expect(fake.calls.every((call) => call.method === "GET")).toBe(true);
+    expect(
+      await page.evaluate(() =>
+        Object.keys(localStorage)
+          .filter((key) => key.startsWith("daily-movement-outbox-v1:"))
+          .map((key) => JSON.parse(localStorage.getItem(key)!)),
+      ),
+    ).toEqual([]);
+    expect(await readData(page)).toEqual(fixtureData);
+    expect(
+      await page.evaluate((key) => localStorage.getItem(key), VIDEO_KEY),
+    ).toBeNull();
+    await expectNoOverflow(page);
+  });
+}
+
+for (const change of ["updated", "deleted"] as const) {
+  test(`編輯中雲端運動${change === "updated" ? "更新" : "刪除"}保留草稿但不覆寫，關閉後使用最新紀錄`, async ({
+    page,
+  }) => {
+    const fake = await installGoogleSelectionFixture(page);
+    await page.goto("./");
+    await openSettings(page);
+    await page
+      .getByRole("button", { name: "使用 Google 登入", exact: true })
+      .click();
+
+    await expect(
+      page.getByRole("heading", { name: "格式檢查通過", exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "紀錄", exact: true }).click();
+    await page.getByRole("button", { name: "編輯運動", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog
+      .getByRole("textbox", { name: "備註", exact: true })
+      .fill("虛構不應覆蓋雲端的草稿");
+    await dialog
+      .getByRole("spinbutton", { name: "分鐘數", exact: true })
+      .fill("42");
+    fake.updateWorkout(
+      change === "deleted" ? null : { minutes: 48, note: "虛構雲端最新運動" },
+    );
+    // Exercise the real foreground listener after the existing 30s refresh cooldown.
+    await page.clock.setFixedTime(new Date(`${TODAY}T04:00:31Z`));
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(dialog.getByRole("alert")).toContainText(
+      "運動紀錄已更新或刪除",
+    );
+    await expect(
+      dialog.getByRole("textbox", { name: "備註", exact: true }),
+    ).toHaveValue("虛構不應覆蓋雲端的草稿");
+    await expect(
+      dialog.getByRole("spinbutton", { name: "分鐘數", exact: true }),
+    ).toHaveValue("42");
+    await expect(
+      dialog.getByRole("button", { name: "儲存紀錄", exact: true }),
+    ).toBeDisabled();
+    await dialog
+      .locator("form")
+      .evaluate((form) =>
+        form.dispatchEvent(
+          new Event("submit", { bubbles: true, cancelable: true }),
+        ),
+      );
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("textbox", { name: "備註", exact: true }).focus();
+    await page.keyboard.press("Tab");
+    await expect(
+      dialog.getByRole("button", { name: "關閉", exact: true }),
+    ).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(
+      dialog.getByRole("textbox", { name: "備註", exact: true }),
+    ).toBeFocused();
+    await expectNoOverflow(page);
+    await dialog.getByRole("button", { name: "關閉", exact: true }).click();
+    await page.getByRole("button", { name: "首頁", exact: true }).click();
+    await expect(page.locator(".week-total .stat-value")).toHaveText(
+      change === "deleted" ? "0" : "48",
+    );
+    await page.getByRole("button", { name: "紀錄", exact: true }).click();
+    if (change === "updated") {
+      await page.getByRole("button", { name: "編輯運動", exact: true }).click();
+      await expect(dialog.getByRole("alert")).toHaveCount(0);
+      await expect(
+        dialog.getByRole("textbox", { name: "備註", exact: true }),
+      ).toHaveValue("虛構雲端最新運動");
+      await expect(
+        dialog.getByRole("spinbutton", { name: "分鐘數", exact: true }),
+      ).toHaveValue("48");
+      await expect(
+        dialog.getByRole("button", { name: "儲存紀錄", exact: true }),
+      ).toBeEnabled();
+      await dialog.getByRole("button", { name: "關閉", exact: true }).click();
+    } else
+      await expect(
+        page.getByRole("button", { name: "編輯運動", exact: true }),
+      ).toHaveCount(0);
+    expect(fake.calls.every((call) => call.method === "GET")).toBe(true);
+    expect(
+      await page.evaluate(() =>
+        Object.keys(localStorage)
+          .filter((key) => key.startsWith("daily-movement-outbox-v1:"))
+          .map((key) => JSON.parse(localStorage.getItem(key)!)),
+      ),
+    ).toEqual([]);
+    expect(await readData(page)).toEqual(fixtureData);
+    await expectNoOverflow(page);
+  });
+}
+
+test("首次格式失敗修好後重新讀取就套用，記住檔案並可下次登入還原", async ({
+  page,
+}) => {
+  const fake = await installGoogleSelectionFixture(page, {
+    invalidHeader: true,
+  });
+  await page.goto("./");
+  await openSettings(page);
+  await page
+    .getByRole("button", { name: "使用 Google 登入", exact: true })
+    .click();
+  await expect(
+    page.getByText("owner-a@example.com", { exact: true }),
+  ).toBeVisible();
+
+  await expect(
+    page.getByRole("heading", { name: "格式尚未符合需求", exact: true }),
+  ).toBeVisible();
+  const key = `daily-movement-selection-v1:${encodeURIComponent(fake.subject)}`;
+  expect(
+    await page.evaluate((key) => localStorage.getItem(key), key),
+  ).toBeNull();
+  expect(await readData(page)).toEqual(fixtureData);
+  fake.repairHeader();
+  await page
+    .getByRole("button", { name: "重新讀取這份試算表", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "格式檢查通過", exact: true }),
+  ).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (key) => JSON.parse(localStorage.getItem(key) || "null"),
+        key,
+      ),
+    )
+    .toEqual({ subject: fake.subject, id: fake.id, title: "虛構私人健身表" });
+  await expect(
+    page.getByRole("button", { name: "在首頁查看這份雲端資料", exact: true }),
+  ).toHaveCount(0);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.dataset.fictionalPickerCount,
+    ),
+  ).toBe("1");
+  await page.getByRole("button", { name: "首頁", exact: true }).click();
+  await expect(page.locator(".week-total .stat-value")).toHaveText("37");
+  await page.getByRole("button", { name: "紀錄", exact: true }).click();
+  await expect(
+    page.getByText("虛構雲端選表紀錄", { exact: true }),
+  ).toBeVisible();
+  expect(await readData(page)).toEqual(fixtureData);
+  await expectNoOverflow(page);
+  await page.reload();
+  await expect(
+    page.getByRole("dialog", { name: "日常動作", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".week-total .stat-value")).not.toHaveText("37");
+  await page
+    .getByRole("button", { name: "以 owner-a@example.com 繼續", exact: true })
+    .click();
+  await expect(page.locator(".week-total .stat-value")).toHaveText("37");
+  await openSettings(page);
+  await expect(
+    page.getByRole("heading", { name: "格式檢查通過", exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.dataset.fictionalPickerCount,
+    ),
+  ).toBe("0");
+  await page.getByRole("button", { name: "首頁", exact: true }).click();
+  await expect(page.locator(".week-total .stat-value")).toHaveText("37");
+  expect(
+    fake.calls.filter(
+      (call) =>
+        new URL(call.url).searchParams.get("includeGridData") === "true",
+    ),
+  ).toHaveLength(3);
+  expect(fake.calls.every((call) => call.method === "GET")).toBe(true);
+  expect(
+    await page.evaluate(() =>
+      [localStorage, sessionStorage]
+        .map((store) =>
+          Array.from({ length: store.length }, (_, i) =>
+            store.getItem(store.key(i)!),
+          ).join(""),
+        )
+        .join(""),
+    ),
+  ).not.toContain(fake.token);
+  expect(await readData(page)).toEqual(fixtureData);
+  await expectNoOverflow(page);
+});
+
+test("首次選表通過就套用並記住，重開登入自動讀取且不需首頁確認", async ({
+  page,
+}) => {
+  const fake = await installGoogleSelectionFixture(page);
+  await page.goto("./");
+  await openSettings(page);
+  await page
+    .getByRole("button", { name: "使用 Google 登入", exact: true })
+    .click();
+  await expect(
+    page.getByText("owner-a@example.com", { exact: true }),
+  ).toBeVisible();
+
+  await expect(
+    page.getByRole("heading", { name: "格式檢查通過", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "在首頁查看這份雲端資料", exact: true }),
+  ).toHaveCount(0);
+  const key = `daily-movement-selection-v1:${encodeURIComponent(fake.subject)}`;
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (key) => JSON.parse(localStorage.getItem(key) || "null"),
+        key,
+      ),
+    )
+    .toEqual({ subject: fake.subject, id: fake.id, title: "虛構私人健身表" });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.dataset.fictionalPickerCount,
+    ),
+  ).toBe("1");
+  await page.getByRole("button", { name: "首頁", exact: true }).click();
+  await expect(page.locator(".week-total .stat-value")).toHaveText("37");
+  await page.getByRole("button", { name: "紀錄", exact: true }).click();
+  await expect(
+    page.getByText("虛構雲端選表紀錄", { exact: true }),
+  ).toBeVisible();
+  expect(await readData(page)).toEqual(fixtureData);
+  await expectNoOverflow(page);
+  await page.reload();
+  await expect(
+    page.getByRole("dialog", { name: "日常動作", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".week-total .stat-value")).not.toHaveText("37");
+  await page
+    .getByRole("button", { name: "以 owner-a@example.com 繼續", exact: true })
+    .click();
+  await expect(page.locator(".week-total .stat-value")).toHaveText("37");
+  await openSettings(page);
+  await expect(
+    page.getByRole("heading", { name: "格式檢查通過", exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.dataset.fictionalPickerCount,
+    ),
+  ).toBe("0");
+  await page.getByRole("button", { name: "首頁", exact: true }).click();
+  await expect(page.locator(".week-total .stat-value")).toHaveText("37");
+  expect(
+    fake.calls.filter(
+      (call) =>
+        new URL(call.url).searchParams.get("includeGridData") === "true",
+    ),
+  ).toHaveLength(2);
+  expect(fake.calls.every((call) => call.method === "GET")).toBe(true);
+  const storage = await page.evaluate(() =>
+    [localStorage, sessionStorage]
+      .map((store) =>
+        Array.from({ length: store.length }, (_, i) =>
+          store.getItem(store.key(i)!),
+        ).join(""),
+      )
+      .join(""),
+  );
+  expect(storage).not.toContain(fake.token);
+  expect(await readData(page)).toEqual(fixtureData);
+  await expectNoOverflow(page);
+});
 
 test("偏好在雙分頁更新，保留影片與目標草稿、播放器及離線備份", async ({
   page,
@@ -144,10 +545,7 @@ test("偏好在雙分頁更新，保留影片與目標草稿、播放器及離�
     ).toEqual(libraryData);
     await expectNoOverflow(page);
     await page.context().setOffline(true);
-    await page
-      .getByRole("button", { name: "帳號與同步設定", exact: true })
-      .click();
-    await page.getByRole("button", { name: "設定與備份", exact: true }).click();
+    await openSettings(page);
     const [download] = await Promise.all([
       page.waitForEvent("download"),
       page.getByRole("button", { name: "匯出 JSON 備份", exact: true }).click(),
@@ -248,10 +646,7 @@ test("50 段跑步機明細限制高度並內部捲動，從下方收合後資�
   await toggle.click();
   await expect(panel.getByRole("row")).toHaveCount(51);
   await collapse.click();
-  await page
-    .getByRole("button", { name: "帳號與同步設定", exact: true })
-    .click();
-  await page.getByRole("button", { name: "設定與備份", exact: true }).click();
+  await openSettings(page);
   const [download] = await Promise.all([
     page.waitForEvent("download"),
     page.getByRole("button", { name: "匯出 JSON 備份", exact: true }).click(),
@@ -906,10 +1301,7 @@ test("本機自訂影片可取消或編輯，保留原 ID、排序、播放與�
     await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY),
   ).toBe(healthRaw);
   await expectNoOverflow(page);
-  await page
-    .getByRole("button", { name: "帳號與同步設定", exact: true })
-    .click();
-  await page.getByRole("button", { name: "設定與備份", exact: true }).click();
+  await openSettings(page);
   const ready = page.waitForEvent("download");
   await page
     .getByRole("button", { name: "匯出 JSON 備份", exact: true })
@@ -1166,10 +1558,7 @@ test("影片庫搜尋、長度與收藏可組合，分批保留播放並可離�
     await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY),
   ).toBe(healthRaw);
   await expectNoOverflow(page);
-  await page
-    .getByRole("button", { name: "帳號與同步設定", exact: true })
-    .click();
-  await page.getByRole("button", { name: "設定與備份", exact: true }).click();
+  await openSettings(page);
   const downloadReady = page.waitForEvent("download");
   await page
     .getByRole("button", { name: "匯出 JSON 備份", exact: true })
@@ -1537,10 +1926,7 @@ test("健康表單欄位字級與寬度適合手機，零步可儲存", async ({
 
 test("JSON 備份可下載及還原，取消與壞檔保留原資料", async ({ page }) => {
   await page.goto("./");
-  await page
-    .getByRole("button", { name: "帳號與同步設定", exact: true })
-    .click();
-  await page.getByRole("button", { name: "設定與備份", exact: true }).click();
+  await openSettings(page);
   const downloadReady = page.waitForEvent("download");
   await page
     .getByRole("button", { name: "匯出 JSON 備份", exact: true })
@@ -1598,10 +1984,7 @@ test("本機內容損壞可先另存原始檔案，再用有效備份修復並�
     raw,
   });
   await page.reload();
-  await page
-    .getByRole("button", { name: "帳號與同步設定", exact: true })
-    .click();
-  await page.getByRole("button", { name: "設定與備份", exact: true }).click();
+  await openSettings(page);
   const input = page.getByLabel("選擇有效備份來修復", { exact: true });
   const choose = page.getByRole("button", {
     name: "選擇有效備份來修復",

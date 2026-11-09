@@ -15,7 +15,7 @@
 1. 在 https://console.cloud.google.com/ 建立專用專案。啟用 **Google Sheets API、Google Drive API、Google Picker API**。
 2. 在 Google Auth Platform 設定應用名稱、聯絡 Email、受眾及測試使用者。先維持 Testing，把自己的 Google 帳號加入測試使用者。
 3. 建立 OAuth Client，類型選 **Web application**。Authorized JavaScript origins 加入實際 origin，例如 `https://josephinezulin.github.io`，不帶 `/fitness-pwa/` 路徑。此版本使用 popup token flow，不需要另外設定 redirect URI。若要本機測試，另加 `http://localhost:5173`。
-4. 使用最小存取範圍：`openid`、`email`、`https://www.googleapis.com/auth/drive.file`。不要求整個 Drive 或全部試算表的廣泛權限。這個 scope 在 Google 授權層級允許選定檔案讀寫，但此程式目前只發送 GET。
+4. 使用最小存取範圍：`openid`、`email`、`https://www.googleapis.com/auth/drive.file`。不要求整個 Drive 或全部試算表的廣泛權限。這個 scope 在 Google 授權層級允許選定檔案讀寫；選表及格式檢查只發送 GET，明確修改雲端運動、影片或課表時才會寫入。
 5. 建立 API Key，設定「網站」HTTP referrer 限制，例如 `https://josephinezulin.github.io/*`。限制可呼叫的 API 至 Google Picker API（若 Google 當時的 Picker 設定要求其他 API，先依官方文件核對，不移除限制）。API Key 只是 Picker 的可公開識別設定，不能替代 OAuth。
 6. 取得同一專案的 OAuth Client ID、API Key 與**數字專案編號**。不是 project ID，也不是 Client Secret。三者由維護者填入 repository 的 `public/google-config.json` 後部署，網站會自動讀取。檔案只允許 clientId、apiKey、projectNumber 三個欄位，禁止放 Token、Client Secret、私鑰或健康資料。
 
@@ -27,8 +27,8 @@
 2. 網站會自行讀取共用應用設定。進入設定頁且網站已完成設定時，才準備 Google 登入元件；首次首頁不自行載入 Google 第三方程式。尚未設定時只顯示「Google 連線準備中」，不要求使用者維護金鑰。
 3. 點「使用 Google 登入」。按鈕直接從使用者點擊開啟登入流程，以保留 Safari popup 權限；選自己的帳號，確認所要求範圍。
 4. 點「選擇自己的副本並驗收」。在 Picker 選擇自己的私人範本副本；授權綁定這個檔案，不由檔名推測。
-5. 應顯示格式檢查通過、筆數 0 / 0 / 0 / 3 / 0，以及檔名與時區。
-6. 點「在首頁查看這份雲端資料」後，首頁與趨勢應顯示該檔的每日摘要，編輯按鈕停用。切頁保留連線，登出或 Token 到期則返回本機資料。重載不自動顯示上個帳號的快取。
+5. 應顯示格式檢查通過、筆數 0 / 0 / 0 / 3 / 0，以及檔名與時區。 若格式尚未符合需求，先依錯誤修正範本，再按「重新讀取這份試算表」；通過後也會立即套用並記住，不需再次開啟選檔器。重讀仍失敗會保留目前資料來源；讀取中若切回本機，晚到結果不會切回雲端。
+6. 格式檢查通過後立即套用並記住這份檔案，不需額外首頁確認；回到總覽與健康趨勢，應顯示該檔摘要。雲端運動、影片及課表依權限與同步狀態可編輯。切頁保留連線，登出或 Token 到期則返回本機資料；重載不會在登入前顯示雲端快取。再次登入同一帳號時，應自動讀取已記住的檔案，不再要求重選；換帳號不得讀取別人的選擇。若瀏覽器拒絕記住檔案，畫面會提示下次需重選，但本次已驗證的資料仍可使用。
 7. 分享中的範本、別人擁有的檔案、Excel、錯誤版本、錯誤欄名、公式或不正確型別均應拒絕。選擇檔案不會修改權限或表格。
 8. 在 Safari 與加入主畫面的 PWA 各測一次；測試拒絕授權、取消 popup、取消選檔、Token 過期、Google 撤銷權限、離線、錯誤 origin 與 API Key 限制。
 9. 兩個測試帳號依序登入，各自只能選擇已授權且自己擁有的私人副本；登出或授權到期會清除本次雲端檢視並取消未完成的讀取，遲到回應不可更新新會話。
@@ -40,9 +40,9 @@ Token 僅存在記憶體；不寫入 localStorage、sessionStorage、URL、JSON 
 - 每張表目前最多 5000 筆資料、總格線最多 5001 列，欄數依 schema 精確比對。超大範本先停止，不掃描無界範圍。
 - 檔案必須自己擁有且未分享；不是只靠檔名或前端帳號字串隔離。Google 權限仍是最終存取控制。
 - 私人檔案檢查使用 Drive 的 ownedByMe / shared / canEdit 回應；格式、版本與公式檢查使用 Sheets API。它們的真實 Google 回應仍需上述實機驗收。
-- 格式通過不代表去重寫入、離線衝突、原子交易或 iOS 背景同步已完成。
-- 首頁預設使用本機資料；明確選擇後可以查看雲端每日摘要，驗收連線不會自動搬移、混入或公開本機紀錄。
-- 帳號＋檔案的摘要快取分區與衝突規劃邏輯已備妥；明確匯入本機資料、實際 revision 檢查與寫入、雲端 CRUD 與同步在實機驗收後繼續實作。驗收之前不開啟寫入，避免不相容的表格被修改。
+- 格式通過後會套用資料；本人 OAuth 寫入、離線衝突與 iOS 捷徑仍須分別實機驗收，不能只以格式相容宣告通過。
+- 首頁未登入時使用本機資料；首次選表通過後立即套用雲端摘要，之後登入同帳號會重讀該帳號記住的選擇。選表只記住帳號、檔案 ID 與標題，不保存 Token，也不自動搬移、混入或公開本機紀錄。
+- 帳號＋檔案的摘要快取分區、revision 比對、雲端 CRUD 與離線 outbox 已實作，完整結果與本人待驗收項目見 [階段 C 進度](stage-c-progress.md)。格式不符的檔案不會套用或記成新選擇；驗證／權限檢查與帳號切換取消規則保留。
 
 ## 官方文件
 
