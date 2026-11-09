@@ -916,3 +916,53 @@ it.each(["updated", "deleted"])(
     expect(localStorage.getItem(LOCAL_KEY)).toBeNull();
   },
 );
+
+it.each(["storage", "silent"])(
+  "does not overwrite another tab's goal after %s storage changes",
+  (event) => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "調整目標" }));
+    fireEvent.change(
+      screen.getByRole("spinbutton", { name: "每週目標（分鐘）" }),
+      { target: { value: "175" } },
+    );
+    const key = preferenceKey();
+    const latest = JSON.stringify({
+      version: 1,
+      weeklyGoal: 240,
+      favorites: ["v7AYKMP6rOE"],
+      seen: { v7AYKMP6rOE: 2 },
+    });
+    localStorage.setItem(key, latest);
+    if (event === "storage")
+      act(() =>
+        window.dispatchEvent(
+          new StorageEvent("storage", { key, storageArea: localStorage }),
+        ),
+      );
+    fireEvent.submit(screen.getByRole("form", { name: "每週運動目標" }));
+    expect(localStorage.getItem(key)).toBe(latest);
+    expect(
+      screen.getByRole("spinbutton", { name: "每週目標（分鐘）" }),
+    ).toHaveProperty("value", "175");
+    expect(screen.getByRole("alert").textContent).toContain("240 分鐘");
+    expect(screen.getByRole("button", { name: "儲存目標" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+    expect(screen.getByRole("button", { name: "測試更新版本" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "取消調整" }));
+    expect(screen.getByRole("button", { name: "測試更新版本" })).toHaveProperty(
+      "disabled",
+      false,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "調整目標" }));
+    expect(
+      screen.getByRole("spinbutton", { name: "每週目標（分鐘）" }),
+    ).toHaveProperty("value", "240");
+    expect(localStorage.getItem(LOCAL_KEY)).toBeNull();
+  },
+);

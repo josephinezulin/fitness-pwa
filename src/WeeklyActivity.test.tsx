@@ -102,3 +102,63 @@ it("clears validation feedback on cancel and reopens with the saved goal", () =>
     screen.getByRole("spinbutton", { name: "每週目標（分鐘）" }),
   ).toHaveProperty("value", "150");
 });
+
+it.each([true, false])(
+  "preserves an %s edited goal draft and blocks a newer goal until cancel",
+  (edited) => {
+    const save = vi.fn(() => true),
+      draft = vi.fn();
+    const view = render(
+      <WeeklyGoal
+        minutes={20}
+        goal={150}
+        onChange={save}
+        onDraftChange={draft}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "調整目標" }));
+    const field = screen.getByRole("spinbutton", { name: "每週目標（分鐘）" });
+    if (edited) fireEvent.change(field, { target: { value: "175" } });
+    view.rerender(
+      <WeeklyGoal
+        minutes={30}
+        goal={240}
+        onChange={save}
+        onDraftChange={draft}
+      />,
+    );
+    fireEvent.submit(screen.getByRole("form", { name: "每週運動目標" }));
+    expect(save).not.toHaveBeenCalled();
+    expect(field).toHaveProperty("value", edited ? "175" : "150");
+    expect(screen.getByRole("alert").textContent).toContain("240 分鐘");
+    expect(screen.getByRole("button", { name: "儲存目標" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+    expect(draft).toHaveBeenLastCalledWith(true);
+    fireEvent.click(screen.getByRole("button", { name: "取消調整" }));
+    expect(draft).toHaveBeenLastCalledWith(false);
+    fireEvent.click(screen.getByRole("button", { name: "調整目標" }));
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(
+      screen.getByRole("spinbutton", { name: "每週目標（分鐘）" }),
+    ).toHaveProperty("value", "240");
+    expect(screen.getByRole("button", { name: "儲存目標" })).toHaveProperty(
+      "disabled",
+      false,
+    );
+  },
+);
+it("allows a goal draft when only the activity minutes change", () => {
+  const save = vi.fn(() => true);
+  const view = render(<WeeklyGoal minutes={20} goal={150} onChange={save} />);
+  fireEvent.click(screen.getByRole("button", { name: "調整目標" }));
+  fireEvent.change(
+    screen.getByRole("spinbutton", { name: "每週目標（分鐘）" }),
+    { target: { value: "175" } },
+  );
+  view.rerender(<WeeklyGoal minutes={35} goal={150} onChange={save} />);
+  expect(screen.queryByRole("alert")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "儲存目標" }));
+  expect(save).toHaveBeenCalledExactlyOnceWith(175);
+});

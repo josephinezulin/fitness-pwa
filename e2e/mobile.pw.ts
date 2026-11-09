@@ -19,6 +19,263 @@ import { preferenceKey } from "../src/preferences";
 import { defaultPlans } from "../src/model";
 import { installGoogleSelectionFixture } from "./google-selection-fixture";
 
+for (const failure of ["login", "picker"] as const) {
+  test(`歡迎頁${failure === "login" ? "登入失敗" : "取消選表"}直接顯示錯誤並可重試登入讀表`, async ({
+    page,
+  }) => {
+    const fake = await installGoogleSelectionFixture(page, {
+      failFirstLogin: failure === "login",
+      cancelFirstPick: failure === "picker",
+    });
+    await page.goto("./");
+    await page.evaluate(() =>
+      localStorage.setItem("daily-movement-entry-v1", "google"),
+    );
+    await page.reload();
+    const welcome = page.getByRole("dialog", { name: "日常動作", exact: true });
+    await welcome
+      .getByRole("button", { name: "用 Google 開始", exact: true })
+      .click();
+    await expect(welcome.getByRole("alert")).toContainText(
+      failure === "login" ? "登入視窗已關閉或被阻擋" : "已取消選擇試算表",
+    );
+    await expectNoOverflow(page);
+    await welcome
+      .getByRole("button", { name: "重試 Google 連線", exact: true })
+      .click();
+    await expect(welcome).toHaveCount(0);
+    await expect(page.locator(".week-total .stat-value")).toHaveText("37");
+    expect(
+      await page.evaluate(
+        () => document.documentElement.dataset.fictionalLoginCount,
+      ),
+    ).toBe(failure === "login" ? "2" : "1");
+    expect(fake.calls.every((call) => call.method === "GET")).toBe(true);
+    expect(await readData(page)).toEqual(fixtureData);
+  });
+}
+
+test("離線圖示可點開說明並返回焦點，首頁沒有重複提示列", async ({ page }) => {
+  await page.goto("./");
+  await page.context().setOffline(true);
+  const button = page.getByRole("button", { name: "離線說明", exact: true });
+  await expect(button).toBeVisible();
+  await expect(
+    page.locator(".content > .notice").filter({ hasText: "目前離線" }),
+  ).toHaveCount(0);
+  await button.click();
+  await expect(page.getByRole("note", { name: "離線模式說明" })).toContainText(
+    "仍可查看、記錄與備份",
+  );
+  await expectNoOverflow(page);
+  await page.keyboard.press("Escape");
+  await expect(button).toBeFocused();
+  await expect(page.getByRole("region", { name: "帳號與同步" })).toHaveCount(0);
+  await page.context().setOffline(false);
+  await expect(button).toHaveCount(0);
+});
+
+test("儲存接受後先顯示勾選動畫再關閉，防止重複提交與晚到關閉", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("./");
+  await page.getByRole("button", { name: "記錄運動", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog
+    .getByRole("textbox", { name: "備註", exact: true })
+    .fill("虛構勾選動畫紀錄");
+  await dialog.getByRole("button", { name: "儲存紀錄", exact: true }).click();
+  const saved = dialog.getByRole("button", { name: "已儲存", exact: true });
+  await expect(saved).toBeDisabled();
+  await expect(saved.locator(".save-check")).toBeVisible();
+  await expect(saved.locator(".save-label")).toHaveCount(0);
+  await dialog
+    .locator("form")
+    .evaluate((form) =>
+      form.dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true }),
+      ),
+    );
+  await expect(dialog).toHaveCount(0);
+  expect((await readData(page)).workouts).toHaveLength(
+    fixtureData.workouts.length + 1,
+  );
+  await page.getByRole("button", { name: "記錄運動", exact: true }).click();
+  await dialog.getByRole("button", { name: "儲存紀錄", exact: true }).click();
+  await expect(
+    dialog.getByRole("button", { name: "已儲存", exact: true }),
+  ).toBeDisabled();
+  await dialog.getByRole("button", { name: "關閉", exact: true }).click();
+  await page.getByRole("button", { name: "記錄運動", exact: true }).click();
+  // An old animation must not close the newly opened form.
+  await page.waitForTimeout(400);
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "關閉", exact: true }).click();
+  expect((await readData(page)).workouts).toHaveLength(
+    fixtureData.workouts.length + 2,
+  );
+  await expectNoOverflow(page);
+});
+
+test("首頁推薦納入自訂短片，清單更新不切換正在播放的影片", async ({ page }) => {
+  const first = {
+    id: "fictional-home-one",
+    youtubeId: "aaaaaaaaaaa",
+    title: "虛構首頁自訂",
+    category: "床上運動",
+    minutes: 5,
+  };
+  const second = {
+    ...first,
+    id: "fictional-home-two",
+    youtubeId: "bbbbbbbbbbb",
+    title: "虛構首頁新片",
+  };
+  const library = {
+    version: 1,
+    custom: [first],
+    hidden: BUILT_IN_VIDEOS.map((video) => video.id),
+  };
+  await page.addInitScript(
+    ({ key, data, library, videoKey, origin }) => {
+      if (location.origin !== origin) return;
+      localStorage.setItem(key, JSON.stringify({ ...data, plans: [] }));
+      if (!localStorage.getItem(videoKey))
+        localStorage.setItem(videoKey, JSON.stringify(library));
+    },
+    {
+      key: STORAGE_KEY,
+      data: fixtureData,
+      library,
+      videoKey: VIDEO_KEY,
+      origin: ORIGIN,
+    },
+  );
+  await page.goto("./");
+  await page
+    .getByRole("button", { name: "播放：虛構首頁自訂", exact: true })
+    .click();
+  const frame = await page.locator(".today-card iframe").elementHandle();
+  const other = await page.context().newPage();
+  try {
+    await other.goto("http://127.0.0.1:4173/fitness-pwa/");
+    await other.evaluate(
+      ({ key, value }) => localStorage.setItem(key, JSON.stringify(value)),
+      { key: VIDEO_KEY, value: { ...library, custom: [second] } },
+    );
+    await expect(page.locator(".today-card .suggest-title")).toContainText(
+      first.title,
+    );
+    expect(
+      await frame!.evaluate(
+        (node) =>
+          node.isConnected &&
+          node === document.querySelector(".today-card iframe"),
+      ),
+    ).toBe(true);
+    await page.getByRole("button", { name: "換一個", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "播放：虛構首頁新片", exact: true }),
+    ).toBeVisible();
+    expect((await readData(page)).workouts).toEqual(fixtureData.workouts);
+    expect((await readData(page)).metrics).toEqual(fixtureData.metrics);
+    await expectNoOverflow(page);
+  } finally {
+    await other.close();
+  }
+});
+
+test("兩分頁調整每週目標保留草稿並阻擋覆寫，取消重開採新目標且離線備份完整", async ({
+  page,
+}) => {
+  const key = preferenceKey();
+  const initial = {
+    version: 1,
+    weeklyGoal: 150,
+    favorites: ["v7AYKMP6rOE"],
+    seen: { v7AYKMP6rOE: 2 },
+  };
+  await page.addInitScript(
+    ({ key, initial, origin }) => {
+      if (location.origin !== origin) return;
+      if (!localStorage.getItem(key))
+        localStorage.setItem(key, JSON.stringify(initial));
+    },
+    { key, initial, origin: ORIGIN },
+  );
+  await page.goto("./");
+  const other = await page.context().newPage();
+  const errors: string[] = [];
+  other.on("pageerror", (error) => errors.push(error.message));
+  try {
+    await other.goto("http://127.0.0.1:4173/fitness-pwa/");
+    await page.getByRole("button", { name: "調整目標", exact: true }).click();
+    const form = page.getByRole("form", { name: "每週運動目標", exact: true });
+    const field = form.getByRole("spinbutton", {
+      name: "每週目標（分鐘）",
+      exact: true,
+    });
+    await field.fill("175");
+    await other.getByRole("button", { name: "調整目標", exact: true }).click();
+    await other
+      .getByRole("spinbutton", { name: "每週目標（分鐘）", exact: true })
+      .fill("240");
+    await other.getByRole("button", { name: "儲存目標", exact: true }).click();
+    await expect(page.locator(".goal-total")).toContainText("/ 240");
+    const raw = await page.evaluate((key) => localStorage.getItem(key), key);
+    await form.evaluate((node) =>
+      node.dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true }),
+      ),
+    );
+    expect(await page.evaluate((key) => localStorage.getItem(key), key)).toBe(
+      raw,
+    );
+    await expect(form.getByRole("alert")).toContainText("240 分鐘");
+    await expect(field).toHaveValue("175");
+    await expect(
+      form.getByRole("button", { name: "儲存目標", exact: true }),
+    ).toBeDisabled();
+    await expectNoOverflow(page);
+    await page.getByRole("button", { name: "取消調整", exact: true }).click();
+    await expect(form).toHaveCount(0);
+    expect(await page.evaluate((key) => localStorage.getItem(key), key)).toBe(
+      raw,
+    );
+    await page.getByRole("button", { name: "調整目標", exact: true }).click();
+    await expect(field).toHaveValue("240");
+    await expect(form.getByRole("alert")).toHaveCount(0);
+    await field.fill("260");
+    await form.getByRole("button", { name: "儲存目標", exact: true }).click();
+    await expect(other.locator(".goal-total")).toContainText("/ 260");
+    const saved = { ...initial, weeklyGoal: 260 };
+    expect(
+      await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!), key),
+    ).toEqual(saved);
+    expect(await readData(page)).toEqual(fixtureData);
+    expect(
+      await page.evaluate((key) => localStorage.getItem(key), VIDEO_KEY),
+    ).toBeNull();
+    await page.context().setOffline(true);
+    await openSettings(page);
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      page.getByRole("button", { name: "匯出 JSON 備份", exact: true }).click(),
+    ]);
+    const backup = JSON.parse(await readFile((await download.path())!, "utf8"));
+    expect(backup.experience).toEqual(saved);
+    expect(backup.workouts).toEqual(fixtureData.workouts);
+    expect(backup.metrics).toEqual(fixtureData.metrics);
+    await page.reload({ waitUntil: "networkidle" });
+    await expect(page.locator(".goal-total")).toContainText("/ 260");
+    await expectNoOverflow(page);
+    expect(errors).toEqual([]);
+  } finally {
+    await other.close();
+  }
+});
+
 for (const change of ["updated", "deleted"] as const) {
   test(`編輯中雲端影片${change === "updated" ? "更新" : "刪除"}保留草稿與播放器，不加入待同步修改`, async ({
     page,

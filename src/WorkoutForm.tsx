@@ -1,3 +1,4 @@
+import { SaveButton, useSaveFeedback } from "./SaveFeedback";
 import { useId, useState } from "react";
 import {
   estimateEnergy,
@@ -95,6 +96,7 @@ export function WorkoutForm({
   metrics = [],
   initialDraft,
   saveError = "",
+  onSaved,
 }: {
   editing: Workout | null;
   today: string;
@@ -103,7 +105,9 @@ export function WorkoutForm({
   metrics?: Metric[];
   initialDraft?: WorkoutDraft | null;
   saveError?: string;
+  onSaved?: () => void;
 }) {
+  const feedback = useSaveFeedback();
   const [type, setType] = useState<WorkoutType>(
     editing?.type || initialDraft?.type || "home",
   );
@@ -191,7 +195,13 @@ export function WorkoutForm({
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        if (disabled || errors.length || (treadmill && !complete)) return;
+        if (
+          disabled ||
+          feedback.pending() ||
+          errors.length ||
+          (treadmill && !complete)
+        )
+          return;
         const form = new FormData(e.currentTarget);
         const record: Workout = {
           id: editing?.id || crypto.randomUUID(),
@@ -202,10 +212,10 @@ export function WorkoutForm({
           note: String(form.get("note")).trim(),
         };
         if (treadmill) record.segments = parsed;
-        onSave(record);
+        if (onSave(record)) feedback.finish(() => onSaved?.());
       }}
     >
-      {saveError && (
+      {saveError && !feedback.saved && (
         <p className="notice" role="alert">
           {saveError}
         </p>
@@ -494,9 +504,13 @@ export function WorkoutForm({
           placeholder="今天的感受、訓練內容…"
         />
       </label>
-      <button className="primary full" disabled={disabled} type="submit">
+      <SaveButton
+        feedback={feedback}
+        className="primary full"
+        disabled={disabled}
+      >
         儲存紀錄 <Check size={18} />
-      </button>
+      </SaveButton>
     </form>
   );
 }

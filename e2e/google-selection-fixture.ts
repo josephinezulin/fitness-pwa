@@ -11,7 +11,12 @@ import { TODAY } from "./fixtures";
 // Fake SDK and read-only HTTP responses only. No real OAuth, Picker or private files.
 export async function installGoogleSelectionFixture(
   page: Page,
-  options: { invalidHeader?: boolean; video?: boolean } = {},
+  options: {
+    invalidHeader?: boolean;
+    video?: boolean;
+    failFirstLogin?: boolean;
+    cancelFirstPick?: boolean;
+  } = {},
 ) {
   const id = "fictional-fitness-sheet-A";
   const subject = "fictional-owner-A";
@@ -59,6 +64,7 @@ export async function installGoogleSelectionFixture(
   );
   const sdk = `(() => {
     document.documentElement.dataset.fictionalPickerCount = '0';
+    document.documentElement.dataset.fictionalLoginCount = '0';
     class DocsView {
       setMimeTypes() { return this; } setIncludeFolders() { return this; } setSelectFolderEnabled() { return this; }
     }
@@ -71,13 +77,14 @@ export async function installGoogleSelectionFixture(
         return { dispose() {}, setVisible(show) {
           if (!show) return;
           document.documentElement.dataset.fictionalPickerCount = String(Number(document.documentElement.dataset.fictionalPickerCount) + 1);
+          if (${!!options.cancelFirstPick} && document.documentElement.dataset.fictionalPickerCount === '1') { queueMicrotask(() => callback({ action: 'cancel' })); return; }
           queueMicrotask(() => callback({ action: 'picked', docs: [{ id: 'fictional-fitness-sheet-A', name: '虛構私人健身表' }] }));
         } };
       }
     }
     window.google = {
       accounts: { oauth2: {
-        initTokenClient(config) { return { requestAccessToken() { queueMicrotask(() => config.callback({ access_token: 'fictional-browser-oauth-token-not-real', expires_in: 3600 })); } }; },
+        initTokenClient(config) { return { requestAccessToken() { document.documentElement.dataset.fictionalLoginCount = String(Number(document.documentElement.dataset.fictionalLoginCount) + 1); if (${!!options.failFirstLogin} && document.documentElement.dataset.fictionalLoginCount === '1') { queueMicrotask(() => config.error_callback()); return; } queueMicrotask(() => config.callback({ access_token: 'fictional-browser-oauth-token-not-real', expires_in: 3600 })); } }; },
         hasGrantedAllScopes() { return true; }, revoke(token, callback) { callback(); }
       } }, picker: { DocsView, PickerBuilder, Action: { PICKED: 'picked', CANCEL: 'cancel' } }
     };

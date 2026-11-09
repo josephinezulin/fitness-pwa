@@ -94,3 +94,23 @@ it("closes on Escape/outside/Tab/context changes without reopening stale account
   );
   expect(screen.queryByRole("region")).toBeNull();
 });
+
+it("opens offline information from its icon and returns focus there on Escape", () => {
+  const p = props();
+  const view = render(<AccountMenu {...p} online={false} />);
+  const button = screen.getByRole("button", { name: "離線說明" });
+  fireEvent.click(button);
+  expect(
+    screen.getByRole("note", { name: "離線模式說明" }).textContent,
+  ).toContain("有效 Google 授權後補同步");
+  fireEvent.keyDown(document, { key: "Escape" });
+  expect(document.activeElement).toBe(button);
+  fireEvent.click(button);
+  view.rerender(<AccountMenu {...p} online />);
+  expect(screen.queryByRole("button", { name: "離線說明" })).toBeNull();
+  expect(screen.queryByRole("note")).toBeNull();
+  fireEvent.keyDown(document, { key: "Escape" });
+  expect(document.activeElement).toBe(
+    screen.getByRole("button", { name: "帳號與同步設定" }),
+  );
+});

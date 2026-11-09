@@ -1,3 +1,4 @@
+import { SaveButton, useSaveFeedback } from "./SaveFeedback";
 import {
   useId,
   useLayoutEffect,
@@ -42,8 +43,11 @@ export function WeeklyGoal({
   children?: ReactNode;
 }) {
   const id = useId();
-  const [editing, setEditing] = useState(false),
+  const feedback = useSaveFeedback();
+  const [editingGoal, setEditingGoal] = useState<number | null>(null),
     [error, setError] = useState("");
+  const editing = editingGoal !== null;
+  const goalChanged = editing && !feedback.saved && goal !== editingGoal;
   const toggleRef = useRef<HTMLButtonElement>(null);
   useLayoutEffect(() => {
     onDraftChange?.(editing);
@@ -78,11 +82,13 @@ export function WeeklyGoal({
           ref={toggleRef}
           className="icon-button round"
           aria-label={editing ? "取消調整" : "調整目標"}
+          disabled={feedback.saved}
           aria-expanded={editing}
           aria-controls={editing ? `${id}-editor` : undefined}
           onClick={() => {
+            feedback.cancel();
             setError("");
-            setEditing((value) => !value);
+            setEditingGoal(editing ? null : goal);
           }}
         >
           {editing ? <X size={17} /> : <Target size={17} />}
@@ -105,18 +111,26 @@ export function WeeklyGoal({
           className="goal-editor"
           onSubmit={(e) => {
             e.preventDefault();
+            if (goalChanged || feedback.pending()) return;
             const n = Number(new FormData(e.currentTarget).get("goal"));
             if (!Number.isInteger(n) || n < 10 || n > 2000) {
               setError("目標需為 10–2000 分鐘的整數。");
               return;
             }
-            if (onChange(n)) {
-              setEditing(false);
-              setError("");
-              toggleRef.current?.focus();
-            }
+            if (onChange(n))
+              feedback.finish(() => {
+                setEditingGoal(null);
+                setError("");
+                toggleRef.current?.focus();
+              });
           }}
         >
+          {goalChanged && (
+            <p className="notice" role="alert">
+              每週目標已更新為 {goal}{" "}
+              分鐘，草稿仍保留。請先記下需要的數值，再取消調整並重新開啟。
+            </p>
+          )}
           <label htmlFor={id}>每週目標（分鐘）</label>
           <input
             id={id}
@@ -127,11 +141,15 @@ export function WeeklyGoal({
             max="2000"
             step="1"
             required
-            defaultValue={goal}
+            defaultValue={editingGoal ?? goal}
           />
-          <button className="secondary" type="submit">
+          <SaveButton
+            feedback={feedback}
+            className="secondary"
+            disabled={goalChanged}
+          >
             儲存目標
-          </button>
+          </SaveButton>
           {error && (
             <p role="status" className="cloud-error">
               {error}
@@ -216,8 +234,7 @@ export function WeeklyActivity({
               filterNull={false}
               content={({ active, payload }) => {
                 const row = payload?.[0]?.payload as
-                  | (WeeklyRow & { value: number | null })
-                  | undefined;
+                  (WeeklyRow & { value: number | null }) | undefined;
                 return (
                   <TrendTooltip
                     active={active}
