@@ -139,7 +139,7 @@ describe("workout recording experience", () => {
   it.each([
     ["新增一段", 2],
     ["複製上一段", 2],
-    ["平地健走 20 分", 3],
+    ["我的上坡快走 55 分", 3],
     ["刪除第 2 段", 1],
   ] as const)(
     "preserves structural segment changes from %s when changing type",
@@ -271,19 +271,19 @@ describe("workout recording experience", () => {
     expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(
       true,
     );
-    fireEvent.click(screen.getByRole("button", { name: "緩坡快走 30 分" }));
+    fireEvent.click(screen.getByRole("button", { name: "我的上坡快走 55 分" }));
     expect(
       screen.getAllByRole("spinbutton", { name: /第 .* 段分鐘/ }),
     ).toHaveLength(3);
-    expect(field("分鐘數").value).toBe("30");
+    expect(field("分鐘數").value).toBe("55");
     fireEvent.click(screen.getByRole("button", { name: /儲存紀錄/ }));
     expect(p.onSave.mock.calls[0][0]).toMatchObject({
       type: "walk",
-      minutes: 30,
+      minutes: 55,
       segments: [
-        { minutes: 5, speed: 4, incline: 0 },
-        { minutes: 20, speed: 5, incline: 3 },
-        { minutes: 5, speed: 4, incline: 0 },
+        { minutes: 35, speed: 5, incline: 11 },
+        { minutes: 10, speed: 4.5, incline: 7 },
+        { minutes: 10, speed: 4.5, incline: 4 },
       ],
     });
   });

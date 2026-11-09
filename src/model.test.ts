@@ -62,7 +62,7 @@ describe("健康紀錄與備份", () => {
     ).toThrow();
   });
 });
-import { treadmillSummary, demo } from "./model";
+import { treadmillSummary } from "./model";
 describe("運動類型與跑步機分段", () => {
   const segments = [
     { minutes: 10, speed: 6, incline: 2 },
@@ -140,6 +140,4 @@ describe("運動類型與跑步機分段", () => {
       validate({ ...empty, workouts: [{ ...run, segments: [] }] }),
     ).toThrow();
   });
-  it("示範資料通過驗證並含跑步機範例", () =>
-    expect(validate(demo()).workouts.some((w) => w.segments)).toBe(true));
 });

@@ -89,8 +89,12 @@ export const test = base.extend({
     );
     await context.addInitScript(
       ({ key, data, origin }) => {
-        if (location.origin === origin && !localStorage.getItem(key))
+        if (location.origin !== origin) return;
+        if (!localStorage.getItem(key))
           localStorage.setItem(key, JSON.stringify(data));
+        // These tests cover the signed-out workspace, so skip the welcome screen.
+        if (!localStorage.getItem("daily-movement-entry-v1"))
+          localStorage.setItem("daily-movement-entry-v1", "local");
       },
       { key: STORAGE_KEY, data: fixtureData, origin: ORIGIN },
     );
@@ -133,4 +137,11 @@ export async function reloadOffline(page: Page) {
   await expect(
     page.getByText("目前離線，仍可查看與記錄本機資料。", { exact: true }),
   ).toBeVisible();
+}
+
+export async function openSettings(page: Page) {
+  await page
+    .getByRole("button", { name: "帳號與同步設定", exact: true })
+    .click();
+  await page.getByRole("button", { name: "設定與備份", exact: true }).click();
 }

@@ -405,10 +405,12 @@ describe("upgrade script for existing copies (mock, not a Google runtime test)",
     expect(grids.WorkoutLogs[1][6]).toBe("舊資料");
     expect(validateGrids(grids).errors).toEqual([]);
   });
-  it("is safe to run twice", () => {
-    const { sheets, run } = upgradeHarness();
+  it("is safe to run twice and refreshes the category dropdown on existing tabs", () => {
+    const { sheets, run, lists } = upgradeHarness();
     run();
-    expect(run()).toContain("Videos 已存在，未修改");
+    lists.length = 0;
+    expect(run()).toContain("Videos 已存在，資料未修改，下拉選單已更新");
+    expect(lists).toContainEqual([...VIDEO_CATEGORIES]);
     expect(sheets).toHaveLength(7);
   });
   it("stops before changing anything when an unknown tab exists", () => {

@@ -51,7 +51,6 @@ export function HealthChart({
     <section className="card chart" aria-labelledby={`${id}-heading`}>
       <div className="section-head">
         <div>
-          <span className="eyebrow">每一點進步，都值得記錄</span>
           <h2 id={`${id}-heading`}>身體的變化</h2>
         </div>
         <select

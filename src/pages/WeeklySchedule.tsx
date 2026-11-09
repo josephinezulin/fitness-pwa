@@ -36,7 +36,6 @@ export function WeeklySchedule({
     <section className="card schedule">
       <div className="section-head">
         <div>
-          <span className="eyebrow">讓運動成為日常</span>
           <h2>本週課表</h2>
         </div>
         <span className="pill">
@@ -189,7 +188,6 @@ export function PlanManager({
     >
       <div className="section-head">
         <div>
-          <span className="eyebrow">安排自己的節奏</span>
           <h2 id={`${formId}-manager`} ref={headingRef} tabIndex={-1}>
             管理課表
           </h2>

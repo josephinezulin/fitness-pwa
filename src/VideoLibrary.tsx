@@ -135,7 +135,6 @@ export function VideoLibrary({
     <section className="card video-library">
       <div className="section-head">
         <div>
-          <span className="eyebrow">跟著影片一起動</span>
           <h2>運動影片庫</h2>
         </div>
         <button

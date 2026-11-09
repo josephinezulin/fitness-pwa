@@ -10,7 +10,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CloudPanel } from "./CloudPanel";
-import { readSelection, rememberSelection } from "./workspace";
+import { readSelection, rememberSelection, selectionKey } from "./workspace";
 import { testSource } from "./test-fixtures";
 import type { SheetInspection } from "./sheets";
 const mock = vi.hoisted(() => ({
@@ -79,13 +79,24 @@ async function ready() {
     ).toBe(false),
   );
 }
-async function connect() {
+async function connect(automatic = false) {
   await ready();
+  const first = !readSelection(localStorage, "A");
+  // Cancel the automatic first-login picker; individual tests exercise explicit selection separately.
+  if (first && !automatic) mock.choose.mockResolvedValueOnce(null);
   fireEvent.click(screen.getByRole("button", { name: "使用 Google 登入" }));
   await screen.findByText("a@example.com");
+  if (first && !automatic) {
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+      ).toHaveProperty("disabled", false),
+    );
+    mock.choose.mockClear();
+  }
 }
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   localStorage.clear();
   mock.config.mockResolvedValue(config);
   mock.prepare.mockResolvedValue(undefined);
@@ -106,7 +117,7 @@ describe("Google connection lifecycle", () => {
   it("asks for no API key inputs and leaves login unavailable if the site is not configured", async () => {
     mock.config.mockResolvedValue(null);
     render(<CloudPanel {...props()} />);
-    await screen.findByText(/Google 連線準備中/);
+    await screen.findByText(/Google 連線暫時無法使用/);
     expect(screen.queryAllByRole("textbox")).toHaveLength(0);
     expect(
       (
@@ -216,6 +227,7 @@ describe("Google connection lifecycle", () => {
     fireEvent.click(screen.getByRole("button", { name: "登出" }));
     expect(signal.aborted).toBe(true);
     await ready();
+    mock.choose.mockResolvedValueOnce(null);
     fireEvent.click(screen.getByRole("button", { name: "使用 Google 登入" }));
     await screen.findByText("b@example.com");
     await act(async () => finish(inspection()));
@@ -445,6 +457,11 @@ describe("Google connection lifecycle", () => {
       screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
     );
     await screen.findByText("格式尚未符合需求");
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
+      ).toHaveProperty("disabled", false),
+    );
     act(() => window.dispatchEvent(new Event("daily-movement-refresh")));
     await waitFor(() => expect(p.onUseSnapshot).toHaveBeenCalledTimes(2));
     expect(mock.inspect.mock.calls[2][0]).toBe("sheet-private-1");
@@ -490,12 +507,28 @@ describe("Google connection lifecycle", () => {
     const signal = mock.inspect.mock.calls[0][2] as AbortSignal;
     fireEvent.click(screen.getByRole("button", { name: "登出" }));
     expect(signal.aborted).toBe(true);
+    // Account B has no remembered file, so sign-in opens the picker; the user cancels it.
+    mock.choose.mockResolvedValueOnce(null);
     await ready();
     fireEvent.click(screen.getByRole("button", { name: "使用 Google 登入" }));
     await screen.findByText("b@example.com");
+    await waitFor(() => expect(mock.choose).toHaveBeenCalledTimes(1));
     await act(async () => finish(inspection()));
     expect(p.onUseSnapshot).not.toHaveBeenCalled();
     expect(mock.inspect).toHaveBeenCalledTimes(1);
+  });
+  it("opens the picker on first sign-in and applies and remembers a compatible pick at once", async () => {
+    const p = props();
+    render(<CloudPanel {...p} />);
+    await connect(true);
+    await waitFor(() => expect(p.onUseSnapshot).toHaveBeenCalledTimes(1));
+    expect(mock.choose).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByRole("button", { name: "在首頁查看這份雲端資料" }),
+    ).toBeNull();
+    expect(JSON.parse(localStorage.getItem(selectionKey("A"))!).id).toBe(
+      "sheet-private-1",
+    );
   });
   it("ignores a completed login after the user cancels", async () => {
     let finish!: (value: ReturnType<typeof session>) => void;
@@ -519,12 +552,9 @@ describe("Google connection lifecycle", () => {
   it("does not switch back to cloud when a pending refresh completes after returning to local", async () => {
     const p = props();
     const view = render(<CloudPanel {...p} />);
-    await connect();
-    fireEvent.click(
-      screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
-    );
+    await connect(true);
     await screen.findByText("格式檢查通過");
-    expect(p.onUseSnapshot).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(p.onUseSnapshot).toHaveBeenCalledTimes(1));
     view.rerender(<CloudPanel {...p} activeSpreadsheetId="sheet-private-1" />);
     let finish!: (value: ReturnType<typeof inspection>) => void;
     mock.inspect.mockImplementationOnce(
@@ -576,10 +606,7 @@ describe("Google connection lifecycle", () => {
   it("keeps the last snapshot and reports a failed refresh outside the settings panel", async () => {
     const p = props();
     const view = render(<CloudPanel {...p} />);
-    await connect();
-    fireEvent.click(
-      screen.getByRole("button", { name: "選擇自己的副本並驗收" }),
-    );
+    await connect(true);
     await screen.findByText("格式檢查通過");
     view.rerender(<CloudPanel {...p} activeSpreadsheetId="sheet-private-1" />);
     mock.inspect.mockRejectedValueOnce(Error("offline"));

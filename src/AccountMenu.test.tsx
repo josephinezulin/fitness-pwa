@@ -33,7 +33,7 @@ it("shows private sheet details only after opening and routes settings without o
   expect(screen.getByText("Asia/Taipei")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "更新資料" }));
   expect(input.onRefresh).toHaveBeenCalledTimes(1);
-  fireEvent.click(screen.getByRole("button", { name: "管理 Google 連線" }));
+  fireEvent.click(screen.getByRole("button", { name: "設定與備份" }));
   expect(input.onSettings).toHaveBeenCalledTimes(1);
   expect(avatar.getAttribute("aria-expanded")).toBe("false");
   expect(document.activeElement).toBe(avatar);

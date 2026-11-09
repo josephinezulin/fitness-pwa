@@ -78,11 +78,18 @@ vi.mock("./CloudPanel", async () => {
     },
   };
 });
+/** Settings now live in the avatar menu instead of the bottom dock. */
+function openSettings() {
+  fireEvent.click(screen.getByRole("button", { name: "帳號與同步設定" }));
+  fireEvent.click(screen.getByRole("button", { name: "設定與備份" }));
+}
 beforeEach(() => {
   lifecycle.snapshot = null;
   lifecycle.mounts = 0;
   lifecycle.unmounts = 0;
   localStorage.clear();
+  // Skip the welcome screen; these tests exercise the signed-out local workspace.
+  localStorage.setItem("daily-movement-entry-v1", "local");
   Object.defineProperty(navigator, "onLine", {
     configurable: true,
     value: false,
@@ -128,7 +135,7 @@ it("blocks interface updates while a weekly-goal draft is open and releases afte
     false,
   );
   fireEvent.click(screen.getByRole("button", { name: "調整目標" }));
-  fireEvent.click(screen.getByRole("button", { name: "運動影片" }));
+  fireEvent.click(screen.getByRole("button", { name: "影片" }));
   expect(screen.getByRole("button", { name: "測試更新版本" })).toHaveProperty(
     "disabled",
     false,
@@ -159,7 +166,7 @@ it("clears the goal draft and its update lock when the existing workspace key ch
 });
 it("protects a video draft from interface updates while searching and releases the lock on close or navigation", () => {
   render(<App />);
-  fireEvent.click(screen.getByRole("button", { name: "運動影片" }));
+  fireEvent.click(screen.getByRole("button", { name: "影片" }));
   fireEvent.click(screen.getByRole("button", { name: "新增影片" }));
   fireEvent.change(screen.getByRole("textbox", { name: "名稱" }), {
     target: { value: "虛構未儲存影片" },
@@ -180,7 +187,7 @@ it("protects a video draft from interface updates while searching and releases t
       .disabled,
   ).toBe(false);
   fireEvent.click(screen.getByRole("button", { name: "新增影片" }));
-  fireEvent.click(screen.getByRole("button", { name: "總覽" }));
+  fireEvent.click(screen.getByRole("button", { name: "首頁" }));
   expect(
     (screen.getByRole("button", { name: "測試更新版本" }) as HTMLButtonElement)
       .disabled,
@@ -260,7 +267,7 @@ it("exports the exact unreadable original and restores a valid backup through th
   vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
   const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
   render(<App />);
-  fireEvent.click(screen.getByRole("button", { name: "設定與備份" }));
+  openSettings();
   vi.useFakeTimers();
   fireEvent.click(screen.getByRole("button", { name: "下載待修復原始檔案" }));
   vi.advanceTimersByTime(1000);
@@ -381,6 +388,8 @@ it("retains a local draft, blocks stale writes and explicitly refreshes another 
   expect(refresh.disabled).toBe(false);
   fireEvent.click(refresh);
   expect(screen.queryByText("本機資料已變更")).toBeNull();
+  // The home page no longer lists records; the refreshed record shows on the log page.
+  fireEvent.click(screen.getByRole("button", { name: "紀錄" }));
   expect(screen.getByText("虛構其他分頁最新紀錄")).toBeTruthy();
   expect(
     (screen.getByRole("button", { name: "記錄運動" }) as HTMLButtonElement)
@@ -389,7 +398,7 @@ it("retains a local draft, blocks stale writes and explicitly refreshes another 
 });
 it("does not refresh local data while a backup is being read and preserves the newer storage", async () => {
   render(<App />);
-  fireEvent.click(screen.getByRole("button", { name: "設定與備份" }));
+  openSettings();
   let finish!: (text: string) => void;
   const file = new File(["fictional"], "fictional.json", {
     type: "application/json",
@@ -438,7 +447,7 @@ it("does not refresh local data while a backup is being read and preserves the n
 });
 it("resets workout filters across cloud accounts without resetting the Google panel", async () => {
   render(<App />);
-  fireEvent.click(screen.getByRole("button", { name: "運動紀錄" }));
+  fireEvent.click(screen.getByRole("button", { name: "紀錄" }));
   fireEvent.change(screen.getByRole("searchbox", { name: "搜尋運動紀錄" }), {
     target: { value: "虛構本機篩選" },
   });
@@ -488,7 +497,7 @@ it("does not apply a local backup after switching to a cloud account while its f
   });
   const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
   render(<App />);
-  fireEvent.click(screen.getByRole("button", { name: "設定與備份" }));
+  openSettings();
   fireEvent.change(screen.getByLabelText("還原 JSON 備份"), {
     target: { files: [file] },
   });
@@ -524,7 +533,7 @@ it("blocks version updates during a backup read and lets the user cancel it", as
   });
   const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
   render(<App />);
-  fireEvent.click(screen.getByRole("button", { name: "設定與備份" }));
+  openSettings();
   const input = screen.getByLabelText("還原 JSON 備份") as HTMLInputElement;
   fireEvent.change(input, { target: { files: [file] } });
   expect(input.disabled).toBe(true);
@@ -564,7 +573,7 @@ it("repeats a workout only after save, preserving the source and cancelling with
     JSON.parse(localStorage.getItem("daily-movement-v1")!)
       .workouts as Workout[];
   render(<App />);
-  fireEvent.click(screen.getByRole("button", { name: "運動紀錄" }));
+  fireEvent.click(screen.getByRole("button", { name: "紀錄" }));
   fireEvent.click(
     screen.getByRole("button", { name: /以 2026-01-01 .*再記一次/ }),
   );
@@ -595,7 +604,7 @@ it("repeats a workout only after save, preserving the source and cancelling with
 it("keeps Google mounted across pages, preserves a navigation draft, and clears it across accounts", async () => {
   render(<App />);
   expect(lifecycle.mounts).toBe(1);
-  fireEvent.click(screen.getByRole("button", { name: "設定與備份" }));
+  openSettings();
   fireEvent.click(screen.getByText("連線測試帳號A"));
   await waitFor(() =>
     expect(
@@ -603,19 +612,19 @@ it("keeps Google mounted across pages, preserves a navigation draft, and clears 
         .disabled,
     ).toBe(false),
   );
-  fireEvent.click(screen.getByRole("button", { name: "總覽" }));
+  fireEvent.click(screen.getByRole("button", { name: "首頁" }));
   expect(screen.queryByText(/私人雲端：/)).toBeNull();
   expect(screen.queryByText("虛構表A")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "帳號與同步設定" }));
   expect(screen.getByText("虛構表A")).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "管理 Google 連線" }));
+  fireEvent.click(screen.getByRole("button", { name: "設定與備份" }));
   expect(screen.getByRole("heading", { name: "設定與備份" })).toBeTruthy();
   expect(lifecycle.mounts).toBe(1);
   fireEvent.click(screen.getByRole("button", { name: "記錄運動" }));
   fireEvent.click(screen.getByRole("button", { name: "儲存紀錄" }));
   expect(screen.getByText("1 筆修改保留在此裝置")).toBeTruthy();
   expect(screen.queryByRole("region", { name: "帳號與同步" })).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "本週課表" }));
+  fireEvent.click(screen.getByRole("button", { name: "課表" }));
   fireEvent.click(screen.getByLabelText("編輯帳號A課表"));
   fireEvent.change(screen.getByLabelText("課表名稱"), {
     target: { value: "帳號A的未儲存草稿" },
@@ -625,16 +634,16 @@ it("keeps Google mounted across pages, preserves a navigation draft, and clears 
       (screen.getByText("測試更新版本") as HTMLButtonElement).disabled,
     ).toBe(true),
   );
-  fireEvent.click(screen.getByRole("button", { name: "總覽" }));
-  fireEvent.click(screen.getByRole("button", { name: "本週課表" }));
+  fireEvent.click(screen.getByRole("button", { name: "首頁" }));
+  fireEvent.click(screen.getByRole("button", { name: "課表" }));
   expect((screen.getByLabelText("課表名稱") as HTMLInputElement).value).toBe(
     "帳號A的未儲存草稿",
   );
-  fireEvent.click(screen.getByRole("button", { name: "設定與備份" }));
+  openSettings();
   await act(async () => {
     fireEvent.click(screen.getByText("連線測試帳號B"));
   });
-  fireEvent.click(screen.getByRole("button", { name: "本週課表" }));
+  fireEvent.click(screen.getByRole("button", { name: "課表" }));
   expect(screen.queryByLabelText("課表名稱")).toBeNull();
   expect(screen.getByLabelText("編輯帳號B課表")).toBeTruthy();
   expect((screen.getByText("測試更新版本") as HTMLButtonElement).disabled).toBe(
@@ -643,6 +652,45 @@ it("keeps Google mounted across pages, preserves a navigation draft, and clears 
   expect(lifecycle.mounts).toBe(1);
   expect(lifecycle.unmounts).toBe(0);
   expect(JSON.stringify(localStorage)).not.toContain("must-never-persist");
+});
+it("starts with a welcome screen and remembers browsing without signing in", () => {
+  localStorage.removeItem("daily-movement-entry-v1");
+  const view = render(<App />);
+  expect(screen.getByRole("dialog", { name: "日常動作" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "先逛逛" }));
+  expect(screen.queryByRole("dialog", { name: "日常動作" })).toBeNull();
+  expect(localStorage.getItem("daily-movement-entry-v1")).toBe("local");
+  view.unmount();
+  render(<App />);
+  expect(screen.queryByRole("dialog", { name: "日常動作" })).toBeNull();
+});
+it("checks off today's plan through a prefilled form and confirms before removing it", () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-11-04T12:00:00Z"));
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+  const saved = () =>
+    JSON.parse(localStorage.getItem(LOCAL_KEY) || '{"workouts":[]}')
+      .workouts as Workout[];
+  render(<App />);
+  fireEvent.click(screen.getByRole("checkbox", { name: "健身房上坡快走" }));
+  expect(
+    screen.getAllByRole("spinbutton", { name: /第 .* 段分鐘/ }),
+  ).toHaveLength(3);
+  expect((screen.getByLabelText("分鐘數") as HTMLInputElement).value).toBe(
+    "55",
+  );
+  expect(saved()).toHaveLength(0);
+  fireEvent.click(screen.getByRole("button", { name: /儲存紀錄/ }));
+  expect(saved()).toMatchObject([
+    { date: "2026-11-04", type: "walk", minutes: 55 },
+  ]);
+  const done = screen.getByRole("checkbox", {
+    name: "健身房上坡快走（已完成）",
+  });
+  expect(done.getAttribute("aria-checked")).toBe("true");
+  fireEvent.click(done);
+  expect(confirm).toHaveBeenCalledWith(expect.stringContaining("11/04"));
+  expect(saved()).toHaveLength(0);
 });
 
 it.each(["note", "segments", "deleted", "unchanged", "other"])(
@@ -683,9 +731,9 @@ it.each(["note", "segments", "deleted", "unchanged", "other"])(
     ]);
     lifecycle.snapshot = testInspection(source);
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "設定與備份" }));
+    openSettings();
     await act(async () => fireEvent.click(screen.getByText("連線測試帳號A")));
-    fireEvent.click(screen.getByRole("button", { name: "總覽" }));
+    fireEvent.click(screen.getByRole("button", { name: "紀錄" }));
     await waitFor(() =>
       expect(screen.getByLabelText("編輯運動")).toHaveProperty(
         "disabled",
@@ -810,9 +858,9 @@ it.each(["updated", "deleted"])(
     ]);
     lifecycle.snapshot = testInspection(source);
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "設定與備份" }));
+    openSettings();
     await act(async () => fireEvent.click(screen.getByText("連線測試帳號A")));
-    fireEvent.click(screen.getByRole("button", { name: "運動影片" }));
+    fireEvent.click(screen.getByRole("button", { name: "影片" }));
     await waitFor(() =>
       expect(
         screen.getByRole("button", { name: "編輯影片：虛構雲端原影片" }),

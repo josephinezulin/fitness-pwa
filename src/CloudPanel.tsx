@@ -28,6 +28,7 @@ import {
 } from "./workspace";
 import { loadSiteConfig } from "./site-config";
 import { ALL_TABS } from "./sheet-schema";
+import { rememberAccount } from "./entry";
 export type CloudReadState = { busy: boolean; error: string };
 export function CloudPanel({
   onUseSnapshot,
@@ -36,7 +37,13 @@ export function CloudPanel({
   activeSpreadsheetId,
   onReadState,
   onSessionChange,
+  eager = false,
+  onLoginReady,
 }: {
+  /** Prepare Google sign-in even while the panel is hidden (welcome screen). */
+  eager?: boolean;
+  /** Receives the sign-in action once Google is ready, or null while unavailable. */
+  onLoginReady?: (signIn: (() => void) | null) => void;
   onUseSnapshot: (
     identity: CloudIdentity,
     data: Data,
@@ -128,7 +135,10 @@ export function CloudPanel({
     };
   }, [retry]);
   useEffect(() => {
-    if (!visible || !config || ready) return;
+    onLoginReady?.(config && ready && !session ? signIn : null);
+  });
+  useEffect(() => {
+    if (!(visible || eager) || !config || ready) return;
     let cancelled = false;
     setBusy("準備 Google 登入");
     prepareGoogle()
@@ -145,7 +155,7 @@ export function CloudPanel({
     return () => {
       cancelled = true;
     };
-  }, [visible, config, retry]);
+  }, [visible, eager, config, retry]);
   function signIn() {
     if (!config || !ready) return;
     const version = ++epoch.current;
@@ -161,8 +171,14 @@ export function CloudPanel({
         currentSession.current = next;
         setSession(next);
         setInspection(null);
+        rememberAccount(localStorage, next.email);
         const previous = readSelection(localStorage, next.subject);
-        if (previous) {
+        if (!previous) {
+          // First sign-in on this account: go straight to choosing the spreadsheet.
+          void pick(next);
+          return;
+        }
+        {
           const controller = new AbortController();
           request.current = controller;
           setBusy("讀取上次使用的試算表");
@@ -296,8 +312,9 @@ export function CloudPanel({
       document.removeEventListener("visibilitychange", update);
     };
   }, [session, activeSpreadsheetId, busy]);
-  async function pick() {
-    if (!session || !config) return;
+  async function pick(current: GoogleSession | null = session) {
+    if (!current || !config) return;
+    const session = current;
     const viewAtStart = currentViewId.current;
     const version = ++epoch.current;
     request.current?.abort();
@@ -349,19 +366,12 @@ export function CloudPanel({
         </h2>
         <span className="pill">私人雲端資料</span>
       </div>
-      <p className="guide">
-        連線到你自己的私人試算表。選取後會先檢查格式，通過後立即套用並記住檔案，可新增、編輯及刪除雲端運動與影片。健康資料由
-        Apple 健康同步，本機紀錄不會自動上傳或混入。
-      </p>
       {configLoaded && !config && (
-        <p className="tiny muted">
-          Google 連線準備中，目前可使用本機紀錄與 JSON
-          備份。開放連線後，你只需登入並選擇自己的試算表。
-        </p>
+        <p className="tiny muted">Google 連線暫時無法使用</p>
       )}
       {!configLoaded && (
-        <p className="tiny muted" role="status">
-          正在確認 Google 連線狀態…
+        <p className="tiny muted cloud-status" role="status">
+          <LoaderCircle size={14} />
         </p>
       )}
       {!session ? (
@@ -406,10 +416,6 @@ export function CloudPanel({
           >
             選擇自己的副本並驗收
           </button>
-          <p className="tiny muted">
-            只要求存取你選定的檔案，不要求存取整個 Google
-            Drive。授權會過期，重新開啟 PWA 需要再次登入。
-          </p>
         </>
       )}
       {!session && !busy && (!config || !ready) && configLoaded && (
@@ -476,13 +482,6 @@ export function CloudPanel({
               重新讀取這份試算表
             </button>
           )}
-          <p className="tiny muted">
-            下次登入同一個 Google 帳號會自動讀取已記住的檔案，也可隨時重新選檔。
-          </p>
-          <p className="tiny muted">
-            通過僅代表目前版本及資料格式相容；不代表已啟用同步、iOS 捷徑或完成
-            Safari 跨裝置測試。
-          </p>
         </div>
       )}
     </section>

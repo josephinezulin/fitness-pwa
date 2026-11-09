@@ -1,4 +1,10 @@
-import { useId, useLayoutEffect, useRef, useState } from "react";
+import {
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   Bar,
   BarChart,
@@ -19,16 +25,21 @@ import {
   type WeeklyRow,
 } from "./trends";
 import { TrendData, TrendTooltip } from "./TrendData";
+import { CountUp, ProgressRing } from "./motion-ui";
+import { motion } from "motion/react";
+import { Target, X } from "lucide-react";
 export function WeeklyGoal({
   minutes,
   goal,
   onChange,
   onDraftChange,
+  children,
 }: {
   minutes: number;
   goal: number;
   onChange: (goal: number) => boolean;
   onDraftChange?: (open: boolean) => void;
+  children?: ReactNode;
 }) {
   const id = useId();
   const [editing, setEditing] = useState(false),
@@ -40,15 +51,33 @@ export function WeeklyGoal({
   }, [editing, onDraftChange]);
   const left = Math.max(0, Math.round((goal - minutes) * 10) / 10);
   return (
-    <section className="card weekly-goal">
-      <div className="section-head">
-        <div>
-          <span className="eyebrow">一點一點，累積自己的節奏</span>
-          <h2>本週累積運動</h2>
+    <article className={"card weekly-goal" + (left ? "" : " reached")}>
+      <div className="week-head">
+        <ProgressRing value={minutes} goal={goal} size={52} stroke={7} />
+        <div className="grow">
+          <h2>本週運動</h2>
+          <p className="week-total">
+            <strong className="stat-value">
+              <CountUp value={minutes} decimals={1} />
+            </strong>
+            <span className="goal-total"> / {goal} 分</span>
+            {!left && (
+              <motion.span
+                className="cheer-inline"
+                aria-hidden="true"
+                initial={{ scale: 0, rotate: -20 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ type: "spring", stiffness: 500, damping: 18 }}
+              >
+                🎉
+              </motion.span>
+            )}
+          </p>
         </div>
         <button
           ref={toggleRef}
-          className="text-button"
+          className="icon-button round"
+          aria-label={editing ? "取消調整" : "調整目標"}
           aria-expanded={editing}
           aria-controls={editing ? `${id}-editor` : undefined}
           onClick={() => {
@@ -56,22 +85,19 @@ export function WeeklyGoal({
             setEditing((value) => !value);
           }}
         >
-          {editing ? "取消調整" : "調整目標"}
+          {editing ? <X size={17} /> : <Target size={17} />}
         </button>
       </div>
-      <p className="goal-total">
-        <strong>{minutes}</strong> / {goal} <span>分鐘</span>
-      </p>
       <progress
+        className="sr-only"
         aria-label="本週運動分鐘進度"
         max={goal}
         value={Math.min(minutes, goal)}
       />
-      <p className="tiny muted">
-        {left
-          ? `距離這週的目標還有 ${left} 分鐘，每次短短運動也算進步。`
-          : "這週已達到自己的累積目標，做得很好。"}
+      <p className="sr-only">
+        {left ? `還差 ${left} 分鐘` : "已達到自己的累積目標"}
       </p>
+      {children}
       {editing && (
         <form
           id={`${id}-editor`}
@@ -106,9 +132,6 @@ export function WeeklyGoal({
           <button className="secondary" type="submit">
             儲存目標
           </button>
-          <p className="tiny muted">
-            目標儲存在此裝置，依本機或登入帳號／試算表分開保存。
-          </p>
           {error && (
             <p role="status" className="cloud-error">
               {error}
@@ -116,7 +139,7 @@ export function WeeklyGoal({
           )}
         </form>
       )}
-    </section>
+    </article>
   );
 }
 export function WeeklyActivity({
@@ -139,7 +162,7 @@ export function WeeklyActivity({
       <div className="section-head">
         <div>
           <span className="eyebrow">最近 8 週</span>
-          <h2 id={`${id}-heading`}>看見每週的小進步</h2>
+          <h2 id={`${id}-heading`}>每週趨勢</h2>
         </div>
       </div>
       <div className="chips" role="group" aria-label="每週運動趨勢指標">

@@ -18,7 +18,35 @@ export type WorkoutDraft = {
   countWatch?: boolean;
   segments?: Segment[];
   fromDate?: string;
+  /** Prefilled record date, e.g. checking off an earlier day this week. */
+  date?: string;
 };
+/** Draft for checking off a planned session: walks use the personal incline routine. */
+export function planWorkoutDraft(
+  plan: { type: WorkoutType; title: string; minMinutes: number },
+  date: string,
+): WorkoutDraft {
+  const routine =
+    plan.type === "walk"
+      ? TREADMILL_PRESETS.find((p) => p.id === "my-incline-55")
+      : undefined;
+  return routine
+    ? {
+        type: "walk",
+        minutes: routine.segments.reduce((sum, s) => sum + s.minutes, 0),
+        note: "",
+        treadmill: true,
+        segments: routine.segments.map((s) => ({ ...s })),
+        date,
+      }
+    : {
+        type: plan.type,
+        minutes: plan.minMinutes,
+        note: "",
+        treadmill: false,
+        date,
+      };
+}
 /** Reuse settings as a new draft; identity, date, calories and watch counts are not copied. */
 export function repeatWorkoutDraft(workout: Workout): WorkoutDraft {
   return {
@@ -33,6 +61,9 @@ export function repeatWorkoutDraft(workout: Workout): WorkoutDraft {
   };
 }
 export const CATEGORY_WORKOUT: Record<VideoCategory, WorkoutType> = {
+  床上運動: "home",
+  坐姿運動: "home",
+  減脂燃脂: "home",
   暖身: "stretch",
   居家徒手: "home",
   "快走／跑步機": "walk",
@@ -52,24 +83,40 @@ export const TREADMILL_PRESETS: {
   segments: Segment[];
 }[] = [
   {
-    id: "easy-20",
-    title: "平地健走 20 分",
+    id: "my-incline-55",
+    title: "我的上坡快走 55 分",
     type: "walk",
     segments: [
-      { minutes: 5, speed: 4, incline: 0 },
-      { minutes: 10, speed: 4.5, incline: 0 },
-      { minutes: 5, speed: 4, incline: 0 },
+      { minutes: 35, speed: 5, incline: 11 },
+      { minutes: 10, speed: 4.5, incline: 7 },
+      { minutes: 10, speed: 4.5, incline: 4 },
     ],
   },
   {
-    id: "incline-30",
-    title: "緩坡快走 30 分",
+    id: "incline-short-30",
+    title: "上坡快走短版 30 分",
     type: "walk",
     segments: [
-      { minutes: 5, speed: 4, incline: 0 },
-      { minutes: 20, speed: 5, incline: 3 },
-      { minutes: 5, speed: 4, incline: 0 },
+      { minutes: 20, speed: 5, incline: 11 },
+      { minutes: 5, speed: 4.5, incline: 7 },
+      { minutes: 5, speed: 4.5, incline: 4 },
     ],
+  },
+  {
+    id: "incline-plus-60",
+    title: "上坡快走加強 60 分",
+    type: "walk",
+    segments: [
+      { minutes: 40, speed: 5, incline: 12 },
+      { minutes: 10, speed: 4.5, incline: 8 },
+      { minutes: 10, speed: 4.5, incline: 4 },
+    ],
+  },
+  {
+    id: "incline-main-35",
+    title: "只做主段 35 分",
+    type: "walk",
+    segments: [{ minutes: 35, speed: 5, incline: 11 }],
   },
   {
     id: "run-30",
